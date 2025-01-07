@@ -1,6 +1,8 @@
 ## Define mini-templates for each portion of the doco.
 
 <%!
+  import re
+
   def indent(s, spaces=4):
       new = s.replace('\n', '\n' + ' ' * spaces)
       return ' ' * spaces + new.strip()
@@ -8,58 +10,60 @@
   def extract_param_descriptions(docstring):
       """Extract parameter descriptions from docstring."""
       param_desc = {}
-      if docstring and 'Args:' in docstring:
-          # Get the Args section
-          args_section = docstring.split('Args:')[1]
-          # Split at the next major section if it exists
-          if '\n\n' in args_section:
-              for section_start in ['Returns:', 'Raises:', 'Note:', 'Example:', 'Examples:']:
-                  if section_start in args_section:
-                      args_section = args_section.split(section_start)[0]
+      if not docstring or 'Args:' not in docstring:
+          return param_desc
 
-          lines = args_section.split('\n')
-          current_param = None
-          current_desc = []
-          base_indent = None
+      # Extract the Args section
+      parts = docstring.split('Args:', 1)
+      if len(parts) < 2:
+          return param_desc
 
-          for line in lines:
-              if not line.strip():
+      args_section = parts[1]
+
+      # Find where the Args section ends
+      for section in ['Returns:', 'Raises:', 'Note:', 'Example:', 'Examples:']:
+          if f'\n{section}' in args_section:
+              args_section = args_section.split(f'\n{section}')[0]
+
+      # Split into lines and process
+      lines = args_section.split('\n')
+      current_param = None
+      current_desc = []
+      param_indent = None
+
+      for line in lines:
+          if not line.strip():
+              continue
+
+          # Calculate indentation
+          indent_level = len(line) - len(line.lstrip())
+          stripped = line.strip()
+
+          # Check if this is a parameter definition line
+          if ':' in stripped:
+              # If this is a new parameter (either first one or less/equal indentation than previous)
+              if param_indent is None or indent_level <= param_indent:
+                  # Save previous parameter if exists
+                  if current_param and current_desc:
+                      param_desc[current_param] = ' '.join(current_desc).strip()
+
+                  # Parse new parameter
+                  param_parts = stripped.split(':', 1)
+                  param_name = param_parts[0].split('(')[0].strip()
+                  desc = param_parts[1].strip()
+
+                  current_param = param_name
+                  current_desc = [desc] if desc else []
+                  param_indent = indent_level
                   continue
 
-              # Calculate the indentation level
-              indent_level = len(line) - len(line.lstrip())
+          # Add to current description if we have a parameter and indentation is valid
+          if current_param and (param_indent is None or indent_level >= param_indent):
+              current_desc.append(stripped)
 
-              # If this is a parameter definition line (contains "(type):" pattern)
-              if '(' in line and '):' in line:
-                  # If we were processing a previous parameter, save it
-                  if current_param:
-                      desc = ' '.join(current_desc)
-                      # Add double line breaks after periods
-                      desc = desc.replace('. ', '.<br/><br/>')
-                      # Remove any trailing <br/><br/> if description ends with a period
-                      if desc.endswith('.<br/><br/>'):
-                          desc = desc[:-8] + '.'
-                      param_desc[current_param] = desc
-
-                  # Start new parameter
-                  current_param = line.split('(')[0].strip()
-                  desc_start = line.split('):')[1].strip()
-                  current_desc = [desc_start] if desc_start else []
-                  base_indent = indent_level
-              else:
-                  # If indentation is more than base, it's a continuation of the current description
-                  if base_indent is not None and indent_level > base_indent and current_param:
-                      current_desc.append(line.strip())
-
-          # Save the last parameter
-          if current_param:
-              desc = ' '.join(current_desc)
-              # Add double line breaks after periods
-              desc = desc.replace('. ', '.<br/><br/>')
-              # Remove any trailing <br/><br/> if description ends with a period
-              if desc.endswith('.<br/><br/>'):
-                  desc = desc[:-8] + '.'
-              param_desc[current_param] = desc
+      # Don't forget to save the last parameter
+      if current_param and current_desc:
+          param_desc[current_param] = ' '.join(current_desc).strip()
 
       return param_desc
 
@@ -70,27 +74,40 @@
       table = "| PARAMETER | DESCRIPTION |\n|--|--|\n"
 
       for param in params:
-          # Split the parameter into name, type, and default
+          # Skip 'self' parameter
+          if param.startswith('self:') or param == 'self':
+              continue
+
+          # Split the parameter into name and type annotation
           parts = param.split(':')
           if len(parts) > 1:
               name = parts[0].strip()
               type_default = parts[1].strip()
-              # Split type and default if exists
+              # Handle default values
               if '=' in type_default:
-                  type_val, default = type_default.split('=', 1)
-                  type_val = type_val.strip().replace('|', '\\|')  # Escape pipe characters
-                  default = default.strip().replace('|', '\\|')     # Escape pipe characters
+                  type_val, default = type_default.rsplit('=', 1)
+                  type_val = type_val.strip().replace('|', '\\|')
+                  default = default.strip().replace('|', '\\|')
               else:
-                  type_val = type_default.replace('|', '\\|')      # Escape pipe characters
+                  type_val = type_default.replace('|', '\\|')
                   default = '-'
           else:
-              name = param
+              name = param.strip()
               type_val = '-'
               default = '-'
 
+          # Get description from docstring and format it
           description = param_descriptions.get(name, "")
-          formatted_desc = f"{description}<br/><br/>**TYPE:** `{type_val}`"
-          if default != '-':
+          # Convert multiple spaces to single space but preserve intended line breaks
+          description = ' '.join(description.split())
+          # Add line breaks before numbered points
+          description = re.sub(r'(?<!\d)\. ', '.<br/><br/>', description)
+
+          # Format the table cell
+          formatted_desc = f"{description}<br/><br/>" if description else ''
+          if type_val != '-':
+              formatted_desc += f"**TYPE:** `{type_val}`"
+          if default != '-' and default != '"-"':
               formatted_desc += f"<br/><br/>**DEFAULT:** {default}"
 
           table += f"| `{name}` | {formatted_desc} |\n"

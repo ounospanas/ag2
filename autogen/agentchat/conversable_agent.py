@@ -1890,12 +1890,12 @@ class ConversableAgent(LLMAgent):
         for the conversation and prints relevant messages based on the human input received.
 
         Args:
-            - messages (Optional[List[Dict]]): A list of message dictionaries, representing the conversation history.
-            - sender (Optional[Agent]): The agent object representing the sender of the message.
-            - config (Optional[Any]): Configuration object, defaults to the current instance if not provided.
+            messages (Optional[List[Dict]]): A list of message dictionaries, representing the conversation history.
+            sender (Optional[Agent]): The agent object representing the sender of the message.
+            config (Optional[Any]): Configuration object, defaults to the current instance if not provided.
 
         Returns:
-            - Tuple[bool, Union[str, Dict, None]]: A tuple containing a boolean indicating if the conversation
+            Tuple[bool, Union[str, Dict, None]]: A tuple containing a boolean indicating if the conversation
             should be terminated, and a human reply which can be a string, a dictionary, or None.
         """
         iostream = IOStream.get_default()
