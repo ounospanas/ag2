@@ -1,26 +1,3 @@
-pip install pydantic-core
-falkordb
-graphrag_sdk
-llama_index
-pypdf
-llama-index
-llama-index-graph-stores-neo4j
-fastembed
-qdrant-client
-pymongo
-pgvector
-psycopg[binary]
-azure-cosmos
-'pyautogen[jupyter-executor]'
-anthropic
-boto3
-cerebras-cloud-sdk
-cohere
-google-generativeai
-vertexai
-groq
-mistralai
-ollama
-together
+pip install pdoc3 fast_depends pydantic-core falkordb graphrag_sdk llama_index pypdf llama-index llama-index-graph-stores-neo4j fastembed qdrant-client pymongo pgvector psycopg[binary] azure-cosmos 'pyautogen[jupyter-executor]' anthropic boto3 cerebras-cloud-sdk cohere google-generativeai vertexai groq mistralai ollama together
 
-pdoc --output-dir test-pydoc3 --force autogen
+pdoc --output-dir test-pydoc3 --template-dir mako_templates --force autogen

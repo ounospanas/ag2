@@ -153,8 +153,7 @@ class ConversableAgent(LLMAgent):
                 silent in each function.
             context_variables (dict or None): Context variables that provide a persistent context for the agent.
                 Note: Will maintain a reference to the passed in context variables (enabling a shared context)
-                Only used in Swarms at this stage:
-                https://docs.ag2.ai/docs/reference/agentchat/contrib/swarm_agent
+                Only used in [Swarms](https://docs.ag2.ai/docs/reference/agentchat/contrib/swarm_agent) at this stage.
         """
         # we change code_execution_config below and we have to make sure we don't change the input
         # in case of UserProxyAgent, without this we could even change the default value {}
