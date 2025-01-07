@@ -75,14 +75,15 @@ body.reference-page h4 {
   text-transform: none !important;
 }
 
+/* Reference section starts */
+
 body.reference-page h1,
 body.reference-page div.api-doc-prefix h2 {
   display: inline-block;
   margin: 0;
   font-family: monospace;
-  font-size: 1.5rem !important;
+  font-size: 1.25rem !important;
 }
-
 
 body.reference-page .doc-heading {
   display: flex;
@@ -100,24 +101,26 @@ body.reference-page .doc-symbol-class:before {
   content: "class" !important;
   color: #338fd1;
   font-family: monospace;
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   font-weight: bold;
   vertical-align: middle;
 }
 
 .doc-symbol-method {
   background-color: #f3eefc;
+  display: inline-block;
 }
 
 .doc-symbol-attribute {
   background-color: #f4ebe6;
+  display: inline-block;
 }
 
 .doc-symbol-method:before {
   content: "meth" !important;
   color: #8250df;
   font-family: monospace;
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   font-weight: bold;
   vertical-align: middle;
 }
@@ -126,24 +129,27 @@ body.reference-page .doc-symbol-class:before {
   content: "attr" !important;
   color: #953800;
   font-family: monospace;
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   font-weight: bold;
   vertical-align: middle;
 }
 
-
-
 .doc-symbol-instance-attribute::after {
   content: "instance-attribute" !important;
+  margin-left: 0.5rem;
+  padding: 0.2em 0.4em;
+  display: inline-block;
 }
 
 .doc-symbol-class-attribute::after {
   content: "class-attribute" !important;
+  margin-left: 0.5rem;
+  padding: 0.2em 0.4em;
+  display: inline-block;
 }
 
 .doc-symbol-instance-attribute::after,
 .doc-symbol-class-attribute::after {
-  background-color: #f5f5f5;
   font-size: 0.8rem;
   word-break: break-word;
   font-family: monospace;
@@ -171,8 +177,17 @@ body.reference-page .doc-symbol-class:before {
 
 body.reference-page .doc-object-name {
   font-family: monospace;
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   margin: 0 0.25rem;
+  display: inline-block;
+}
+
+body.reference-page h3 {
+  display: inline-block;
+    margin: 0 0.5rem;
+    vertical-align: middle;
+    font-family: monospace;
+    font-size: 1.25rem !important;
 }
 
 body.reference-page .headerlink {
@@ -181,6 +196,8 @@ body.reference-page .headerlink {
   text-decoration: none;
   visibility: hidden;
   margin-left: 0.5rem;
+  display: inline-block;
+  vertical-align: middle;
 }
 
 body.reference-page .doc-heading:hover .headerlink {
@@ -191,8 +208,20 @@ body.reference-page .headerlink:hover {
   color: #338fd1;
   text-decoration: none;
 }
+.doc-heading-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 2rem 0 1rem 0;
+  font-size: 1.25rem;
+}
 
-
+.doc-heading-wrapper .doc-object-name {
+  font-family: monospace;
+  font-size: 1.25rem;
+  margin: 0 0.25rem;
+}
+/* Reference section ends */
 
 a.colab-badge, a.github-badge {
   display: inline-block;

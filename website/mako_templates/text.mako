@@ -113,42 +113,40 @@ ${indent(s)}
 </%def>
 
 <%def name="function(func)" buffered="True">
-<h3 id="${func.module.name}.${func.cls.name if func.cls else ''}.${func.name}" class="doc doc-heading">
 <code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
-<span class="doc doc-object-name doc-function-name">${func.name}</span>
+${'###'} ${func.name}
 <a href="#${func.module.name}.${func.cls.name if func.cls else ''}.${func.name}" class="headerlink" title="Permanent link"></a>
-</h3>
 
 <%
-       returns = show_type_annotations and func.return_annotation() or ''
-       if returns:
-           returns = ' \N{non-breaking hyphen}> ' + returns
-       params = func.params(annotate=show_type_annotations)
-       if len(params) > 2:
-           formatted_params = ',\n    '.join(params)
-           signature = f"{func.name}(\n    {formatted_params}\n){returns}"
-       else:
-           signature = f"{func.name}({', '.join(params)}){returns}"
+        returns = show_type_annotations and func.return_annotation() or ''
+        if returns:
+            returns = ' \N{non-breaking hyphen}> ' + returns
+        params = func.params(annotate=show_type_annotations)
+        if len(params) > 2:
+            formatted_params = ',\n    '.join(params)
+            signature = f"{func.name}(\n    {formatted_params}\n){returns}"
+        else:
+            signature = f"{func.name}({', '.join(params)}){returns}"
 %>
 ```python
 ${signature}
 ```
+
 ${func.docstring | deflist}
 
 % if len(params) > 0:
-#### Parameters
-
 ${format_param_table(params, func.docstring)}
 % endif
 </%def>
 
 <%def name="variable(var)" buffered="True">
-<h3 id="${var.module.name}.${var.cls.name if var.cls else ''}.${var.name}" class="doc doc-heading">
+
 <code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
-<span class="doc doc-object-name doc-attribute-name">${var.name}</span>
+${'###'} ${var.name}
 <code class="doc-symbol doc-symbol-heading doc-symbol-${var.instance_var and 'instance' or 'class'}-attribute"></code>
 <a href="#${var.module.name}.${var.cls.name if var.cls else ''}.${var.name}" class="headerlink" title="Permanent link"></a>
-</h3>
+
+
 <%
         annot = show_type_annotations and var.type_annotation() or ''
         if annot:
@@ -180,8 +178,6 @@ ${signature}
 ${cls.docstring | deflist}
 
 % if len(params) > 0:
-### Parameters
-
 ${format_param_table(params, cls.docstring)}
 % endif
 
