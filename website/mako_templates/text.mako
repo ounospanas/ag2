@@ -133,8 +133,8 @@ ${indent(s)}
 </%def>
 
 <%def name="function(func)" buffered="True">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>
-${'###'} ${func.name}
+<code class="doc-symbol doc-symbol-heading doc-symbol-${func.cls and 'method' or 'function'}"></code>
+${'####'} ${func.name}
 <a href="#${func.module.name}.${func.cls.name if func.cls else ''}.${func.name}" class="headerlink" title="Permanent link"></a>
 
 <%
@@ -162,8 +162,7 @@ ${format_param_table(params, func.docstring)}
 <%def name="variable(var)" buffered="True">
 
 <code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>
-${'###'} ${var.name}
-<code class="doc-symbol doc-symbol-heading doc-symbol-${var.instance_var and 'instance' or 'class'}-attribute"></code>
+${'####'} ${var.name}
 <a href="#${var.module.name}.${var.cls.name if var.cls else ''}.${var.name}" class="headerlink" title="Permanent link"></a>
 
 
@@ -210,24 +209,28 @@ ${format_param_table(params, cls.docstring)}
   subclasses = cls.subclasses()
 %>
 % if class_vars:
+${'###'} Class Attributes
     % for v in class_vars:
 ${variable(v)}
 
     % endfor
 % endif
 % if static_methods:
+${'###'} Static Methods
     % for f in static_methods:
 ${function(f)}
 
     % endfor
 % endif
 % if inst_vars:
+${'###'} Instance Attributes
     % for v in inst_vars:
 ${variable(v)}
 
     % endfor
 % endif
 % if methods:
+${'###'} Instance Methods
     % for m in methods:
 ${function(m)}
 

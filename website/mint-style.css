@@ -116,11 +116,20 @@ body.reference-page .doc-symbol-class:before {
   display: inline-block;
 }
 
+.doc-symbol-function:before {
+  content: "func" !important;
+  color: #8250df;
+  font-family: monospace;
+  font-size: 0.75rem;
+  font-weight: bold;
+  vertical-align: middle;
+}
+
 .doc-symbol-method:before {
   content: "meth" !important;
   color: #8250df;
   font-family: monospace;
-  font-size: 1.25rem;
+  font-size: 0.75rem;
   font-weight: bold;
   vertical-align: middle;
 }
@@ -129,32 +138,8 @@ body.reference-page .doc-symbol-class:before {
   content: "attr" !important;
   color: #953800;
   font-family: monospace;
-  font-size: 1.25rem;
+  font-size: 0.75rem;
   font-weight: bold;
-  vertical-align: middle;
-}
-
-.doc-symbol-instance-attribute::after {
-  content: "instance-attribute" !important;
-  margin-left: 0.5rem;
-  padding: 0.2em 0.4em;
-  display: inline-block;
-}
-
-.doc-symbol-class-attribute::after {
-  content: "class-attribute" !important;
-  margin-left: 0.5rem;
-  padding: 0.2em 0.4em;
-  display: inline-block;
-}
-
-.doc-symbol-instance-attribute::after,
-.doc-symbol-class-attribute::after {
-  font-size: 0.8rem;
-  word-break: break-word;
-  font-family: monospace;
-  color: #36464e;
-  opacity: 0.75;
   vertical-align: middle;
 }
 
@@ -182,12 +167,12 @@ body.reference-page .doc-object-name {
   display: inline-block;
 }
 
-body.reference-page h3 {
+body.reference-page h4 {
+  vertical-align: middle;
+  margin: 0 0.25rem;
+  font-family: monospace;
   display: inline-block;
-    margin: 0 0.5rem;
-    vertical-align: middle;
-    font-family: monospace;
-    font-size: 1.25rem !important;
+  font-size: 1rem !important;
 }
 
 body.reference-page .headerlink {
@@ -218,7 +203,7 @@ body.reference-page .headerlink:hover {
 
 .doc-heading-wrapper .doc-object-name {
   font-family: monospace;
-  font-size: 1.25rem;
+  font-size: 1rem;
   margin: 0 0.25rem;
 }
 /* Reference section ends */
