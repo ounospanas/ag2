@@ -102,6 +102,9 @@
           description = ' '.join(description.split())
           # Add line breaks before numbered points
           description = re.sub(r'(?<!\d)\. ', '.<br/><br/>', description)
+          # Escape { character to prevent it from being interpreted as a variable
+          description = description.replace('{', '\{')
+          default = default.replace('{', '\{')
 
           # Format the table cell
           formatted_desc = f"{description}<br/><br/>" if description else ''

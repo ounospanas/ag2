@@ -18,6 +18,20 @@ from pathlib import Path
 from typing import Any, List, Optional
 
 
+def move_files_excluding_index(api_dir: Path) -> None:
+    """Move files from api_dir/autogen to api_dir, excluding index.md files.
+
+    Args:
+        api_dir (Path): Path to the API directory
+    """
+    autogen_dir = api_dir / "autogen"
+    for file_path in autogen_dir.rglob('*'):
+        if file_path.is_file() and file_path.name != "index.md":
+            dest = api_dir / file_path.relative_to(autogen_dir)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(file_path), str(dest))
+    shutil.rmtree(autogen_dir)
+
 def run_pdoc3(api_dir: Path) -> None:
     """Run pydoc3 to generate the API documentation."""
     try:
@@ -28,6 +42,10 @@ def run_pdoc3(api_dir: Path) -> None:
             capture_output=True,
             text=True,
         )
+
+        # the generated files are saved in a directory named '{api_dir}/autogen'. move all files to the parent directory
+        move_files_excluding_index(api_dir)
+
         print("Successfully generated API documentation")
     except subprocess.CalledProcessError as e:
         print(f"Error running pdoc3: {e.stderr}")
