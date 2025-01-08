@@ -11,26 +11,26 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any, List, Optional
 
 
-def run_pydoc_markdown(config_file: Path) -> None:
-    """Run pydoc-markdown with the specified config file.
-
-    Args:
-        config_file (Path): Path to the pydoc-markdown config file
-    """
+def run_pdoc3(api_dir: Path) -> None:
+    """Run pydoc3 to generate the API documentation."""
     try:
-        subprocess.run(["pydoc-markdown"], check=True, capture_output=True, text=True)
-        print(f"Successfully ran pydoc-markdown with config: {config_file}")
+        print(f"Generating API documentation and saving to {str(api_dir)}...")
+        subprocess.run(
+            ["pdoc", "--output-dir", str(api_dir), "--template-dir", "mako_templates", "--force", "autogen"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        print("Successfully generated API documentation")
     except subprocess.CalledProcessError as e:
-        print(f"Error running pydoc-markdown: {e.stderr}")
-        sys.exit(1)
-    except FileNotFoundError:
-        print("pydoc-markdown not found. Please install it with: pip install pydoc-markdown")
+        print(f"Error running pdoc3: {e.stderr}")
         sys.exit(1)
 
 
@@ -74,11 +74,8 @@ def convert_md_to_mdx(input_dir: Path) -> None:
         # Read content from .md file
         content = md_file.read_text(encoding="utf-8")
 
-        # Update sidenav title
-        processed_content = content.replace("sidebar_label: ", "sidebarTitle: ")
-
         # Write content to .mdx file
-        mdx_file.write_text(processed_content, encoding="utf-8")
+        mdx_file.write_text(content, encoding="utf-8")
 
         # Remove original .md file
         md_file.unlink()
@@ -188,9 +185,15 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    if args.api_dir.exists():
+        # Force delete the directory and its contents
+        shutil.rmtree(args.api_dir, ignore_errors=True)
+
+    api_dir_rel_path = args.api_dir.resolve().relative_to(script_dir)
+
     # Run pydoc-markdown
     print("Running pydoc-markdown...")
-    run_pydoc_markdown(args.config)
+    run_pdoc3(api_dir_rel_path)
 
     # Convert MD to MDX
     print("Converting MD files to MDX...")

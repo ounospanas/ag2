@@ -5,7 +5,8 @@ set -x
 
 # Function to build documentation
 docs_build() {
-    cd website &&
+    pip install falkordb graphrag_sdk pypdf &&
+        cd website &&
         python ./process_api_reference.py &&
         python ./process_notebooks.py render
 }

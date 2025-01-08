@@ -14,15 +14,15 @@ See [here](https://github.com/ag2ai/ag2/blob/main/notebook/contributing.md#how-t
 nvm install --lts
 ```
 
-Then, install the required packages by running the following commands:
+Then, install the required Python packages by running the following command:
 
 ```bash
-pip install pydoc-markdown pyyaml termcolor nbclient
+pip install -e ".[docs]"
 ```
 
 2. You also need to install quarto. Please click on the `Pre-release` tab from [this website](https://quarto.org/docs/download/) to download the latest version of `quarto` and install it. Ensure that the `quarto` version is `1.5.23` or higher.
 
-3. Finally, run the following commands to build and serve the documentation:
+3. Finally, run the following command to build and serve the documentation:
 
 ```console
 ./scripts/docs_serve.sh
@@ -45,9 +45,10 @@ Then start the container like so, this will log you in and ensure that Docker po
 docker run -it -p 8081:3000 -v $(pwd):/home/autogen/ag2 ag2ai_dev_img bash
 ```
 
-Once at the CLI in Docker run the following commands:
+Once at the CLI in Docker run the following commands one by one:
 
 ```console
+pip install -e ".[docs]"
 ./scripts/docs_serve.sh
 ```
 

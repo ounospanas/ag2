@@ -60,6 +60,7 @@ setuptools.setup(
         "interop-pydantic-ai": ["pyautogen[interop-pydantic-ai]==" + __version__],
         "interop": ["pyautogen[interop]==" + __version__],
         "neo4j": ["pyautogen[neo4j]==" + __version__],
+        "docs": ["pyautogen[docs]==" + __version__],
     },
     url="https://github.com/ag2ai/ag2",
     author="Chi Wang & Qingyun Wu",

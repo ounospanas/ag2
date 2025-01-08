@@ -95,12 +95,57 @@ interop_langchain = ["langchain-community>=0.3.12,<1"]
 interop_pydantic_ai = ["pydantic-ai==0.0.13"]
 interop = interop_crewai + interop_langchain + interop_pydantic_ai
 
+fastembed = ["fastembed>=0.3.1"]
+pymongo = ["pymongo>=4.0.0"]
+azure_cosmos = ["azure-cosmos>=4.2.0"]
+anthropic = ["anthropic[vertex]>=0.23.1"]
+boto3 = ["boto3>=1.34.149"]
+cerebras_cloud_sdk = ["cerebras_cloud_sdk>=1.0.0"]
+cohere = ["cohere>=5.5.8"]
+gemini = [
+    "google-generativeai>=0.5,<1",
+    "google-cloud-aiplatform",
+    "google-auth",
+    "pillow",
+    "pydantic",
+    "jsonschema",
+]
+groq = ["groq>=0.9.0"]
+mistral = ["mistralai>=1.0.1"]
+ollama = ["ollama>=0.3.3", "fix_busted_json>=0.0.18"]
+together = ["together>=1.2"]
+qdrant_client = ["qdrant_client"]
+
 types = ["mypy==1.9.0"] + test + jupyter_executor + interop
 
 if current_os in ["Windows", "Darwin"]:
     retrieve_chat_pgvector.extend(["psycopg[binary]>=3.1.18"])
 elif current_os == "Linux":
     retrieve_chat_pgvector.extend(["psycopg>=3.1.18"])
+
+docs = [
+    "pdoc3>=0.11.5",
+    "pyyaml>=6.0.2",
+    "termcolor>=2.5.0",
+    "nbclient>=0.10.2",
+    *qdrant_client,
+    *anthropic,
+    *azure_cosmos,
+    *pymongo,
+    *fastembed,
+    *neo4j,
+    *retrieve_chat_pgvector,
+    *jupyter_executor,
+    *anthropic,
+    *boto3,
+    *cerebras_cloud_sdk,
+    *cohere,
+    *gemini,
+    *groq,
+    *mistral,
+    *ollama,
+    *together,
+]
 
 # pysqlite3-binary used so it doesn't need to compile pysqlite3
 autobuild = ["chromadb", "sentence-transformers", "huggingface-hub", "pysqlite3-binary"]
@@ -117,43 +162,37 @@ extra_require = {
     "mathchat": ["sympy", "pydantic==1.10.9", "wolframalpha"],
     "retrievechat": retrieve_chat,
     "retrievechat-pgvector": retrieve_chat_pgvector,
-    "retrievechat-mongodb": [*retrieve_chat, "pymongo>=4.0.0"],
-    "retrievechat-qdrant": [*retrieve_chat, "qdrant_client", "fastembed>=0.3.1"],
+    "retrievechat-mongodb": [*retrieve_chat, *pymongo],
+    "retrievechat-qdrant": [*retrieve_chat, *qdrant_client, *fastembed],
     "graph-rag-falkor-db": graph_rag_falkor_db,
     "autobuild": autobuild,
     "captainagent": autobuild + ["pandas"],
     "teachable": ["chromadb"],
     "lmm": ["replicate", "pillow"],
     "graph": ["networkx", "matplotlib"],
-    "gemini": [
-        "google-generativeai>=0.5,<1",
-        "google-cloud-aiplatform",
-        "google-auth",
-        "pillow",
-        "pydantic",
-        "jsonschema",
-    ],
-    "together": ["together>=1.2"],
+    "gemini": gemini,
+    "together": together,
     "websurfer": ["beautifulsoup4", "markdownify", "pdfminer.six", "pathvalidate"],
     "redis": ["redis"],
-    "cosmosdb": ["azure-cosmos>=4.2.0"],
+    "cosmosdb": azure_cosmos,
     "websockets": ["websockets>=14.0,<15"],
     "jupyter-executor": jupyter_executor,
     "types": types,
     "long-context": ["llmlingua<0.3"],
-    "anthropic": ["anthropic[vertex]>=0.23.1"],
-    "cerebras": ["cerebras_cloud_sdk>=1.0.0"],
-    "mistral": ["mistralai>=1.0.1"],
-    "groq": ["groq>=0.9.0"],
-    "cohere": ["cohere>=5.5.8"],
-    "ollama": ["ollama>=0.3.3", "fix_busted_json>=0.0.18"],
-    "bedrock": ["boto3>=1.34.149"],
+    "anthropic": anthropic,
+    "cerebras": cerebras_cloud_sdk,
+    "mistral": mistral,
+    "groq": groq,
+    "cohere": cohere,
+    "ollama": ollama,
+    "bedrock": boto3,
     "twilio": twilio,
     "interop-crewai": interop_crewai,
     "interop-langchain": interop_langchain,
     "interop-pydantic-ai": interop_pydantic_ai,
     "interop": interop,
     "neo4j": neo4j,
+    "docs": docs,
 }
 
 setuptools.setup(
