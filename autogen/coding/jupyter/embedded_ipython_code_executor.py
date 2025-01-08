@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field, field_validator
 from ..base import CodeBlock, CodeExtractor, IPythonCodeResult
 from ..markdown_code_extractor import MarkdownCodeExtractor
 
-__all__ = "EmbeddedIPythonCodeExecutor"
+__all__ = ["EmbeddedIPythonCodeExecutor"]
 
 
 class EmbeddedIPythonCodeExecutor(BaseModel):

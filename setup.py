@@ -128,6 +128,7 @@ docs = [
     "pyyaml>=6.0.2",
     "termcolor>=2.5.0",
     "nbclient>=0.10.2",
+    "arxiv>=2.1.3",
     *qdrant_client,
     *anthropic,
     *azure_cosmos,

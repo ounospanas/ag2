@@ -2,14 +2,15 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import sys
-import pytest
-from pathlib import Path
-import shutil
 import os
+import shutil
+import sys
+from pathlib import Path
+
+import pytest
 
 # Add the ../../website directory to sys.path
-sys.path.append(str(Path(__file__).resolve().parent.parent.parent / 'website'))
+sys.path.append(str(Path(__file__).resolve().parent.parent.parent / "website"))
 from process_api_reference import move_files_excluding_index
 
 
@@ -22,12 +23,14 @@ def create_test_directory_structure(tmp_path):
     # Create some files in autogen
     (autogen_dir / "browser_utils.md").write_text("browser_utils")
     (autogen_dir / "code_utils.md").write_text("code_utils")
+    (autogen_dir / "version.md").write_text("version")
 
     # Create subdirectories with files
     subdir1 = autogen_dir / "agentchat"
     subdir1.mkdir()
     (subdir1 / "assistant_agent.md").write_text("assistant_agent")
     (subdir1 / "conversable_agent.md").write_text("conversable_agent")
+    (subdir1 / "agentchat.md").write_text("agentchat")
     (subdir1 / "index.md").write_text("index")
 
     # nested subdirectory
@@ -44,22 +47,27 @@ def create_test_directory_structure(tmp_path):
 
     return tmp_path
 
+
 def test_move_files_excluding_index(tmp_path):
     """Test that files are moved correctly excluding index.md"""
     # Setup the test directory structure
     api_dir = create_test_directory_structure(tmp_path)
-    
+
     # Call the function under test
     move_files_excluding_index(api_dir)
 
     # Verify that autogen directory no longer exists
     assert not (api_dir / "autogen").exists()
 
+    # Verify the version.md file was not moved
+    assert not (api_dir / "version.md").exists()
+
     # Verify files were moved correctly
     assert (api_dir / "browser_utils.md").exists()
     assert (api_dir / "code_utils.md").exists()
     assert (api_dir / "agentchat" / "assistant_agent.md").exists()
     assert (api_dir / "agentchat" / "conversable_agent.md").exists()
+    assert (api_dir / "agentchat" / "agentchat.md").exists()
     assert (api_dir / "agentchat" / "contrib" / "agent_builder.md").exists()
     assert (api_dir / "cache" / "cache_factory.md").exists()
     assert (api_dir / "cache" / "disk_cache.md").exists()
@@ -68,4 +76,3 @@ def test_move_files_excluding_index(tmp_path):
     assert not (api_dir / "agentchat" / "index.md").exists()
     assert not (api_dir / "agentchat" / "contrib" / "index.md").exists()
     assert not (api_dir / "cache" / "index.md").exists()
-

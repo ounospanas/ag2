@@ -25,12 +25,13 @@ def move_files_excluding_index(api_dir: Path) -> None:
         api_dir (Path): Path to the API directory
     """
     autogen_dir = api_dir / "autogen"
-    for file_path in autogen_dir.rglob('*'):
-        if file_path.is_file() and file_path.name != "index.md":
+    for file_path in autogen_dir.rglob("*"):
+        if file_path.is_file() and file_path.name != "index.md" and file_path.name != "version.md":
             dest = api_dir / file_path.relative_to(autogen_dir)
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(file_path), str(dest))
     shutil.rmtree(autogen_dir)
+
 
 def run_pdoc3(api_dir: Path) -> None:
     """Run pydoc3 to generate the API documentation."""
