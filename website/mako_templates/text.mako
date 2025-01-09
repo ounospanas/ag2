@@ -68,16 +68,14 @@
       return param_desc
 
   def format_param_table(params, docstring):
+      # remove self from params
+      params = [param for param in params if not param.startswith('self:') and param != 'self']
       if not params:
           return ""
       param_descriptions = extract_param_descriptions(docstring)
       table = "| PARAMETER | DESCRIPTION |\n|--|--|\n"
 
       for param in params:
-          # Skip 'self' parameter
-          if param.startswith('self:') or param == 'self':
-              continue
-
           # Split the parameter into name and type annotation
           parts = param.split(':')
           if len(parts) > 1:
@@ -100,11 +98,11 @@
           description = param_descriptions.get(name, "")
           # Convert multiple spaces to single space but preserve intended line breaks
           description = ' '.join(description.split())
-          # Add line breaks before numbered points
-          description = re.sub(r'(?<!\d)\. ', '.<br/><br/>', description)
           # Escape { and < characters to prevent it from being interpreted as special markdown characters
           description = description.replace('{', '\{').replace("<", "&lt;")
           default = default.replace('{', '\{').replace("<", "&lt;")
+          # Add line breaks before numbered points
+          description = re.sub(r'(?<!\d)\. ', '.<br/><br/>', description)
 
 
           # Format the table cell
@@ -176,13 +174,11 @@ ${'####'} ${var.name}
 <%
         annot = show_type_annotations and var.type_annotation() or ''
         if annot:
-            annot = ': ' + annot
+            annot = f"({annot}) "
 
         cleaned_docstring = var.docstring.replace('{', '\{').replace("<", "&lt;")
 %>
-${var.name}${annot}
-
-${cleaned_docstring | deflist}
+${annot}${cleaned_docstring | deflist}
 </%def>
 
 <%def name="class_(cls)" buffered="True">
