@@ -58,6 +58,14 @@ def _change_usage_summary_format(
 
 @wrap_message
 class UsageSummaryMessage(BaseMessage):
+    """A class that represents a usage summary message.
+
+    Attributes:
+        actual (ActualUsageSummary): The actual usage summary.
+        total (TotalUsageSummary): The total usage summary.
+        mode (Mode): The mode of the usage summary.
+    """
+
     actual: ActualUsageSummary
     total: TotalUsageSummary
     mode: Mode
@@ -70,6 +78,14 @@ class UsageSummaryMessage(BaseMessage):
         total_usage_summary: Optional[dict[str, Any]] = None,
         mode: Mode = "both",
     ):
+        """Initialize a UsageSummaryMessage.
+
+        Args:
+            uuid (Optional[UUID]): The UUID of the message.
+            actual_usage_summary (Optional[dict[str, Any]]): The actual usage summary.
+            total_usage_summary (Optional[dict[str, Any]]): The total usage summary.
+            mode (Mode): The mode of the usage summary.
+        """
         # print(f"{actual_usage_summary=}")
         # print(f"{total_usage_summary=}")
 
@@ -83,6 +99,13 @@ class UsageSummaryMessage(BaseMessage):
         usage_type: str = "total",
         f: Optional[Callable[..., Any]] = None,
     ) -> None:
+        """Print the usage summary.
+
+        Args:
+            usage_summary (Union[ActualUsageSummary, TotalUsageSummary]): The usage summary to print.
+            usage_type (str): The usage type.
+            f (Optional[Callable[..., Any]]): The function to use for printing.
+        """
         f = f or print
         word_from_type = "including" if usage_type == "total" else "excluding"
         if usage_summary.usages is None or len(usage_summary.usages) == 0:
@@ -99,6 +122,11 @@ class UsageSummaryMessage(BaseMessage):
             )
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+        """Print the usage summary.
+
+        Args:
+            f (Optional[Callable[..., Any]]): The function to use for printing.
+        """
         f = f or print
 
         if self.total.usages is None:

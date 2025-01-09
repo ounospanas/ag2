@@ -15,9 +15,20 @@ __all__ = ["BaseMessage", "wrap_message", "get_annotated_type_for_message_classe
 
 
 class BaseMessage(BaseModel, ABC):
+    """Base message class
+
+    Args:
+        BaseModel (BaseModel): Pydantic base model
+    """
+
     uuid: UUID
 
     def __init__(self, uuid: Optional[UUID] = None, **kwargs: Any) -> None:
+        """Initialize the base message class
+
+        Args:
+            uuid (Optional[UUID], optional): Unique identifier. If none, a new UUID will be generated. Defaults to None.
+        """
         uuid = uuid or uuid4()
         super().__init__(uuid=uuid, **kwargs)
 
@@ -54,7 +65,6 @@ def wrap_message(message_cls: Type[BaseMessage]) -> Type[BaseModel]:
     type_name = type_name[: -len("_message")]
 
     class WrapperBase(BaseModel):
-        # these types are generated dynamically so we need to disable the type checker
         type: Literal[type_name] = type_name  # type: ignore[valid-type]
         content: message_cls  # type: ignore[valid-type]
 
@@ -73,12 +83,25 @@ def wrap_message(message_cls: Type[BaseMessage]) -> Type[BaseModel]:
 
     Wrapper = create_model(message_cls.__name__, __base__=WrapperBase)
 
+    # Preserve the original class's docstring and other attributes
+    Wrapper.__doc__ = message_cls.__doc__
+    Wrapper.__module__ = message_cls.__module__
+
+    # Copy any other relevant attributes/metadata from the original class
+    if hasattr(message_cls, "__annotations__"):
+        Wrapper.__annotations__ = message_cls.__annotations__
+
     _message_classes[type_name] = Wrapper
 
     return Wrapper
 
 
 def get_annotated_type_for_message_classes() -> Type[Any]:
+    """Get annotated type for message classes
+
+    Returns:
+        Type[Any]: Annotated type for message classes
+    """
     # this is a dynamic type so we need to disable the type checker
     union_type = Union[tuple(_message_classes.values())]  # type: ignore[valid-type]
     return Annotated[union_type, Field(discriminator="type")]  # type: ignore[return-value]

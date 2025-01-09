@@ -102,9 +102,10 @@
           description = ' '.join(description.split())
           # Add line breaks before numbered points
           description = re.sub(r'(?<!\d)\. ', '.<br/><br/>', description)
-          # Escape { character to prevent it from being interpreted as a variable
-          description = description.replace('{', '\{')
-          default = default.replace('{', '\{')
+          # Escape { and < characters to prevent it from being interpreted as special markdown characters
+          description = description.replace('{', '\{').replace("<", "&lt;")
+          default = default.replace('{', '\{').replace("<", "&lt;")
+
 
           # Format the table cell
           formatted_desc = f"{description}<br/><br/>" if description else ''
@@ -121,6 +122,8 @@
 <%def name="deflist(s)">
 % if 'Args:' in s:
 ${indent(s.split('Args:')[0])}
+% elif 'Attributes:' in s:
+${indent(s.split('Attributes:')[0])}
 % else:
 ${indent(s)}
 % endif
@@ -147,15 +150,19 @@ ${'####'} ${func.name}
             signature = f"{func.name}(\n    {formatted_params}\n){returns}"
         else:
             signature = f"{func.name}({', '.join(params)}){returns}"
+
+        signature = signature.replace('{', '\{').replace("<", "&lt;")
+
+        cleaned_docstring = func.docstring.replace('{', '\{').replace("<", "&lt;")
 %>
 ```python
 ${signature}
 ```
 
-${func.docstring | deflist}
+${cleaned_docstring | deflist}
 
 % if len(params) > 0:
-${format_param_table(params, func.docstring)}
+${format_param_table(params, cleaned_docstring)}
 % endif
 </%def>
 
@@ -170,10 +177,12 @@ ${'####'} ${var.name}
         annot = show_type_annotations and var.type_annotation() or ''
         if annot:
             annot = ': ' + annot
+
+        cleaned_docstring = var.docstring.replace('{', '\{').replace("<", "&lt;")
 %>
 ${var.name}${annot}
 
-${var.docstring | deflist}
+${cleaned_docstring | deflist}
 </%def>
 
 <%def name="class_(cls)" buffered="True">
@@ -190,14 +199,17 @@ ${var.docstring | deflist}
        signature = f"{cls.name}(\n    {formatted_params}\n)"
    else:
        signature = f"{cls.name}({', '.join(params)})"
+   signature = signature.replace('{', '\{').replace("<", "&lt;")
+
+   cleaned_docstring = cls.docstring.replace('{', '\{').replace("<", "&lt;")
 %>
 ```python
 ${signature}
 ```
-${cls.docstring | deflist}
+${cleaned_docstring | deflist}
 
 % if len(params) > 0:
-${format_param_table(params, cls.docstring)}
+${format_param_table(params, cleaned_docstring)}
 % endif
 
 <%

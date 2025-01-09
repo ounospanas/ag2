@@ -405,7 +405,9 @@
           "group": "messages",
           "pages": [
             "docs/reference/messages/agent_messages",
-            "docs/reference/messages/base_message"
+            "docs/reference/messages/base_message",
+            "docs/reference/messages/client_messages",
+            "docs/reference/messages/print_message"
           ]
         },
         {
@@ -437,6 +439,8 @@
         "docs/reference/browser_utils",
         "docs/reference/code_utils",
         "docs/reference/exception_utils",
+        "docs/reference/formatting_utils",
+        "docs/reference/function_utils",
         "docs/reference/graph_utils",
         "docs/reference/math_utils",
         "docs/reference/retrieve_utils",

@@ -194,7 +194,6 @@ def main() -> None:
     script_dir = Path(__file__).parent.absolute()
 
     parser = argparse.ArgumentParser(description="Process API reference documentation")
-    parser.add_argument("--config", type=Path, help="Path to pydoc-markdown config file", default=script_dir)
     parser.add_argument(
         "--api-dir",
         type=Path,
@@ -210,8 +209,8 @@ def main() -> None:
 
     api_dir_rel_path = args.api_dir.resolve().relative_to(script_dir)
 
-    # Run pydoc-markdown
-    print("Running pydoc-markdown...")
+    # Run pdoc3
+    print("Running pdoc3...")
     run_pdoc3(api_dir_rel_path)
 
     # Convert MD to MDX
