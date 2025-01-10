@@ -45,10 +45,10 @@ def camel2snake(name: str) -> str:
     return "".join(["_" + i.lower() if i.isupper() else i for i in name]).lstrip("_")
 
 
-_message_classes: dict[str, Type[BaseModel]] = {}
+_message_classes: dict[str, type[BaseModel]] = {}
 
 
-def wrap_message(message_cls: Type[BaseMessage]) -> Type[BaseModel]:
+def wrap_message(message_cls: type[BaseMessage]) -> type[BaseModel]:
     """Wrap a message class with a type field to be used in a union type
 
     This is needed for proper serialization and deserialization of messages in a union type.
@@ -65,6 +65,7 @@ def wrap_message(message_cls: Type[BaseMessage]) -> Type[BaseModel]:
     type_name = type_name[: -len("_message")]
 
     class WrapperBase(BaseModel):
+        # these types are generated dynamically so we need to disable the type checker
         type: Literal[type_name] = type_name  # type: ignore[valid-type]
         content: message_cls  # type: ignore[valid-type]
 
@@ -81,22 +82,21 @@ def wrap_message(message_cls: Type[BaseMessage]) -> Type[BaseModel]:
         def print(self, f: Optional[Callable[..., Any]] = None) -> None:
             self.content.print(f)  # type: ignore[attr-defined]
 
-    Wrapper = create_model(message_cls.__name__, __base__=WrapperBase)
+    wrapper_cls = create_model(message_cls.__name__, __base__=WrapperBase)
 
     # Preserve the original class's docstring and other attributes
-    Wrapper.__doc__ = message_cls.__doc__
-    Wrapper.__module__ = message_cls.__module__
+    wrapper_cls.__doc__ = message_cls.__doc__
+    wrapper_cls.__module__ = message_cls.__module__
 
     # Copy any other relevant attributes/metadata from the original class
     if hasattr(message_cls, "__annotations__"):
-        Wrapper.__annotations__ = message_cls.__annotations__
+        wrapper_cls.__annotations__ = message_cls.__annotations__
 
-    _message_classes[type_name] = Wrapper
+    _message_classes[type_name] = wrapper_cls
 
-    return Wrapper
+    return wrapper_cls
 
-
-def get_annotated_type_for_message_classes() -> Type[Any]:
+def get_annotated_type_for_message_classes() -> type[Any]:
     """Get annotated type for message classes
 
     Returns:
@@ -107,5 +107,5 @@ def get_annotated_type_for_message_classes() -> Type[Any]:
     return Annotated[union_type, Field(discriminator="type")]  # type: ignore[return-value]
 
 
-def get_message_classes() -> dict[str, Type[BaseModel]]:
+def get_message_classes() -> dict[str, type[BaseModel]]:
     return _message_classes
