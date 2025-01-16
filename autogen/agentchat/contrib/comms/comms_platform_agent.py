@@ -1,15 +1,18 @@
 # Copyright (c) 2023 - 2025, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
+import asyncio
 import copy
 from abc import abstractmethod
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 from pydantic import BaseModel, Field
+from pydantic_core import ValidationError
 
 from ...agent import Agent
 from ...conversable_agent import ConversableAgent
 from .platform_configs import BasePlatformConfig, ReplyConfig
+from .platform_errors import PlatformError
 
 
 class PlatformMessageDecision(BaseModel):
@@ -61,7 +64,7 @@ class PlatformExecutorAgent(ConversableAgent):
             "You handle sending messages and receiving replies from the platform."
         )
 
-        super().__init__(name="PlatformExecutor", system_message=system_message)
+        super().__init__(name=self.__class__.__name__, system_message=system_message)
 
         self.platform_config = platform_config
         self.reply_config = reply_config
@@ -70,12 +73,12 @@ class PlatformExecutorAgent(ConversableAgent):
         self.register_function({"send_to_platform": self._send_to_platform, "wait_for_reply": self._wait_for_reply})
 
     @abstractmethod
-    def _send_to_platform(self, message: str) -> str:
+    async def _send_to_platform(self, message: str) -> str:
         """Send message to platform."""
         pass
 
     @abstractmethod
-    def _wait_for_reply(self, msg_id: str) -> str:
+    async def _wait_for_reply(self, msg_id: str) -> str:
         """Wait for reply from platform."""
         pass
 
@@ -93,8 +96,11 @@ class CommsPlatformAgent(ConversableAgent):
         self,
         name: str,
         platform_config: "BasePlatformConfig",
-        send_config: Dict[str, Any],
         executor_agent: "PlatformExecutorAgent",
+        send_config: Dict[str, Any],
+        message_to_send: Optional[
+            callable
+        ] = None,  # The function to determine the message to send, returns None to indicate do not send a message, otherwise determined automatically
         reply_config: Optional["ReplyConfig"] = None,
         auto_reply: str = "Message sent",
         system_message: Optional[str] = None,
@@ -104,45 +110,99 @@ class CommsPlatformAgent(ConversableAgent):
     ):
         super().__init__(name=name, system_message=system_message, llm_config=llm_config, *args, **kwargs)
 
-        # Deep copy the llm_config as we'll be adding a response format to it
-        # decision_llm_config = copy.deepcopy(self.llm_config)
+        # self.message_to_send = message_to_send
+        # Are we using an LLM to decide and create the message?
+        self.message_decision_creation_llm = message_to_send is None
+        self.message_to_send = message_to_send
 
         # Create our specialized agents
+        self.executor_agent = executor_agent
         self.decision_agent = PlatformDecisionAgent(self.__class__.__name__.replace("Agent", ""), llm_config=llm_config)
-        self.executor = executor_agent
 
-        # Register the nested chat sequence on the current agent
-        self.register_nested_chats(
-            [
-                {
-                    # First: Decision agent evaluates and decides
-                    "sender": self,
-                    "recipient": self.decision_agent,
-                    "message": self._prepare_decision_message,
-                    # "summary_method": "last_msg",
-                    "max_turns": 1,
-                },
-                {
-                    # Second: Executor handles platform communication if decision is to send
-                    "sender": self.decision_agent,
-                    "recipient": self.executor,
-                    # "message": self._prepare_executor_message,
-                    "message": "PLACEHOLDER",  # As the reply function doesn't need the message but we need text here to keep it in the nested chat queue
-                    # "summary_method": "last_msg",
-                    "max_turns": 1,
-                },
-            ],
-            trigger=[ConversableAgent],  # , None],  # Respond to any agent or direct messages
-            # reply_func_from_nested_chats=self._process_nested_chat_results,
-            position=0,
-        )
+        if self.message_decision_creation_llm:
+            # Register the nested chat sequence on the current agent
+            self.register_nested_chats(
+                [
+                    {
+                        # First: Decision agent decides whether to send a message and crafts the message
+                        "sender": self,
+                        "recipient": self.decision_agent,
+                        "message": self._prepare_decision_message,
+                        "summary_method": "last_msg",
+                        "max_turns": 1,
+                        # "chat_id": 1
+                    },
+                    {
+                        # Second: Executor handles platform communication if decision is to send
+                        # "sender": self.decision_agent,
+                        "sender": self,
+                        "recipient": self.executor_agent,
+                        "message": "PLACEHOLDER",  # As the reply function doesn't need the message but we need text here to keep it in the nested chat queue, must be PLACEHOLDER for processing
+                        "max_turns": 1,
+                        # "chat_id": 2
+                    },
+                ],
+                trigger=[ConversableAgent],
+                position=0,
+            )
+
+        else:
+            # Create our specialized agents
+            self.decision_agent.register_reply(
+                trigger=[ConversableAgent],
+                reply_func=self._process_message_to_send,
+                remove_other_reply_funcs=True,
+            )
+
+            # Register the nested chat sequence on the current agent
+            self.register_nested_chats(
+                [
+                    {
+                        # First: Decision agent decides whether to send a message and crafts the message
+                        "sender": self,
+                        "recipient": self.decision_agent,
+                        "message": "Determine if we need to send a message and what it should be.",
+                        "summary_method": "last_msg",
+                        "max_turns": 1,
+                        # "chat_id": 1
+                    },
+                    {
+                        # Second: Executor handles platform communication if decision is to send
+                        # "sender": self.decision_agent,
+                        "sender": self,
+                        "recipient": self.executor_agent,
+                        "message": "PLACEHOLDER",  # As the reply function doesn't need the message but we need text here to keep it in the nested chat queue, must be PLACEHOLDER for processing
+                        "max_turns": 1,
+                        # "chat_id": 2
+                    },
+                ],
+                trigger=[ConversableAgent],
+                position=0,
+            )
 
         # Register the reply function on the executor agent that will trigger in the second chat in the nested chat sequence
-        self.executor.register_reply(
+        self.executor_agent.register_reply(
             trigger=[ConversableAgent],  # , None],
             reply_func=self._executor_reply_function,
             remove_other_reply_funcs=True,
         )
+
+    def _process_message_to_send(
+        self,
+        recipient: ConversableAgent,
+        messages: Optional[List[Dict]] = None,
+        sender: Optional[Agent] = None,
+        config: Optional[Any] = None,
+    ) -> Tuple[bool, Union[str, Dict, None]]:
+        """Execute the message_to_send and returns our structured output for compatibility with the executor agent's processing."""
+
+        # Get the message to send
+        message = self.message_to_send(messages)
+
+        # Put into our structured output format so the executor can process it in _executor_reply_function
+        decision = PlatformMessageDecision(message_to_post=message or "", should_send=message is not None)
+
+        return True, decision.model_dump_json()
 
     def _executor_reply_function(
         self,
@@ -152,13 +212,44 @@ class CommsPlatformAgent(ConversableAgent):
         config: Optional[Any] = None,
     ) -> Tuple[bool, Union[str, Dict, None]]:
         """Process the results from the decision agent and perform an action, or not."""
-        # If no messages, return
-        if not messages:
-            return True, "No action taken"
+        message_content: str = messages[-1]["content"]
 
-        # Extract the relevant information from chat results
-        # This might need adjustment based on exact chat_results structure
-        return True, "Communication completed"
+        # We should have a message that starts with the second nested chat message text, "PLACEHOLDER", and the inbuilt carry over prefix "Context: \n"
+        if not message_content.startswith("PLACEHOLDER\nContext: \n"):
+            return True, "Error, the workflow did not work correctly, message not sent."
+
+        message_content = message_content.replace("PLACEHOLDER\nContext: \n", "")
+
+        try:
+            decision = PlatformMessageDecision.model_validate_json(message_content)
+
+        except ValidationError:
+            return (
+                True,
+                "Couldn't convert the structured output, ensure you are using a client and model that supports structured output.",
+            )
+
+        if decision.should_send:
+            # Handle asynchronous functions in here as this chat may not be running async
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+
+            async def _send_with_error_handling():
+                return await self.executor_agent._send_to_platform(decision.message_to_post)
+
+            try:
+                # Run the async function in the event loop with proper error handling
+                _ = loop.run_until_complete(_send_with_error_handling())
+                return True, f"Message sent successfully:\n{decision.message_to_post}"
+            except PlatformError as e:
+                return True, f"Message not sent due to platform exception: {str(e)}"
+            except Exception as e:
+                return True, f"Message not sent due to unexpected error: {str(e)}"
+
+        return True, "No message was sent based on decision"
 
     def _prepare_decision_message(self, recipient: Agent, messages: List[Dict[str, Any]], sender: Agent, config) -> str:
         """Prepare message for decision agent based on conversation history."""
@@ -193,7 +284,7 @@ class CommsPlatformAgent(ConversableAgent):
             return f'send_to_platform("{decision.message_to_post}")'
 
         except Exception:
-            return "Need to return a string so this chat remains a valid chat to execute."
+            return "Couldn't convert the structured output, ensure you are using a client and model that supports structured output."
 
     '''
     def _process_nested_chat_results(self, chat_queue: List[Dict],

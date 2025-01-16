@@ -17,6 +17,7 @@ class PlatformError(Exception):
         self.platform_error = platform_error
         self.platform_name = platform_name
         self.context = context or {}
+        self.message = message
 
         # Enhance error message with platform details if available
         full_message = f"[{platform_name or 'Unknown Platform'}] {message}"
@@ -24,6 +25,12 @@ class PlatformError(Exception):
             full_message += f"\nOriginal error: {str(platform_error)}"
 
         super().__init__(full_message)
+
+    """
+    # Message to user with full details
+    def __str__(self):
+        return f"{self.__class__.__name__} - {self.platform_name}.\nMessage: {self.message}\nError: {self.platform_error}\nContext: {self.context}"
+    """
 
 
 class PlatformConnectionError(PlatformError):
