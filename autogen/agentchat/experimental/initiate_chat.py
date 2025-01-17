@@ -2,14 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import getpass
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, AsyncIterable, Iterable, Optional, Protocol, Union, runtime_checkable
 from uuid import UUID
 
 from ...io import IOStream
-from ...messages.print_message import PrintMessage
 from .chat_context import ChatContext
 
 if TYPE_CHECKING:
