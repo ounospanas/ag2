@@ -26,12 +26,6 @@ class PlatformError(Exception):
 
         super().__init__(full_message)
 
-    """
-    # Message to user with full details
-    def __str__(self):
-        return f"{self.__class__.__name__} - {self.platform_name}.\nMessage: {self.message}\nError: {self.platform_error}\nContext: {self.context}"
-    """
-
 
 class PlatformConnectionError(PlatformError):
     """Raised when there's an error connecting to the platform."""

@@ -5,8 +5,10 @@ from .discord_agent import (
     DiscordAgent,
     DiscordConfig,
 )
+from .platform_configs import ReplyMonitorConfig
 
 __all__ = [
     "DiscordAgent",
     "DiscordConfig",
+    "ReplyMonitorConfig",
 ]

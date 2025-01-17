@@ -21,17 +21,14 @@ class BasePlatformConfig(ABC):
 
 
 @dataclass
-class ReplyConfig:
+class ReplyMonitorConfig:
     """Configuration for handling platform replies."""
 
-    timeout_minutes: int = 60
+    timeout_minutes: int = 1
     """How long to wait for replies before timing out."""
 
     max_reply_messages: int = 1
     """Maximum number of messages to collect before returning."""
-
-    aggregate_replies: bool = False
-    """Whether to combine multiple replies into one response."""
 
 
 # MS MOVE THESE TO THEIR RESPECTIVE CLASSES

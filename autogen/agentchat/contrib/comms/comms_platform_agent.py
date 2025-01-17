@@ -8,12 +8,15 @@ from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 from pydantic import BaseModel, Field
 from pydantic_core import ValidationError
 
+from ....io.base import IOStream
+from ....messages.agent_messages import WaitingForTaskMessage
 from ...agent import Agent
 from ...conversable_agent import ConversableAgent
-from .platform_configs import BasePlatformConfig, ReplyConfig
+from .platform_configs import BasePlatformConfig, ReplyMonitorConfig
 from .platform_errors import PlatformError
 
 __NESTED_CHAT_EXECUTOR_PREFIX__ = "Send the message (if needed)"
+__DECISION_AGENT_SYSTEM_MESSAGE__ = "You are an AI assistant that determines if there's sufficient need to send a message and, if so, crafts the message."
 
 
 class PlatformMessageDecision(BaseModel):
@@ -38,7 +41,7 @@ class PlatformDecisionAgent(ConversableAgent):
     ):
         system_message = (
             f"You are a decision maker for {platform_name} communications. "
-            "You evaluate messages and decide what should be sent to the platform. "
+            "You evaluate messages and decide what should be sent to the platform. There must be explicit instruction to send a message to the platform. "
             "Consider message appropriateness, platform limitations, and context."
         )
 
@@ -59,7 +62,7 @@ class PlatformDecisionAgent(ConversableAgent):
 class PlatformExecutorAgent(ConversableAgent):
     """Agent responsible for executing platform communications."""
 
-    def __init__(self, platform_config: BasePlatformConfig, reply_config: Optional[ReplyConfig] = None):
+    def __init__(self, platform_config: BasePlatformConfig, reply_monitor_config: Optional[ReplyMonitorConfig] = None):
         system_message = (
             "You are a platform communication executor. "
             "You handle sending messages and receiving replies from the platform."
@@ -68,22 +71,40 @@ class PlatformExecutorAgent(ConversableAgent):
         super().__init__(name=self.__class__.__name__, system_message=system_message)
 
         self.platform_config = platform_config
-        self.reply_config = reply_config
-
-        # Register function for actual platform interaction
-        # self.register_function({"send_to_platform": self._send_to_platform, "wait_for_reply": self._wait_for_reply})
+        self.reply_monitor_config = reply_monitor_config
 
     @abstractmethod
-    def send_to_platform(self, message: str) -> str:
-        """Send message to platform."""
+    def send_to_platform(self, message: str) -> Tuple[str, Optional[str]]:
+        """Send message to platform.
+
+        Args:
+            message: The message to send
+
+        Returns:
+            Tuple[str, Optional[str]]: Status message and message ID if successful
+        """
         pass
 
-    '''
     @abstractmethod
-    def _wait_for_reply(self, msg_id: str) -> str:
-        """Wait for reply from platform."""
+    def wait_for_reply(self, msg_id: str) -> List[dict]:
+        """Wait for reply from platform.
+
+        Args:
+            msg_id: Message ID to monitor for replies
+
+        Returns:
+            List of reply messages
+        """
         pass
-    '''
+
+    @abstractmethod
+    def cleanup_monitoring(self, msg_id: str):
+        """Clean up any monitoring resources used for waiting for the reply
+
+        Args:
+            msg_id: Message ID to cleanup monitoring for
+        """
+        pass
 
 
 class CommsPlatformAgent(ConversableAgent):
@@ -104,7 +125,7 @@ class CommsPlatformAgent(ConversableAgent):
         message_to_send: Optional[
             callable
         ] = None,  # The function to determine the message to send, returns None to indicate do not send a message, otherwise determined automatically
-        reply_config: Optional["ReplyConfig"] = None,
+        reply_monitor_config: Optional["ReplyMonitorConfig"] = None,
         auto_reply: str = "Message sent",
         system_message: Optional[str] = None,
         llm_config: Optional[Union[dict, Literal[False]]] = None,
@@ -130,23 +151,10 @@ class CommsPlatformAgent(ConversableAgent):
                 remove_other_reply_funcs=True,
             )
 
-        # self.is_async = False
         # Register the reply function on the executor agent that will trigger in the second chat in the nested chat sequence
-        """
-        try:
-            self.executor_agent.register_reply(
-                trigger=[ConversableAgent],  # , None],
-                reply_func=self._async_executor_reply_function,
-                remove_other_reply_funcs=True,
-            )
-            # Registered successfully, we're running async, e.g. a_initiate_chat
-            is_async = True
-        except:
-        """
         self.executor_agent.register_reply(
             trigger=[ConversableAgent],  # , None],
             reply_func=self._executor_reply_function,
-            # reply_func=self._async_executor_reply_function,
             remove_other_reply_funcs=True,
         )
 
@@ -167,7 +175,7 @@ class CommsPlatformAgent(ConversableAgent):
                     # Second: Executor handles platform communication if decision is to send
                     "sender": self,
                     "recipient": self.executor_agent,
-                    "message": __NESTED_CHAT_EXECUTOR_PREFIX__,  # As the reply function doesn't need the message but we need text here to keep it in the nested chat queue
+                    "message": __NESTED_CHAT_EXECUTOR_PREFIX__,  # Note: We need some text here to keep it in the nested chat queue
                     "max_turns": 1,
                 },
             ],
@@ -175,6 +183,9 @@ class CommsPlatformAgent(ConversableAgent):
             position=0,
             use_async=False,
         )
+
+        # Reply configuration
+        self.reply_monitor_config = reply_monitor_config
 
     def _process_message_to_send(
         self,
@@ -221,7 +232,11 @@ class CommsPlatformAgent(ConversableAgent):
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
     ) -> Tuple[bool, Union[str, Dict, None]]:
-        """Synchronous version of the executor reply function."""
+        """Enhanced executor reply function that handles sending and waiting for replies.
+
+        Handles all platform-specific errors and provides detailed status reporting.
+        Returns a tuple of (completed, response_message).
+        """
         message_content: str = messages[-1]["content"]
 
         # Use shared validation
@@ -231,43 +246,58 @@ class CommsPlatformAgent(ConversableAgent):
 
         if decision.should_send:
             try:
-                _ = self.executor_agent.send_to_platform(decision.message_to_post)
-                return True, f"Message sent successfully:\n{decision.message_to_post}"
+                # Send message and get tracking ID
+                status, msg_id = self.executor_agent.send_to_platform(decision.message_to_post)
+
+                if not msg_id:
+                    return True, f"Message sent but unable to track replies: {status}"
+
+                # Initialize response with sent message status
+                response = f"Message sent successfully:\n{decision.message_to_post}"
+
+                # Wait for replies if configured
+                replies = []
+                if self.reply_monitor_config and msg_id:
+                    try:
+                        iostream = IOStream.get_default()
+                        iostream.send(
+                            WaitingForTaskMessage(
+                                task_details=f"{self.name} has sent the message and is waiting for replies, max {self.reply_monitor_config.timeout_minutes} min(s){(' or ' + str(self.reply_monitor_config.max_reply_messages) + ' replies') if self.reply_monitor_config.max_reply_messages else ''}"
+                            )
+                        )
+
+                        # Wait for replies...
+                        replies = self.executor_agent.wait_for_reply(msg_id)
+
+                        if replies:
+                            response += "\n\nReplies received:\n" + "\n".join(replies)
+                        else:
+                            response += "\n\nNo replies received"
+
+                    except PlatformError as e:
+                        response += f"\n\nError while waiting for replies: {str(e)}"
+
+                    except Exception as e:
+                        # Non-handled exceptions
+                        response += f"\n\nUnexpected error while waiting for replies: {str(e)}"
+
+                    finally:
+                        try:
+                            self.executor_agent.cleanup_monitoring(msg_id)
+                        except Exception as cleanup_error:
+                            response += f"\n\nWarning: Error during cleanup: {str(cleanup_error)}"
+
+                return True, response
+
+            # Exception handling for sending messages
             except PlatformError as e:
-                return True, f"Message not sent due to platform exception: {str(e)}"
+                return True, f"Error: {str(e)}"
+
             except Exception as e:
-                return True, f"Message not sent due to unexpected error: {str(e)}"
+                # Non-handled exceptions
+                return True, f"Error: Unexpected error while sending message - {str(e)}"
 
         return True, "No message was sent based on decision"
-
-    '''
-    async def _async_executor_reply_function(
-        self,
-        recipient: ConversableAgent,
-        messages: Optional[List[Dict]] = None,
-        sender: Optional[Agent] = None,
-        config: Optional[Any] = None,
-    ) -> Tuple[bool, Union[str, Dict, None]]:
-        """Asynchronous version of the executor reply function."""
-        message_content: str = messages[-1]["content"]
-
-        # Use shared validation
-        is_valid, decision, error_msg = self._executor_message_validation(message_content)
-        if not is_valid:
-            return True, error_msg
-
-        if decision.should_send:
-            try:
-                await self.executor_agent._ready.wait()
-                result = await self.executor_agent._send_to_platform(decision.message_to_post)
-                return True, f"Message sent successfully:\n{decision.message_to_post}"
-            except PlatformError as e:
-                return True, f"Message not sent due to platform exception: {str(e)}"
-            except Exception as e:
-                return True, f"Message not sent due to unexpected error: {str(e)}"
-
-        return True, "No message was sent based on decision"
-    '''
 
     def _prepare_decision_message(self, recipient: Agent, messages: List[Dict[str, Any]], sender: Agent, config) -> str:
         """Prepare message for decision agent based on conversation history."""
@@ -284,25 +314,3 @@ class CommsPlatformAgent(ConversableAgent):
 
         # Prepare message for decision agent
         return f"Decide whether you should send a message and, if so, what the message should be based on this chat history:\n{message_history}"
-
-
-'''
-    def _prepare_executor_message(self, recipient: Agent, messages: List[Dict[str, Any]], sender: Agent, config) -> str:
-        """Prepare message for executor based on decision agent's response."""
-        if not messages:
-            return None
-
-        try:
-            # Get last message which should be decision agent's structured response
-            decision = PlatformMessageDecision.model_validate_json(messages[-1]["content"])
-
-            # If we aren't sending a message, set the message to none
-            if not decision.should_send:
-                return None
-
-            # If we should send, create the execution message
-            return f'send_to_platform("{decision.message_to_post}")'
-
-        except Exception:
-            return "Couldn't convert the structured output, ensure you are using a client and model that supports structured output."
-'''

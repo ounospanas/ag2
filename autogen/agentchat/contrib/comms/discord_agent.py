@@ -7,7 +7,8 @@ import sys
 import threading
 import time
 from dataclasses import dataclass
-from typing import Optional
+from datetime import datetime
+from typing import List, Optional, Tuple
 
 import discord
 
@@ -16,8 +17,8 @@ from .comms_platform_agent import (
     BasePlatformConfig,
     CommsPlatformAgent,
     PlatformExecutorAgent,
-    ReplyConfig,
 )
+from .platform_configs import ReplyMonitorConfig
 from .platform_errors import (
     PlatformAuthenticationError,
     PlatformConnectionError,
@@ -28,13 +29,6 @@ from .platform_errors import (
 
 __PLATFORM_NAME__ = "Discord"  # Platform name for messages
 __TIMEOUT__ = 5  # Timeout in seconds
-
-
-# Discord-specific errors
-class DiscordChannelError(PlatformError):
-    """Raised when there's an error with Discord channels."""
-
-    pass
 
 
 @dataclass
@@ -78,6 +72,8 @@ class DiscordHandler:
         self._loop = None
         self._error = None
         self._is_closed = False  # New flag to track connection state
+        self._message_replies = {}  # Store message replies by message ID
+        self._reply_events = {}  # Store completion events by message ID
 
         self._setup_client()
 
@@ -109,7 +105,7 @@ class DiscordHandler:
                 # Validate guild
                 self._guild = discord.utils.get(self._client.guilds, name=self._guild_name)
                 if not self._guild:
-                    self._error = DiscordChannelError(
+                    self._error = PlatformConnectionError(
                         message=f"Could not find guild: {self._guild_name}", platform_name=__PLATFORM_NAME__
                     )
                     self._ready.set()  # Set ready to unblock validation
@@ -118,7 +114,7 @@ class DiscordHandler:
                 # Validate channel
                 self._channel = discord.utils.get(self._guild.text_channels, name=self._channel_name)
                 if not self._channel:
-                    self._error = DiscordChannelError(
+                    self._error = PlatformConnectionError(
                         message=f"Could not find channel: {self._channel_name}", platform_name=__PLATFORM_NAME__
                     )
                     self._ready.set()  # Set ready to unblock validation
@@ -130,6 +126,47 @@ class DiscordHandler:
             except Exception as e:
                 self._error = e
                 self._ready.set()  # Set ready to unblock validation
+
+        @self._client.event
+        async def on_message(message):
+            # Ignore our own messages
+            if message.author == self._client.user:
+                return
+
+            # Check if this is a reply to one of our monitored messages
+            if message.reference and message.reference.message_id:
+                ref_id = str(message.reference.message_id)
+                if ref_id in self._message_replies:
+                    reply_data = {
+                        "content": message.content,
+                        "author": str(message.author),
+                        "timestamp": message.created_at.isoformat(),
+                        "id": str(message.id),
+                    }
+
+                    # Attachments are concatenated to message content like "(Attachment: )"
+                    if message.attachments:
+                        attachment_string = " ".join(
+                            [f"(Attachment: {a.filename}, URL: {str(a.url)})" for a in message.attachments]
+                        )
+                        """
+                        reply_data['attachments'] = [
+                            {'filename': a.filename, 'url': str(a.url)}
+                            for a in message.attachments
+                        ]
+                        """
+                        reply_data["content"] += f" {attachment_string}"
+
+                    # Add any embeds
+                    if message.embeds:
+                        reply_data["embeds"] = [embed.to_dict() for embed in message.embeds]
+
+                    self._message_replies[ref_id].append(reply_data)
+
+                    # Check if we've hit max replies
+                    max_replies = self._reply_events[ref_id].get("max_replies", 0)
+                    if max_replies > 0 and len(self._message_replies[ref_id]) >= max_replies:
+                        self._reply_events[ref_id]["event"].set()
 
     async def validate(self):
         """Wait for validation to complete and return result."""
@@ -216,8 +253,15 @@ class DiscordHandler:
         # Give the thread a second to start
         time.sleep(1)
 
-    async def send_message(self, message: str) -> str:
-        """Send a message to the Discord channel."""
+    async def send_message(self, message: str) -> Tuple[str, Optional[str]]:
+        """Send a message to the Discord channel.
+
+        Args:
+            message: The message to send
+
+        Returns:
+            Tuple[str, Optional[str]]: Status message and message ID if successful
+        """
         if self._is_closed:
             # If closed, reinitialize and restart
             self._setup_client()
@@ -231,29 +275,72 @@ class DiscordHandler:
             )
 
         try:
+            sent_message_id = None
             if len(message) > 2000:
                 chunks = [message[i : i + 1999] for i in range(0, len(message), 1999)]
-                for chunk in chunks:
-                    await self._channel.send(chunk)
-                return "Message sent (split into chunks)"
+                for i, chunk in enumerate(chunks):
+                    sent = await self._channel.send(chunk)
+                    # Store ID of first chunk for reply tracking
+                    if i == 0:
+                        sent_message_id = str(sent.id)
+                return "Message sent (split into chunks)", sent_message_id
             else:
-                await self._channel.send(message)
-                return "Message sent successfully"
+                sent = await self._channel.send(message)
+                return "Message sent successfully", str(sent.id)
+
         except discord.Forbidden as e:
             raise PlatformAuthenticationError(
                 message="Bot lacks permission to send messages", platform_error=e, platform_name=__PLATFORM_NAME__
             )
         except discord.HTTPException as e:
-            if e.status == 429:
+            if e.status == 429:  # Rate limit error
                 raise PlatformRateLimitError(
-                    message="Rate limit exceeded",
-                    platform_error=e,
-                    platform_name=__PLATFORM_NAME__,
-                    retry_after=e.retry_after,
+                    message="Rate limit exceeded", platform_error=e, platform_name=__PLATFORM_NAME__
                 )
-            raise PlatformConnectionError(
+            raise PlatformError(
                 message=f"Failed to send message: {str(e)}", platform_error=e, platform_name=__PLATFORM_NAME__
             )
+
+    async def wait_for_replies(self, message_id: str, timeout_minutes: int = 5, max_replies: int = 0) -> List[dict]:
+        """Wait for replies to a specific message.
+
+        Args:
+            message_id: ID of message to monitor for replies
+            timeout_minutes: How long to wait for replies (0 = no timeout)
+            max_replies: Maximum number of replies to collect (0 = unlimited)
+
+        Returns:
+            List of reply messages with content, author, timestamp, and any attachments/embeds
+        """
+        if not message_id:
+            return []
+
+        # Initialize reply tracking for this message
+        self._message_replies[message_id] = []
+        event = asyncio.Event()
+        self._reply_events[message_id] = {"event": event, "max_replies": max_replies}
+
+        try:
+            if timeout_minutes > 0:
+                try:
+                    await asyncio.wait_for(event.wait(), timeout=timeout_minutes * 60)
+                except asyncio.TimeoutError:
+                    if not self._message_replies[message_id]:
+                        raise PlatformError(
+                            message=f"Timeout waiting for replies after {timeout_minutes} minutes",
+                            platform_name=__PLATFORM_NAME__,
+                        )
+        finally:
+            # Cleanup and return any replies we got
+            replies = self._message_replies.pop(message_id, [])
+            self._reply_events.pop(message_id, None)
+            print(f"Returning {len(replies)} replies")
+            return replies
+
+    def cleanup_reply_monitoring(self, message_id: str):
+        """Clean up reply monitoring for a specific message."""
+        self._message_replies.pop(message_id, None)
+        self._reply_events.pop(message_id, None)
 
     def shutdown(self):
         """Shutdown the Discord client."""
@@ -273,8 +360,8 @@ class DiscordHandler:
 class DiscordExecutor(PlatformExecutorAgent):
     """Discord-specific executor agent."""
 
-    def __init__(self, platform_config: DiscordConfig, reply_config: Optional[ReplyConfig] = None):
-        super().__init__(platform_config, reply_config)
+    def __init__(self, platform_config: DiscordConfig, reply_monitor_config: Optional[ReplyMonitorConfig] = None):
+        super().__init__(platform_config, reply_monitor_config)
 
         # Create Discord handler
         self._discord = DiscordHandler(
@@ -299,8 +386,22 @@ class DiscordExecutor(PlatformExecutorAgent):
         """Clean shutdown of the Discord client."""
         self._discord.shutdown()
 
-    def send_to_platform(self, message: str) -> str:
-        """Send a message to Discord channel."""
+    def __del__(self):
+        """Cleanup when object is destroyed."""
+        self.shutdown()
+
+    def send_to_platform(self, message: str) -> Tuple[str, Optional[str]]:
+        """Send a message to Discord channel.
+
+        Args:
+            message: The message to send
+
+        Returns:
+            Tuple[str, Optional[str]]: Status message and message ID if successful
+
+        Raises:
+            PlatformError: For any platform-specific errors
+        """
         # Get the event loop
         loop = self._discord._loop
 
@@ -310,11 +411,74 @@ class DiscordExecutor(PlatformExecutorAgent):
 
         # Otherwise, run in the appropriate context
         future = asyncio.run_coroutine_threadsafe(self._discord.send_message(message), loop)
-        return future.result(timeout=5)
+        return future.result(timeout=__TIMEOUT__)
 
-    def __del__(self):
-        """Cleanup when object is destroyed."""
-        self.shutdown()
+    def _format_replies(self, replies: List[dict]) -> List[str]:
+        """Format replies for display."""
+        formatted_replies = []
+        for reply in replies:
+            # Time in UTC format
+            timestamp = datetime.fromisoformat(reply["timestamp"])
+            formatted_time = timestamp.strftime("%Y-%m-%d %H:%M UTC")
+
+            formatted_reply = f"[{formatted_time}] {reply['author']}: {reply['content']}"
+            formatted_replies.append(formatted_reply)
+        return formatted_replies
+
+    def wait_for_reply(self, msg_id: str) -> List[str]:
+        """Wait for reply from platform.
+
+        Args:
+            msg_id: Message ID to monitor for replies
+
+        Returns:
+            List of reply messages, one for each message formatted as a string
+        """
+        if not self.reply_monitor_config:
+            return []
+
+        # Get the event loop
+        loop = self._discord._loop
+
+        try:
+            # If we're in the event loop thread, run directly
+            if loop and loop.is_running() and threading.current_thread() == self._discord._thread:
+                replies = loop.run_until_complete(
+                    self._discord.wait_for_replies(
+                        msg_id,
+                        timeout_minutes=self.reply_monitor_config.timeout_minutes,
+                        max_replies=self.reply_monitor_config.max_reply_messages,
+                    )
+                )
+                return self._format_replies(replies)
+
+            # Otherwise, run in the appropriate context
+            future = asyncio.run_coroutine_threadsafe(
+                self._discord.wait_for_replies(
+                    msg_id,
+                    timeout_minutes=self.reply_monitor_config.timeout_minutes,
+                    max_replies=self.reply_monitor_config.max_reply_messages,
+                ),
+                loop,
+            )
+
+            try:
+                # No timeout here - we rely on the timeout in wait_for_replies
+                replies = future.result()
+                return self._format_replies(replies)
+            except Exception as e:
+                # Log other errors but return empty list to avoid breaking the chat flow
+                print(f"Error waiting for replies: {str(e)}")
+                return []
+
+        except Exception as e:
+            # Catch any other exceptions that might occur
+            print(f"Unexpected error in wait_for_reply: {str(e)}")
+            return []
+
+    def cleanup_monitoring(self, msg_id: str):
+        """Clean up reply monitoring for a specific message."""
+        self._discord.cleanup_reply_monitoring(msg_id)
 
 
 class DiscordAgent(CommsPlatformAgent):
@@ -328,7 +492,7 @@ class DiscordAgent(CommsPlatformAgent):
         message_to_send: Optional[
             callable
         ] = None,  # The function to determine the message to send, returns None to indicate do not send a message, otherwise determined automatically
-        reply_config: Optional[ReplyConfig] = None,
+        reply_monitor_config: Optional[ReplyMonitorConfig] = None,
         auto_reply: str = "Message sent to Discord",
         system_message: Optional[str] = None,
         *args,
@@ -342,7 +506,7 @@ class DiscordAgent(CommsPlatformAgent):
             )
 
         # Create Discord-specific executor
-        discord_executor = DiscordExecutor(platform_config, reply_config)
+        discord_executor = DiscordExecutor(platform_config, reply_monitor_config)
 
         super().__init__(
             name=name,
@@ -350,7 +514,7 @@ class DiscordAgent(CommsPlatformAgent):
             executor_agent=discord_executor,
             send_config=send_config,
             message_to_send=message_to_send,
-            reply_config=reply_config,
+            reply_monitor_config=reply_monitor_config,
             auto_reply=auto_reply,
             system_message=system_message,
             *args,
