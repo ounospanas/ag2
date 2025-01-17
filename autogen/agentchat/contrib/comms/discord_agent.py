@@ -26,7 +26,8 @@ from .platform_errors import (
     PlatformTimeoutError,
 )
 
-__PLATFORM_NAME__ = "Discord"
+__PLATFORM_NAME__ = "Discord"  # Platform name for messages
+__TIMEOUT__ = 5  # Timeout in seconds
 
 
 # Discord-specific errors
@@ -75,20 +76,29 @@ class DiscordHandler:
         self._shutdown = asyncio.Event()
         self._thread = None
         self._loop = None
-        self._error = None  # Track initialisation errors
+        self._error = None
+        self._is_closed = False  # New flag to track connection state
 
-        # Set up the client with proper intents
         self._setup_client()
 
     def _setup_client(self):
         """Set up the Discord client with proper intents."""
-        intents = discord.Intents.default()
-        intents.message_content = True
-        intents.guilds = True
-        intents.guild_messages = True
+        if self._is_closed:  # Check if we need to create a new client
+            self._client = None
+            self._guild = None
+            self._channel = None
+            self._ready.clear()
+            self._shutdown.clear()
+            self._is_closed = False
 
-        self._client = discord.Client(intents=intents)
-        self._setup_events()
+        if self._client is None:
+            intents = discord.Intents.default()
+            intents.message_content = True
+            intents.guilds = True
+            intents.guild_messages = True
+
+            self._client = discord.Client(intents=intents)
+            self._setup_events()
 
     def _setup_events(self):
         """Set up Discord client event handlers."""
@@ -124,18 +134,18 @@ class DiscordHandler:
     async def validate(self):
         """Wait for validation to complete and return result."""
         try:
-            await asyncio.wait_for(self._ready.wait(), timeout=30)
+            await asyncio.wait_for(self._ready.wait(), timeout=__TIMEOUT__)
             if self._error:
                 # Catch initialisation exceptions, incorrect token, guild, or channel.
                 raise PlatformError(
-                    message="Error initialising Discord client",
+                    message=f"Error initialising {__PLATFORM_NAME__} client",
                     platform_error=self._error,
                     platform_name=__PLATFORM_NAME__,
                 )
             return True
         except asyncio.TimeoutError:
             raise PlatformTimeoutError(
-                message="Timeout waiting for Discord validation", platform_name=__PLATFORM_NAME__
+                message=f"Timeout waiting for {__PLATFORM_NAME__} validation", platform_name=__PLATFORM_NAME__
             )
 
     def start(self):
@@ -153,7 +163,7 @@ class DiscordHandler:
         # Wait for validation in appropriate context
         if self._loop and self._loop.is_running():
             future = asyncio.run_coroutine_threadsafe(self.validate(), self._loop)
-            return future.result(timeout=30)
+            return future.result(timeout=__TIMEOUT__)
         else:
             # For non-async context, we need to use a new event loop
             # since the client is running in its own loop
@@ -208,11 +218,16 @@ class DiscordHandler:
 
     async def send_message(self, message: str) -> str:
         """Send a message to the Discord channel."""
+        if self._is_closed:
+            # If closed, reinitialize and restart
+            self._setup_client()
+            self.start()
+
         try:
             await asyncio.wait_for(self._ready.wait(), timeout=5)
         except asyncio.TimeoutError:
             raise PlatformTimeoutError(
-                message="Timeout waiting for Discord client to be ready", platform_name=__PLATFORM_NAME__
+                message=f"Timeout waiting for {__PLATFORM_NAME__} client to be ready", platform_name=__PLATFORM_NAME__
             )
 
         try:
@@ -251,6 +266,8 @@ class DiscordHandler:
         if self._thread and self._thread.is_alive():
             self._shutdown.set()
             self._thread.join(timeout=2)
+
+        self._is_closed = True  # Mark as closed
 
 
 class DiscordExecutor(PlatformExecutorAgent):
@@ -293,12 +310,7 @@ class DiscordExecutor(PlatformExecutorAgent):
 
         # Otherwise, run in the appropriate context
         future = asyncio.run_coroutine_threadsafe(self._discord.send_message(message), loop)
-        result = future.result(timeout=5)
-
-        # Initiate shutdown after sending message
-        self.shutdown()
-
-        return result
+        return future.result(timeout=5)
 
     def __del__(self):
         """Cleanup when object is destroyed."""
