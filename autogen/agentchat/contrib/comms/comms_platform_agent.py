@@ -1,7 +1,6 @@
 # Copyright (c) 2023 - 2025, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
-import asyncio
 import copy
 from abc import abstractmethod
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
@@ -72,17 +71,19 @@ class PlatformExecutorAgent(ConversableAgent):
         self.reply_config = reply_config
 
         # Register function for actual platform interaction
-        self.register_function({"send_to_platform": self._send_to_platform, "wait_for_reply": self._wait_for_reply})
+        # self.register_function({"send_to_platform": self._send_to_platform, "wait_for_reply": self._wait_for_reply})
 
     @abstractmethod
-    async def _send_to_platform(self, message: str) -> str:
+    def send_to_platform(self, message: str) -> str:
         """Send message to platform."""
         pass
 
+    '''
     @abstractmethod
-    async def _wait_for_reply(self, msg_id: str) -> str:
+    def _wait_for_reply(self, msg_id: str) -> str:
         """Wait for reply from platform."""
         pass
+    '''
 
 
 class CommsPlatformAgent(ConversableAgent):
@@ -129,10 +130,23 @@ class CommsPlatformAgent(ConversableAgent):
                 remove_other_reply_funcs=True,
             )
 
+        # self.is_async = False
         # Register the reply function on the executor agent that will trigger in the second chat in the nested chat sequence
+        """
+        try:
+            self.executor_agent.register_reply(
+                trigger=[ConversableAgent],  # , None],
+                reply_func=self._async_executor_reply_function,
+                remove_other_reply_funcs=True,
+            )
+            # Registered successfully, we're running async, e.g. a_initiate_chat
+            is_async = True
+        except:
+        """
         self.executor_agent.register_reply(
             trigger=[ConversableAgent],  # , None],
             reply_func=self._executor_reply_function,
+            # reply_func=self._async_executor_reply_function,
             remove_other_reply_funcs=True,
         )
 
@@ -159,6 +173,7 @@ class CommsPlatformAgent(ConversableAgent):
             ],
             trigger=[ConversableAgent],
             position=0,
+            use_async=False,
         )
 
     def _process_message_to_send(
@@ -178,6 +193,27 @@ class CommsPlatformAgent(ConversableAgent):
 
         return True, decision.model_dump_json()
 
+    def _executor_message_validation(
+        self, message_content: str
+    ) -> Tuple[bool, Optional[PlatformMessageDecision], Optional[str]]:
+        """Shared validation logic for both sync and async versions."""
+        # Check message prefix
+        if not message_content.startswith(f"{__NESTED_CHAT_EXECUTOR_PREFIX__}\nContext: \n"):
+            return False, None, "Error, the workflow did not work correctly, message not sent."
+
+        message_content = message_content.replace(f"{__NESTED_CHAT_EXECUTOR_PREFIX__}\nContext: \n", "")
+
+        # Parse decision
+        try:
+            decision = PlatformMessageDecision.model_validate_json(message_content)
+            return True, decision, None
+        except ValidationError:
+            return (
+                False,
+                None,
+                "Couldn't parse the structured output, ensure you are using a client and model that supports structured output.",
+            )
+
     def _executor_reply_function(
         self,
         recipient: ConversableAgent,
@@ -185,38 +221,17 @@ class CommsPlatformAgent(ConversableAgent):
         sender: Optional[Agent] = None,
         config: Optional[Any] = None,
     ) -> Tuple[bool, Union[str, Dict, None]]:
-        """Process the results from the decision agent and perform an action, or not."""
+        """Synchronous version of the executor reply function."""
         message_content: str = messages[-1]["content"]
 
-        # We should have a message that starts with the second nested chat message text, "PLACEHOLDER", and the inbuilt carry over prefix "Context: \n"
-        if not message_content.startswith(f"{__NESTED_CHAT_EXECUTOR_PREFIX__}\nContext: \n"):
-            return True, "Error, the workflow did not work correctly, message not sent."
-
-        message_content = message_content.replace(f"{__NESTED_CHAT_EXECUTOR_PREFIX__}\nContext: \n", "")
-
-        try:
-            decision = PlatformMessageDecision.model_validate_json(message_content)
-
-        except ValidationError:
-            return (
-                True,
-                "Couldn't parse the structured output, ensure you are using a client and model that supports structured output.",
-            )
+        # Use shared validation
+        is_valid, decision, error_msg = self._executor_message_validation(message_content)
+        if not is_valid:
+            return True, error_msg
 
         if decision.should_send:
-            # Handle asynchronous functions in here as this chat may not be running async
             try:
-                loop = asyncio.get_event_loop()
-            except RuntimeError:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-
-            async def _send_with_error_handling():
-                return await self.executor_agent._send_to_platform(decision.message_to_post)
-
-            try:
-                # Run the async function in the event loop with proper error handling
-                _ = loop.run_until_complete(_send_with_error_handling())
+                _ = self.executor_agent.send_to_platform(decision.message_to_post)
                 return True, f"Message sent successfully:\n{decision.message_to_post}"
             except PlatformError as e:
                 return True, f"Message not sent due to platform exception: {str(e)}"
@@ -224,6 +239,35 @@ class CommsPlatformAgent(ConversableAgent):
                 return True, f"Message not sent due to unexpected error: {str(e)}"
 
         return True, "No message was sent based on decision"
+
+    '''
+    async def _async_executor_reply_function(
+        self,
+        recipient: ConversableAgent,
+        messages: Optional[List[Dict]] = None,
+        sender: Optional[Agent] = None,
+        config: Optional[Any] = None,
+    ) -> Tuple[bool, Union[str, Dict, None]]:
+        """Asynchronous version of the executor reply function."""
+        message_content: str = messages[-1]["content"]
+
+        # Use shared validation
+        is_valid, decision, error_msg = self._executor_message_validation(message_content)
+        if not is_valid:
+            return True, error_msg
+
+        if decision.should_send:
+            try:
+                await self.executor_agent._ready.wait()
+                result = await self.executor_agent._send_to_platform(decision.message_to_post)
+                return True, f"Message sent successfully:\n{decision.message_to_post}"
+            except PlatformError as e:
+                return True, f"Message not sent due to platform exception: {str(e)}"
+            except Exception as e:
+                return True, f"Message not sent due to unexpected error: {str(e)}"
+
+        return True, "No message was sent based on decision"
+    '''
 
     def _prepare_decision_message(self, recipient: Agent, messages: List[Dict[str, Any]], sender: Agent, config) -> str:
         """Prepare message for decision agent based on conversation history."""

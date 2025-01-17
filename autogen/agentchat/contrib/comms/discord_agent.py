@@ -2,13 +2,16 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 import asyncio
+import signal
+import sys
+import threading
+import time
 from dataclasses import dataclass
 from typing import Optional
 
 import discord
 
 # from discord.ext import commands
-from ....io.base import IOStream
 from .comms_platform_agent import (
     BasePlatformConfig,
     CommsPlatformAgent,
@@ -57,188 +60,176 @@ class DiscordConfig(BasePlatformConfig):
         return True
 
 
-class DiscordExecutor(PlatformExecutorAgent):
-    """Discord-specific executor agent."""
+class DiscordHandler:
+    """Handles Discord client operations and connection management."""
 
-    def __init__(self, platform_config: DiscordConfig, reply_config: Optional[ReplyConfig] = None):
-        super().__init__(platform_config, reply_config)
+    def __init__(self, bot_token: str, guild_name: str, channel_name: str):
+        self._bot_token = bot_token
+        self._guild_name = guild_name
+        self._channel_name = channel_name
 
-        # Initialize Discord client
-        self.platform_client = discord.Client(intents=platform_config.intents)
-        self.guild = None
-        self.channel = None
+        self._client = None
+        self._guild = None
+        self._channel = None
         self._ready = asyncio.Event()
-        self._message_queue = asyncio.Queue()
-        self.message_futures = {}
+        self._shutdown = asyncio.Event()
+        self._thread = None
+        self._loop = None
+        self._error = None  # Track initialisation errors
 
-        @self.platform_client.event
+        # Set up the client with proper intents
+        self._setup_client()
+
+    def _setup_client(self):
+        """Set up the Discord client with proper intents."""
+        intents = discord.Intents.default()
+        intents.message_content = True
+        intents.guilds = True
+        intents.guild_messages = True
+
+        self._client = discord.Client(intents=intents)
+        self._setup_events()
+
+    def _setup_events(self):
+        """Set up Discord client event handlers."""
+
+        @self._client.event
         async def on_ready():
-            await self._initialize_channel()
-            self._ready.set()
-
-        @self.platform_client.event
-        async def on_message(message):
-            if message.author == self.platform_client.user:
-                return
-
-            # Check if we're waiting for a reply to this message
-            parent_id = str(message.reference.message_id if message.reference else None)
-            if parent_id in self.message_futures:
-                future = self.message_futures[parent_id]
-                if not future.done():
-                    future.set_result(message)
-
-            await self._message_queue.put(message)
-
-        # Start client in background
-        self._start_background_tasks()
-
-    def _start_background_tasks(self):
-        """Start Discord client in the background."""
-        iostream = IOStream.get_default()
-
-        if not self.platform_client:
-            raise PlatformError(
-                message=f"{__PLATFORM_NAME__} client not properly initialized", platform_name=__PLATFORM_NAME__
-            )
-
-        try:
-            # Try to get the existing event loop
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            # If there isn't one, create a new loop
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        async def start_client():
             try:
-                await self.platform_client.start(self.platform_config.bot_token)
-            except discord.LoginFailure as e:
-                iostream.send(f"Failed to login to {__PLATFORM_NAME__}: Invalid token or permissions")
-                # Close the client
-                await self.platform_client.close()
-                raise PlatformAuthenticationError(
-                    message="Failed to login with provided token", platform_error=e, platform_name=__PLATFORM_NAME__
-                )
-            except discord.HTTPException as e:
-                iostream.send(f"HTTP Error connecting to {__PLATFORM_NAME__}: {e}")
-                await self.platform_client.close()
-                raise PlatformConnectionError(
-                    message=f"Failed to connect to {__PLATFORM_NAME__}: {str(e)}",
-                    platform_error=e,
-                    platform_name=__PLATFORM_NAME__,
-                )
+                # Validate guild
+                self._guild = discord.utils.get(self._client.guilds, name=self._guild_name)
+                if not self._guild:
+                    self._error = DiscordChannelError(
+                        message=f"Could not find guild: {self._guild_name}", platform_name=__PLATFORM_NAME__
+                    )
+                    self._ready.set()  # Set ready to unblock validation
+                    return
+
+                # Validate channel
+                self._channel = discord.utils.get(self._guild.text_channels, name=self._channel_name)
+                if not self._channel:
+                    self._error = DiscordChannelError(
+                        message=f"Could not find channel: {self._channel_name}", platform_name=__PLATFORM_NAME__
+                    )
+                    self._ready.set()  # Set ready to unblock validation
+                    return
+
+                # Signal that we're ready
+                self._ready.set()
+
             except Exception as e:
-                iostream.send(f"Unexpected error starting Discord client: {e}")
-                await self.platform_client.close()
+                self._error = e
+                self._ready.set()  # Set ready to unblock validation
+
+    async def validate(self):
+        """Wait for validation to complete and return result."""
+        try:
+            await asyncio.wait_for(self._ready.wait(), timeout=30)
+            if self._error:
+                # Catch initialisation exceptions, incorrect token, guild, or channel.
                 raise PlatformError(
-                    message=f"Unexpected error: {str(e)}", platform_error=e, platform_name=__PLATFORM_NAME__
-                )
-            finally:
-                self._ready.set()  # Ensure the ready event is set so nothing waits forever
-
-        def done_callback(future):
-            try:
-                future.result()
-            except Exception as e:
-                iostream.send(f"{__PLATFORM_NAME__} Background task failed: {e}")
-                if hasattr(loop, "is_running") and loop.is_running():
-                    loop.stop()
-
-        # Create and run the task
-        task = loop.create_task(start_client())
-        task.add_done_callback(done_callback)
-
-    async def _initialize_channel(self):
-        """Initialize guild and channel objects."""
-        try:
-            self.guild = discord.utils.get(self.platform_client.guilds, name=self.platform_config.guild_name)
-            if not self.guild:
-                self._last_init_error = DiscordChannelError(
-                    message=f"Could not find guild: {self.platform_config.guild_name}",
+                    message="Error initialising Discord client",
+                    platform_error=self._error,
                     platform_name=__PLATFORM_NAME__,
-                    context={"guild_name": self.platform_config.guild_name},
                 )
-                raise self._last_init_error
-
-            self.channel = discord.utils.get(self.guild.text_channels, name=self.platform_config.channel_name)
-            if not self.channel:
-                self._last_init_error = DiscordChannelError(
-                    message=f"Could not find channel: {self.platform_config.channel_name}",
-                    platform_name=__PLATFORM_NAME__,
-                    context={
-                        "guild_name": self.platform_config.guild_name,
-                        "channel_name": self.platform_config.channel_name,
-                    },
-                )
-                raise self._last_init_error
-
-            # If we got here, initialization was successful
-            self._ready.set()
-
-        except Exception as e:
-            # Store any other unexpected errors
-            if not hasattr(self, "_last_init_error"):
-                self._last_init_error = e
-            # Make sure we set ready event even on failure
-            self._ready.set()
-            # Re-raise the exception
-            raise
-
-    async def _wait_for_reply(self, msg_id: str) -> str:
-        """Wait for reply to specific message."""
-        if not self.reply_config:
-            return None
-
-        try:
-            # Create future for this message
-            future = asyncio.Future()
-            self.message_futures[msg_id] = future
-
-            # Wait for response with timeout
-            timeout = self.reply_config.timeout_minutes * 60
-            response = await asyncio.wait_for(future, timeout)
-
-            # Process response
-            return response.content
-
-        except asyncio.TimeoutError as e:
+            return True
+        except asyncio.TimeoutError:
             raise PlatformTimeoutError(
-                message="No reply received within timeout period", platform_error=e, platform_name=__PLATFORM_NAME__
+                message="Timeout waiting for Discord validation", platform_name=__PLATFORM_NAME__
             )
-        finally:
-            # Clean up
-            self.message_futures.pop(msg_id, None)
 
-    async def _send_to_platform(self, message: str) -> str:
-        """Send a message to Discord channel."""
+    def start(self):
+        """Start the Discord client and wait for validation."""
         try:
-            if not self.channel:
-                await self._ready.wait()  # Wait for client to be ready and then recheck if we have a channel
-                if not self.channel or not self.guild:
-                    if hasattr(self, "_last_init_error"):
-                        raise self._last_init_error
-                    raise PlatformError(
-                        message="Discord channel not initialized. Check token, guild, and channel name.",
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                self._loop = loop
+                asyncio.create_task(self._client.start(self._bot_token))
+            else:
+                self._start_background_thread()
+        except RuntimeError:
+            self._start_background_thread()
+
+        # Wait for validation in appropriate context
+        if self._loop and self._loop.is_running():
+            future = asyncio.run_coroutine_threadsafe(self.validate(), self._loop)
+            return future.result(timeout=30)
+        else:
+            # For non-async context, we need to use a new event loop
+            # since the client is running in its own loop
+            loop = asyncio.new_event_loop()
+            try:
+                return loop.run_until_complete(self.validate())
+            finally:
+                loop.close()
+
+    def _start_background_thread(self):
+        """Start Discord client in a background thread."""
+
+        def run_client():
+            self._loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self._loop)
+
+            async def start_client():
+                try:
+                    await self._client.start(self._bot_token)
+                except discord.LoginFailure as e:
+                    self._error = PlatformAuthenticationError(
+                        message="Failed to login with provided token", platform_error=e, platform_name=__PLATFORM_NAME__
+                    )
+                    self._ready.set()  # Set ready to trigger validation check
+                except Exception as e:
+                    self._error = PlatformError(
+                        message=f"Error during client initialization: {str(e)}",
+                        platform_error=e,
                         platform_name=__PLATFORM_NAME__,
                     )
+                    self._ready.set()
 
-            # Split message if it exceeds Discord's limit
+            try:
+                self._loop.run_until_complete(start_client())
+                self._loop.run_forever()
+            except Exception as e:
+                if not isinstance(self._error, (PlatformAuthenticationError, PlatformError)):
+                    self._error = PlatformError(
+                        message=f"Error in client thread: {str(e)}", platform_error=e, platform_name=__PLATFORM_NAME__
+                    )
+                    self._ready.set()
+            finally:
+                if not self._client.is_closed():
+                    self._loop.run_until_complete(self._client.close())
+                self._loop.close()
+
+        self._thread = threading.Thread(target=run_client, daemon=True)
+        self._thread.start()
+
+        # Give the thread a second to start
+        time.sleep(1)
+
+    async def send_message(self, message: str) -> str:
+        """Send a message to the Discord channel."""
+        try:
+            await asyncio.wait_for(self._ready.wait(), timeout=5)
+        except asyncio.TimeoutError:
+            raise PlatformTimeoutError(
+                message="Timeout waiting for Discord client to be ready", platform_name=__PLATFORM_NAME__
+            )
+
+        try:
             if len(message) > 2000:
                 chunks = [message[i : i + 1999] for i in range(0, len(message), 1999)]
                 for chunk in chunks:
-                    await self.channel.send(chunk)
+                    await self._channel.send(chunk)
                 return "Message sent (split into chunks)"
-
-            await self.channel.send(message)
-            return "Message sent"
-
+            else:
+                await self._channel.send(message)
+                return "Message sent successfully"
         except discord.Forbidden as e:
             raise PlatformAuthenticationError(
                 message="Bot lacks permission to send messages", platform_error=e, platform_name=__PLATFORM_NAME__
             )
         except discord.HTTPException as e:
-            if e.status == 429:  # Rate limit
+            if e.status == 429:
                 raise PlatformRateLimitError(
                     message="Rate limit exceeded",
                     platform_error=e,
@@ -248,18 +239,70 @@ class DiscordExecutor(PlatformExecutorAgent):
             raise PlatformConnectionError(
                 message=f"Failed to send message: {str(e)}", platform_error=e, platform_name=__PLATFORM_NAME__
             )
-        except discord.DiscordException as e:
-            raise PlatformError(
-                message=f"Discord exception: {str(e)}", platform_error=e, platform_name=__PLATFORM_NAME__
-            )
-        except PlatformError as e:
-            # It's one of our handled errors, just raise it as is
-            raise e
-        except Exception as e:
-            # Other exception, wrap with ours and raise
-            raise PlatformError(
-                message=f"Unexpected error sending message: {str(e)}", platform_error=e, platform_name=__PLATFORM_NAME__
-            )
+
+    def shutdown(self):
+        """Shutdown the Discord client."""
+        if self._client and not self._client.is_closed():
+            if self._loop and self._loop.is_running():
+                self._loop.create_task(self._client.close())
+            else:
+                asyncio.run(self._client.close())
+
+        if self._thread and self._thread.is_alive():
+            self._shutdown.set()
+            self._thread.join(timeout=2)
+
+
+class DiscordExecutor(PlatformExecutorAgent):
+    """Discord-specific executor agent."""
+
+    def __init__(self, platform_config: DiscordConfig, reply_config: Optional[ReplyConfig] = None):
+        super().__init__(platform_config, reply_config)
+
+        # Create Discord handler
+        self._discord = DiscordHandler(
+            bot_token=platform_config.bot_token,
+            guild_name=platform_config.guild_name,
+            channel_name=platform_config.channel_name,
+        )
+
+        # Register signal handlers
+        signal.signal(signal.SIGINT, self._signal_handler)
+        signal.signal(signal.SIGTERM, self._signal_handler)
+
+        # Start Discord client
+        self._discord.start()
+
+    def _signal_handler(self, signum, frame):
+        """Handle shutdown signals."""
+        self.shutdown()
+        sys.exit(0)
+
+    def shutdown(self):
+        """Clean shutdown of the Discord client."""
+        self._discord.shutdown()
+
+    def send_to_platform(self, message: str) -> str:
+        """Send a message to Discord channel."""
+        # Get the event loop
+        loop = self._discord._loop
+
+        # If we're in the event loop thread, run directly
+        if loop and loop.is_running() and threading.current_thread() == self._discord._thread:
+            return loop.run_until_complete(self._discord.send_message(message))
+
+        # Otherwise, run in the appropriate context
+        future = asyncio.run_coroutine_threadsafe(self._discord.send_message(message), loop)
+        result = future.result(timeout=5)
+
+        # Initiate shutdown after sending message
+        self.shutdown()
+
+        return result
+
+    def __del__(self):
+        """Cleanup when object is destroyed."""
+        self.shutdown()
 
 
 class DiscordAgent(CommsPlatformAgent):
