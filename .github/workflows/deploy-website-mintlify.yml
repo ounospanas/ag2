@@ -45,7 +45,6 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          uv pip install --system -e ".[docs]"
           # Pin databind packages as version 4.5.0 is not compatible with pydoc-markdown.
           uv pip install --system databind.core==4.4.2 databind.json==4.4.2
 
@@ -88,7 +87,6 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          uv pip install --system -e ".[docs]"
           # Pin databind packages as version 4.5.0 is not compatible with pydoc-markdown.
           uv pip install --system databind.core==4.4.2 databind.json==4.4.2
 
