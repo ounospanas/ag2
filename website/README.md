@@ -14,12 +14,6 @@ See [here](https://github.com/ag2ai/ag2/blob/main/notebook/contributing.md#how-t
 nvm install --lts
 ```
 
-Then, install the required Python packages by running the following command:
-
-```bash
-pip install -e ".[docs]"
-```
-
 2. You also need to install quarto. Please click on the `Pre-release` tab from [this website](https://quarto.org/docs/download/) to download the latest version of `quarto` and install it. Ensure that the `quarto` version is `1.5.23` or higher.
 
 3. Finally, run the following command to build and serve the documentation:
@@ -40,7 +34,6 @@ This will open the project in a devcontainer with all the required dependencies 
 Open a terminal and run the following command to build and serve the documentation:
 
 ```console
-pip install -e ".[docs]"
 ./scripts/docs_serve.sh
 ```
 
