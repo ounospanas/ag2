@@ -210,7 +210,7 @@ lint = [
 ]
 
 dev = [
-    "pyautogen[lint,test,types,docs]",
+    "pyautogen[lint,test,types]",
     "pre-commit==4.0.1",
     "detect-secrets==1.5.0",
     "uv==0.5.16",
