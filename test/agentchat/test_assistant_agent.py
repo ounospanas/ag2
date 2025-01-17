@@ -7,26 +7,21 @@
 #!/usr/bin/env python3 -m pytest
 
 import os
-import sys
 
 import pytest
 
 from autogen.agentchat import AssistantAgent, UserProxyAgent
 
-from ..conftest import Credentials, reason, skip_openai  # noqa: E402
+from ..conftest import Credentials
 
 here = os.path.abspath(os.path.dirname(__file__))
 
 
-@pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"] or skip_openai,
-    reason="do not run on MacOS or windows OR " + reason,
-)
-def test_ai_user_proxy_agent(credentials_gpt_4o_mini: Credentials):
+def _test_ai_user_proxy_agent(credentials: Credentials) -> None:
     conversations = {}
     # autogen.ChatCompletion.start_logging(conversations)
 
-    config_list = credentials_gpt_4o_mini.config_list
+    config_list = credentials.config_list
 
     assistant = AssistantAgent(
         "assistant",
@@ -60,7 +55,22 @@ def test_ai_user_proxy_agent(credentials_gpt_4o_mini: Credentials):
     print("Result summary:", res.summary)
 
 
-@pytest.mark.skipif(skip_openai, reason=reason)
+@pytest.mark.gemini
+def test_ai_user_proxy_agent_gemini(credentials_gemini_pro: Credentials) -> None:
+    _test_ai_user_proxy_agent(credentials_gemini_pro)
+
+
+@pytest.mark.anthropic
+def test_ai_user_proxy_agent_anthropic(credentials_anthropic_claude_sonnet: Credentials) -> None:
+    _test_ai_user_proxy_agent(credentials_anthropic_claude_sonnet)
+
+
+@pytest.mark.openai
+def test_ai_user_proxy_agent(credentials_gpt_4o_mini: Credentials) -> None:
+    _test_ai_user_proxy_agent(credentials_gpt_4o_mini)
+
+
+@pytest.mark.openai
 def test_gpt4omini(credentials_gpt_4o_mini: Credentials, human_input_mode="NEVER", max_consecutive_auto_reply=5):
     config_list = credentials_gpt_4o_mini.config_list
     llm_config = {
@@ -100,7 +110,7 @@ If "Thank you" or "You\'re welcome" are said in the conversation, then say TERMI
     assert not isinstance(user.use_docker, bool)  # None or str
 
 
-@pytest.mark.skipif(skip_openai, reason=reason)
+@pytest.mark.openai
 def test_create_execute_script(
     credentials_gpt_4o_mini: Credentials, human_input_mode="NEVER", max_consecutive_auto_reply=3
 ):
@@ -151,7 +161,7 @@ print('Hello world!')
     # autogen.ChatCompletion.stop_logging()
 
 
-@pytest.mark.skipif(skip_openai, reason=reason)
+@pytest.mark.openai
 def test_tsp(credentials_gpt_4o_mini: Credentials, human_input_mode="NEVER", max_consecutive_auto_reply=2):
     config_list = credentials_gpt_4o_mini.config_list
     hard_questions = [

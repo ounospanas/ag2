@@ -5,9 +5,7 @@
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
 import json
-import os
 import sqlite3
-import sys
 import uuid
 
 import pytest
@@ -15,7 +13,7 @@ import pytest
 import autogen
 import autogen.runtime_logging
 
-from ..conftest import Credentials, skip_openai  # noqa: E402
+from ..conftest import Credentials
 
 TEACHER_MESSAGE = """
     You are roleplaying a math teacher, and your job is to help your students with linear algebra.
@@ -52,11 +50,7 @@ def db_connection():
     autogen.runtime_logging.stop()
 
 
-@pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"] or skip_openai,
-    reason="do not run on MacOS or windows OR dependency is not installed OR requested to skip",
-)
-def test_two_agents_logging(credentials: Credentials, db_connection):
+def _test_two_agents_logging(credentials: Credentials, db_connection, row_classes=["AzureOpenAI", "OpenAI"]) -> None:
     cur = db_connection.cursor()
 
     teacher = autogen.AssistantAgent(
@@ -88,9 +82,9 @@ def test_two_agents_logging(credentials: Credentials, db_connection):
     session_id = rows[0]["session_id"]
 
     for idx, row in enumerate(rows):
-        assert (
-            row["invocation_id"] and str(uuid.UUID(row["invocation_id"], version=4)) == row["invocation_id"]
-        ), "invocation id is not valid uuid"
+        assert row["invocation_id"] and str(uuid.UUID(row["invocation_id"], version=4)) == row["invocation_id"], (
+            "invocation id is not valid uuid"
+        )
         assert row["client_id"], "client id is empty"
         assert row["wrapper_id"], "wrapper id is empty"
         assert row["session_id"] and row["session_id"] == session_id
@@ -154,7 +148,7 @@ def test_two_agents_logging(credentials: Credentials, db_connection):
         assert row["client_id"], "client id is empty"
         assert row["wrapper_id"], "wrapper id is empty"
         assert row["session_id"] and row["session_id"] == session_id
-        assert row["class"] in ["AzureOpenAI", "OpenAI"]
+        assert row["class"] in row_classes
         init_args = json.loads(row["init_args"])
         if row["class"] == "AzureOpenAI":
             assert "api_version" in init_args
@@ -175,18 +169,29 @@ def test_two_agents_logging(credentials: Credentials, db_connection):
         assert row["timestamp"], "timestamp is empty"
 
 
-@pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"] or skip_openai,
-    reason="do not run on MacOS or windows OR dependency is not installed OR requested to skip",
-)
-def test_groupchat_logging(credentials_gpt_4o: Credentials, credentials_gpt_4o_mini: Credentials, db_connection):
+@pytest.mark.gemini
+def test_two_agents_logging_gemini(credentials_gemini_pro: Credentials, db_connection) -> None:
+    _test_two_agents_logging(credentials_gemini_pro, db_connection, row_classes=["GeminiClient"])
+
+
+@pytest.mark.anthropic
+def test_two_agents_logging_anthropic(credentials_anthropic_claude_sonnet: Credentials, db_connection) -> None:
+    _test_two_agents_logging(credentials_anthropic_claude_sonnet, db_connection, row_classes=["AnthropicClient"])
+
+
+@pytest.mark.openai
+def test_two_agents_logging(credentials: Credentials, db_connection):
+    _test_two_agents_logging(credentials, db_connection)
+
+
+def _test_groupchat_logging(credentials: Credentials, credentials2: Credentials, db_connection):
     cur = db_connection.cursor()
 
     teacher = autogen.AssistantAgent(
         "teacher",
         system_message=TEACHER_MESSAGE,
         is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
-        llm_config=credentials_gpt_4o.llm_config,
+        llm_config=credentials.llm_config,
         max_consecutive_auto_reply=2,
     )
 
@@ -194,7 +199,7 @@ def test_groupchat_logging(credentials_gpt_4o: Credentials, credentials_gpt_4o_m
         "student",
         system_message=STUDENT_MESSAGE,
         is_termination_msg=lambda x: x.get("content", "").find("TERMINATE") >= 0,
-        llm_config=credentials_gpt_4o_mini.llm_config,
+        llm_config=credentials2.llm_config,
         max_consecutive_auto_reply=1,
     )
 
@@ -202,7 +207,7 @@ def test_groupchat_logging(credentials_gpt_4o: Credentials, credentials_gpt_4o_m
         agents=[teacher, student], messages=[], max_round=3, speaker_selection_method="round_robin"
     )
 
-    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=credentials_gpt_4o_mini.llm_config)
+    group_chat_manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=credentials2.llm_config)
 
     student.initiate_chat(
         group_chat_manager,
@@ -227,9 +232,7 @@ def test_groupchat_logging(credentials_gpt_4o: Credentials, credentials_gpt_4o_m
     # Verify oai clients
     cur.execute(OAI_CLIENTS_QUERY)
     rows = cur.fetchall()
-    assert len(rows) == len(credentials_gpt_4o_mini.config_list) * 2 + len(
-        credentials_gpt_4o.config_list
-    )  # two agents and chat manager
+    assert len(rows) == len(credentials2.config_list) * 2 + len(credentials.config_list)  # two agents and chat manager
 
     # Verify oai wrappers
     cur.execute(OAI_WRAPPERS_QUERY)
@@ -250,3 +253,18 @@ def test_groupchat_logging(credentials_gpt_4o: Credentials, credentials_gpt_4o_m
     rows = cur.fetchall()
     assert len(rows) == 1
     assert rows[0]["id"] == 1 and rows[0]["version_number"] == 1
+
+
+@pytest.mark.gemini
+def test_groupchat_logging_gemini(credentials_gemini_pro: Credentials, db_connection):
+    _test_groupchat_logging(credentials_gemini_pro, credentials_gemini_pro, db_connection)
+
+
+@pytest.mark.anthropic
+def test_groupchat_logging_anthropic(credentials_anthropic_claude_sonnet: Credentials, db_connection):
+    _test_groupchat_logging(credentials_anthropic_claude_sonnet, credentials_anthropic_claude_sonnet, db_connection)
+
+
+@pytest.mark.openai
+def test_groupchat_logging(credentials_gpt_4o: Credentials, credentials_gpt_4o_mini: Credentials, db_connection):
+    _test_groupchat_logging(credentials_gpt_4o, credentials_gpt_4o_mini, db_connection)
