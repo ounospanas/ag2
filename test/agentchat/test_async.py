@@ -12,7 +12,7 @@ import pytest
 
 import autogen
 
-from ..conftest import Credentials, reason, skip_openai
+from ..conftest import Credentials
 
 
 def get_market_news(ind, ind_upper):
@@ -56,10 +56,8 @@ def get_market_news(ind, ind_upper):
     return feeds_summary
 
 
-@pytest.mark.skipif(skip_openai, reason=reason)
-@pytest.mark.asyncio
-async def test_async_groupchat(credentials_gpt_4o_mini: Credentials):
-    config_list = credentials_gpt_4o_mini.config_list
+async def _test_async_groupchat(credentials: Credentials):
+    config_list = credentials.config_list
 
     # create an AssistantAgent instance named "assistant"
     assistant = autogen.AssistantAgent(
@@ -90,10 +88,26 @@ async def test_async_groupchat(credentials_gpt_4o_mini: Credentials):
     assert len(user_proxy.chat_messages) > 0
 
 
-@pytest.mark.skipif(skip_openai, reason=reason)
+@pytest.mark.openai
 @pytest.mark.asyncio
-async def test_stream(credentials_gpt_4o_mini: Credentials):
-    config_list = credentials_gpt_4o_mini.config_list
+async def test_async_groupchat(credentials_gpt_4o_mini: Credentials):
+    await _test_async_groupchat(credentials_gpt_4o_mini)
+
+
+@pytest.mark.gemini
+@pytest.mark.asyncio
+async def test_async_groupchat_gemini(credentials_gemini_pro: Credentials):
+    await _test_async_groupchat(credentials_gemini_pro)
+
+
+@pytest.mark.anthropic
+@pytest.mark.asyncio
+async def test_async_groupchat_anthropic(credentials_anthropic_claude_sonnet: Credentials):
+    await _test_async_groupchat(credentials_anthropic_claude_sonnet)
+
+
+async def _test_stream(credentials: Credentials):
+    config_list = credentials.config_list
     data = asyncio.Future()
 
     async def add_stock_price_data():
@@ -158,6 +172,19 @@ async def test_stream(credentials_gpt_4o_mini: Credentials):
             # print("Chat summary and cost:", res.summary, res.cost)
 
 
-if __name__ == "__main__":
-    # asyncio.run(test_stream())
-    asyncio.run(test_async_groupchat())
+@pytest.mark.openai
+@pytest.mark.asyncio
+async def test_stream(credentials_gpt_4o_mini: Credentials):
+    await _test_stream(credentials_gpt_4o_mini)
+
+
+@pytest.mark.gemini
+@pytest.mark.asyncio
+async def test_stream_gemini(credentials_gemini_pro: Credentials):
+    await _test_stream(credentials_gemini_pro)
+
+
+@pytest.mark.anthropic
+@pytest.mark.asyncio
+async def test_stream_anthropic(credentials_anthropic_claude_sonnet: Credentials):
+    await _test_stream(credentials_anthropic_claude_sonnet)

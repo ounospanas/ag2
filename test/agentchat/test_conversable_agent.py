@@ -23,7 +23,7 @@ from autogen.agentchat import ConversableAgent, UserProxyAgent
 from autogen.agentchat.conversable_agent import register_function
 from autogen.exception_utils import InvalidCarryOverType, SenderRequired
 
-from ..conftest import Credentials, reason, skip_openai
+from ..conftest import Credentials
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -37,6 +37,15 @@ def conversable_agent():
         llm_config=False,
         human_input_mode="NEVER",
     )
+
+
+@pytest.mark.parametrize("name", ["agent name", "agent_name ", " agent\nname", " agent\tname"])
+def test_conversable_agent_name_with_white_space_raises_error(name: str) -> None:
+    with pytest.raises(
+        ValueError,
+        match=f"The name of the agent cannot contain any whitespace. The name provided is: '{name}'",
+    ):
+        ConversableAgent(name=name)
 
 
 def test_sync_trigger():
@@ -912,10 +921,7 @@ def test_register_functions(mock_credentials: Credentials):
     assert agent.llm_config["tools"] == expected
 
 
-@pytest.mark.skipif(
-    skip_openai,
-    reason=reason,
-)
+@pytest.mark.openai
 def test_function_registration_e2e_sync(credentials_gpt_4o_mini: Credentials) -> None:
     coder = autogen.AssistantAgent(
         name="chatbot",
@@ -977,16 +983,11 @@ def test_function_registration_e2e_sync(credentials_gpt_4o_mini: Credentials) ->
     stopwatch_mock.assert_called_once_with(num_seconds="2")
 
 
-@pytest.mark.skipif(
-    skip_openai,
-    reason=reason,
-)
-@pytest.mark.asyncio
-async def test_function_registration_e2e_async(credentials_gpt_4o: Credentials) -> None:
+async def _test_function_registration_e2e_async(credentials: Credentials) -> None:
     coder = autogen.AssistantAgent(
         name="chatbot",
         system_message="For coding tasks, only use the functions you have been provided with. Reply TERMINATE when the task is done.",
-        llm_config=credentials_gpt_4o.llm_config,
+        llm_config=credentials.llm_config,
     )
 
     # create a UserProxyAgent instance named "user_proxy"
@@ -1043,7 +1044,25 @@ async def test_function_registration_e2e_async(credentials_gpt_4o: Credentials) 
     stopwatch_mock.assert_called_once_with(num_seconds="2")
 
 
-@pytest.mark.skipif(skip_openai, reason=reason)
+@pytest.mark.openai
+@pytest.mark.asyncio
+async def test_function_registration_e2e_async(credentials_gpt_4o: Credentials) -> None:
+    await _test_function_registration_e2e_async(credentials_gpt_4o)
+
+
+@pytest.mark.gemini
+@pytest.mark.asyncio
+async def test_function_registration_e2e_async_gemini(credentials_gemini_pro: Credentials) -> None:
+    await _test_function_registration_e2e_async(credentials_gemini_pro)
+
+
+@pytest.mark.anthropic
+@pytest.mark.asyncio
+async def test_function_registration_e2e_async_anthropic(credentials_anthropic_claude_sonnet: Credentials) -> None:
+    await _test_function_registration_e2e_async(credentials_anthropic_claude_sonnet)
+
+
+@pytest.mark.openai
 def test_max_turn(credentials_gpt_4o_mini: Credentials) -> None:
     # create an AssistantAgent instance named "assistant"
     assistant = autogen.AssistantAgent(
@@ -1063,7 +1082,7 @@ def test_max_turn(credentials_gpt_4o_mini: Credentials) -> None:
     assert len(res.chat_history) <= 6
 
 
-@pytest.mark.skipif(skip_openai, reason=reason)
+@pytest.mark.openai
 def test_message_func(credentials_gpt_4o_mini: Credentials):
     import random
 
@@ -1114,7 +1133,7 @@ def test_message_func(credentials_gpt_4o_mini: Credentials):
     print(chat_res_play.summary)
 
 
-@pytest.mark.skipif(skip_openai, reason=reason)
+@pytest.mark.openai
 def test_summary(credentials_gpt_4o_mini: Credentials):
     import random
 
@@ -1473,7 +1492,7 @@ def test_handle_carryover():
     assert proc_content_empty_carryover == content, "Incorrect carryover processing"
 
 
-@pytest.mark.skipif(skip_openai, reason=reason)
+@pytest.mark.openai
 def test_context_variables():
     # Test initialization with context_variables
     initial_context = {"test_key": "test_value", "number": 42, "nested": {"inner": "value"}}
