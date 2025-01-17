@@ -44,7 +44,7 @@ jobs:
           python-version: "3.8"
       - name: Install Python dependencies
         run: |
-          uv pip install --system pydoc-markdown pyyaml termcolor nbclient
+          python -m pip install --upgrade pip
           # Pin databind packages as version 4.5.0 is not compatible with pydoc-markdown.
           uv pip install --system databind.core==4.4.2 databind.json==4.4.2
 
@@ -86,7 +86,7 @@ jobs:
           python-version: "3.8"
       - name: Install Python dependencies
         run: |
-          uv pip install --system pydoc-markdown pyyaml termcolor nbclient
+          python -m pip install --upgrade pip
           # Pin databind packages as version 4.5.0 is not compatible with pydoc-markdown.
           uv pip install --system databind.core==4.4.2 databind.json==4.4.2
 
