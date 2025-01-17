@@ -68,12 +68,13 @@
       return param_desc
 
   def format_param_table(params, docstring):
-      # remove self from params
-      params = [param for param in params if not param.startswith('self:') and param != 'self']
+      # remove self and * from params
+      params = [param for param in params if not param.startswith('self:') and param != 'self' and param != '*']
+
       if not params:
           return ""
       param_descriptions = extract_param_descriptions(docstring)
-      table = "| PARAMETER | DESCRIPTION |\n|--|--|\n"
+      table = "| Name | Description |\n|--|--|\n"
 
       for param in params:
           # Split the parameter into name and type annotation
@@ -108,13 +109,14 @@
           # Format the table cell
           formatted_desc = f"{description}<br/><br/>" if description else ''
           if type_val != '-':
-              formatted_desc += f"**TYPE:** `{type_val}`"
+              formatted_desc += f"**Type:** `{type_val}`"
           if default != '-' and default != '"-"':
-              formatted_desc += f"<br/><br/>**DEFAULT:** {default}"
+              formatted_desc += f"<br/><br/>**Default:** {default}"
 
           table += f"| `{name}` | {formatted_desc} |\n"
+          ret_val = "<b>Parameters:</b>" + "\n" + table
 
-      return table
+      return ret_val
 %>
 
 <%def name="deflist(s)">
@@ -133,6 +135,43 @@ ${indent(s)}
 <%def name="h2(s)">## ${s}
 </%def>
 
+<%!
+  # Add this new function with the existing helper functions
+  def extract_return_description(docstring):
+      """Extract return description from docstring."""
+      if not docstring or 'Returns:' not in docstring:
+          return ""
+
+      # Split on Returns: to get the section after it
+      post_returns = docstring.split('Returns:', 1)[1]
+
+      # Look for the next section marker
+      next_section_split = [post_returns.split(f"\n{marker}")[0]
+                          for marker in ['Args:', 'Raises:', 'Note:', 'Example:', 'Examples:', 'Attributes:']
+                          if f"\n{marker}" in post_returns]
+
+      # If we found another section, use the text up to that section
+      # Otherwise use all the text after Returns
+      description = next_section_split[0] if next_section_split else post_returns
+
+      return ' '.join(description.split()).strip()
+
+  def format_returns_table(returns, docstring):
+      if not returns:
+          return ""
+
+      description = extract_return_description(docstring)
+      if not description:
+          return ""
+
+      table = "| Type | Description |\n|--|--|\n"
+      returns = returns.replace('{', '\{').replace("<", "&lt;").replace("|", "\\|")
+      description = description.replace('{', '\{').replace("<", "&lt;").replace("|", "\\|")
+
+      table += f"| `{returns}` | {description} |\n"
+      return "<b>Returns:</b>" + "\n" + table
+%>
+
 <%def name="function(func)" buffered="True">
 <code class="doc-symbol doc-symbol-heading doc-symbol-${func.cls and 'method' or 'function'}"></code>
 ${'####'} ${func.name}
@@ -140,17 +179,14 @@ ${'####'} ${func.name}
 
 <%
         returns = show_type_annotations and func.return_annotation() or ''
-        if returns:
-            returns = ' \N{non-breaking hyphen}> ' + returns
         params = func.params(annotate=show_type_annotations)
         if len(params) > 2:
             formatted_params = ',\n    '.join(params)
-            signature = f"{func.name}(\n    {formatted_params}\n){returns}"
+            signature = f"{func.name}(\n    {formatted_params}\n) -> {returns}"
         else:
-            signature = f"{func.name}({', '.join(params)}){returns}"
+            signature = f"{func.name}({', '.join(params)}) -> {returns}"
 
         signature = signature.replace('{', '\{').replace("<", "&lt;")
-
         cleaned_docstring = func.docstring.replace('{', '\{').replace("<", "&lt;")
 %>
 ```python
@@ -162,6 +198,12 @@ ${cleaned_docstring | deflist}
 % if len(params) > 0:
 ${format_param_table(params, cleaned_docstring)}
 % endif
+
+% if returns:
+${format_returns_table(returns, cleaned_docstring)}
+% endif
+
+<br />
 </%def>
 
 <%def name="variable(var)" buffered="True">
@@ -177,8 +219,10 @@ ${'####'} ${var.name}
             annot = f"({annot}) "
 
         cleaned_docstring = var.docstring.replace('{', '\{').replace("<", "&lt;")
+        if not cleaned_docstring:
+            cleaned_docstring = '<br />'
 %>
-${annot}${cleaned_docstring | deflist}
+${cleaned_docstring | deflist}
 </%def>
 
 <%def name="class_(cls)" buffered="True">

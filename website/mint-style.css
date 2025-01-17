@@ -181,8 +181,7 @@ body.reference-page .headerlink {
   text-decoration: none;
   visibility: hidden;
   margin-left: 0.5rem;
-  display: inline-block;
-  vertical-align: middle;
+  display: block;
 }
 
 body.reference-page .doc-heading:hover .headerlink {
