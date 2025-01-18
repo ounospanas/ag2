@@ -6,9 +6,15 @@ from .discord_agent import (
     DiscordConfig,
 )
 from .platform_configs import ReplyMonitorConfig
+from .slack_agent import (
+    SlackAgent,
+    SlackConfig,
+)
 
 __all__ = [
     "DiscordAgent",
     "DiscordConfig",
     "ReplyMonitorConfig",
+    "SlackAgent",
+    "SlackConfig",
 ]
