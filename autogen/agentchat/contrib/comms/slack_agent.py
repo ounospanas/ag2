@@ -4,14 +4,11 @@
 import asyncio
 import signal
 import sys
-import time
 from datetime import datetime
 from typing import List, Optional, Tuple
 
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
-from slack_sdk.socket_mode import SocketModeClient
-from slack_sdk.socket_mode.response import SocketModeResponse
 
 from .comms_platform_agent import (
     CommsPlatformAgent,
@@ -35,10 +32,6 @@ class SlackHandler:
     def __init__(self, config: SlackConfig):
         self._config = config
         self._web_client = WebClient(token=config.bot_token)
-        self._socket_client = (
-            None if not config.app_token else SocketModeClient(app_token=config.app_token, web_client=self._web_client)
-        )
-
         self._ready = asyncio.Event()
         self._shutdown = asyncio.Event()
         self._thread = None
@@ -46,44 +39,6 @@ class SlackHandler:
         self._error = None
         self._message_replies = {}
         self._reply_events = {}
-
-        # Initialize socket mode if available
-        if self._socket_client:
-            self._setup_socket_mode()
-
-    def _setup_socket_mode(self):
-        """Set up Socket Mode event handlers."""
-
-        @self._socket_client.socket_mode_request_listeners.append
-        def handle_message(client: SocketModeClient, req):
-            # Acknowledge the request
-            response = SocketModeResponse(envelope_id=req.envelope_id)
-            client.send_socket_mode_response(response)
-
-            if req.payload.get("type") == "message" and "thread_ts" in req.payload:
-                thread_ts = req.payload["thread_ts"]
-                if thread_ts in self._message_replies:
-                    reply_data = {
-                        "content": req.payload.get("text", ""),
-                        "author": self._get_user_name(req.payload.get("user")),
-                        "timestamp": datetime.fromtimestamp(float(req.payload.get("ts", 0))).isoformat(),
-                        "id": req.payload.get("ts"),
-                    }
-
-                    # Handle attachments
-                    if "files" in req.payload:
-                        attachments = [
-                            f"(Attachment: {f.get('name')}, URL: {f.get('url_private')})" for f in req.payload["files"]
-                        ]
-                        if attachments:
-                            reply_data["content"] += f" {' '.join(attachments)}"
-
-                    self._message_replies[thread_ts].append(reply_data)
-
-                    # Check if we've hit max replies
-                    max_replies = self._reply_events[thread_ts].get("max_replies", 0)
-                    if max_replies > 0 and len(self._message_replies[thread_ts]) >= max_replies:
-                        self._reply_events[thread_ts]["event"].set()
 
     def _get_user_name(self, user_id: str) -> str:
         """Get user name from user ID."""
@@ -139,10 +94,6 @@ class SlackHandler:
     def start(self):
         """Start the Slack client and validate connection."""
         try:
-            # Start socket mode if available
-            if self._socket_client:
-                self._socket_client.connect()
-
             # Validate configuration
             loop = asyncio.get_event_loop()
             if loop.is_running():
@@ -200,7 +151,7 @@ class SlackHandler:
             )
 
     async def wait_for_replies(self, message_id: str, timeout_minutes: int = 5, max_replies: int = 0) -> List[dict]:
-        """Wait for replies to a specific message.
+        """Wait for replies to a specific message using polling.
 
         Args:
             message_id: ID of message to monitor for replies
@@ -218,70 +169,69 @@ class SlackHandler:
         event = asyncio.Event()
         self._reply_events[message_id] = {"event": event, "max_replies": max_replies}
 
+        async def poll_for_replies():
+            while not event.is_set():
+                try:
+                    response = self._web_client.conversations_replies(channel=self._config.channel_id, ts=message_id)
+
+                    # Process any new replies
+                    for msg in response["messages"][1:]:  # Skip the first message (original)
+                        if msg["ts"] not in [r["id"] for r in self._message_replies[message_id]]:
+                            reply_data = {
+                                "content": msg.get("text", ""),
+                                "author": self._get_user_name(msg.get("user")),
+                                "timestamp": datetime.fromtimestamp(float(msg.get("ts", 0))).isoformat(),
+                                "id": msg.get("ts"),
+                            }
+
+                            if "files" in msg:
+                                attachments = [
+                                    f"(Attachment: {f.get('name')}, URL: {f.get('url_private')})" for f in msg["files"]
+                                ]
+                                if attachments:
+                                    reply_data["content"] += f" {' '.join(attachments)}"
+
+                            self._message_replies[message_id].append(reply_data)
+
+                            # Check if we've hit max replies
+                            if max_replies > 0 and len(self._message_replies[message_id]) >= max_replies:
+                                event.set()
+                                break
+
+                except SlackApiError as e:
+                    if e.response["error"] == "rate_limited":
+                        await asyncio.sleep(float(e.response.headers.get("Retry-After", 1)))
+                    else:
+                        raise
+
+                # Sleep before next poll
+                await asyncio.sleep(1)
+
         try:
-            # If using Socket Mode, we'll get real-time updates
-            if self._socket_client:
-                if timeout_minutes > 0:
-                    try:
-                        await asyncio.wait_for(event.wait(), timeout=timeout_minutes * 60)
-                    except asyncio.TimeoutError:
-                        if not self._message_replies[message_id]:
-                            raise PlatformError(
-                                message=f"Timeout waiting for replies after {timeout_minutes} minutes",
-                                platform_name=__PLATFORM_NAME__,
-                            )
-            else:
-                # Fall back to polling if Socket Mode isn't available
-                start_time = time.time()
-                while True:
-                    try:
-                        response = self._web_client.conversations_replies(
-                            channel=self._config.channel_id, ts=message_id
+            # Start polling task
+            poll_task = asyncio.create_task(poll_for_replies())
+
+            if timeout_minutes > 0:
+                try:
+                    await asyncio.wait_for(event.wait(), timeout=timeout_minutes * 60)
+                except asyncio.TimeoutError:
+                    if not self._message_replies[message_id]:
+                        raise PlatformError(
+                            message=f"Timeout waiting for replies after {timeout_minutes} minutes",
+                            platform_name=__PLATFORM_NAME__,
                         )
-
-                        # Process any new replies
-                        for msg in response["messages"][1:]:  # Skip the first message (original)
-                            if msg["ts"] not in [r["id"] for r in self._message_replies[message_id]]:
-                                reply_data = {
-                                    "content": msg.get("text", ""),
-                                    "author": self._get_user_name(msg.get("user")),
-                                    "timestamp": datetime.fromtimestamp(float(msg.get("ts", 0))).isoformat(),
-                                    "id": msg.get("ts"),
-                                }
-
-                                if "files" in msg:
-                                    attachments = [
-                                        f"(Attachment: {f.get('name')}, URL: {f.get('url_private')})"
-                                        for f in msg["files"]
-                                    ]
-                                    if attachments:
-                                        reply_data["content"] += f" {' '.join(attachments)}"
-
-                                self._message_replies[message_id].append(reply_data)
-
-                        # Check if we've hit max replies
-                        if max_replies > 0 and len(self._message_replies[message_id]) >= max_replies:
-                            break
-
-                        # Check timeout
-                        if timeout_minutes > 0 and (time.time() - start_time) > (timeout_minutes * 60):
-                            if not self._message_replies[message_id]:
-                                raise PlatformError(
-                                    message=f"Timeout waiting for replies after {timeout_minutes} minutes",
-                                    platform_name=__PLATFORM_NAME__,
-                                )
-                            break
-
-                        # Sleep before next poll
-                        await asyncio.sleep(1)
-
-                    except SlackApiError as e:
-                        if e.response["error"] == "rate_limited":
-                            await asyncio.sleep(float(e.response.headers.get("Retry-After", 1)))
-                        else:
-                            raise
+            else:
+                await event.wait()
 
         finally:
+            # Cancel polling task
+            if "poll_task" in locals():
+                poll_task.cancel()
+                try:
+                    await poll_task
+                except asyncio.CancelledError:
+                    pass
+
             # Cleanup and return replies
             replies = self._message_replies.pop(message_id, [])
             self._reply_events.pop(message_id, None)
@@ -294,9 +244,6 @@ class SlackHandler:
 
     def shutdown(self):
         """Shutdown the Slack client."""
-        if self._socket_client:
-            self._socket_client.close()
-
         if self._thread and self._thread.is_alive():
             self._shutdown.set()
             self._thread.join(timeout=2)
@@ -368,10 +315,23 @@ class SlackExecutor(PlatformExecutorAgent):
         if not self.reply_monitor_config:
             return []
 
-        _ = asyncio.new_event_loop
+        loop = asyncio.new_event_loop()
+        try:
+            asyncio.set_event_loop(loop)
+            replies = loop.run_until_complete(
+                self._slack.wait_for_replies(
+                    msg_id,
+                    timeout_minutes=self.reply_monitor_config.timeout_minutes,
+                    max_replies=self.reply_monitor_config.max_reply_messages,
+                )
+            )
+            return self._format_replies(replies)
+        finally:
+            loop.close()
 
     def cleanup_monitoring(self, msg_id: str):
-        pass
+        """Clean up reply monitoring resources."""
+        self._slack.cleanup_reply_monitoring(msg_id)
 
 
 class SlackAgent(CommsPlatformAgent):
