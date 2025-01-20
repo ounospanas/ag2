@@ -95,14 +95,14 @@ def template_content():
                 ],
             },
             {"group": "API Reference", "pages": ["PLACEHOLDER"]},
-            {
-                "group": "AutoGen Studio",
-                "pages": [
-                    "docs/autogen-studio/getting-started",
-                    "docs/autogen-studio/usage",
-                    "docs/autogen-studio/faqs",
-                ],
-            },
+            # {
+            #     "group": "AutoGen Studio",
+            #     "pages": [
+            #         "docs/autogen-studio/getting-started",
+            #         "docs/autogen-studio/usage",
+            #         "docs/autogen-studio/faqs",
+            #     ],
+            # },
         ],
     }
 
