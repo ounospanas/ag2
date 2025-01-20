@@ -3,63 +3,87 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from abc import ABC
-from typing import TYPE_CHECKING
-from uuid import UUID
+from typing import Any, Callable, Optional
 
-from pydantic import BaseModel
-from termcolor import colored
-
-from ..code_utils import content_str
-from ..oai.client import OpenAIWrapper
 from .base_message import BaseMessage, wrap_message
 
-if TYPE_CHECKING:
-    from ..agentchat.agent import Agent
-    from ..coding.base import CodeBlock
+__all__ = [
+    "InputRequestMessage",
+    "InputResponseMessage",
+    "MultipleChoiceInputRequestMessage",
+    "MultipleChoiceInputResponseMessage",
+    "PasswordInputRequestMessage",
+    "PasswordInputResponseMessage",
+    "SingleChoiceInputRequestMessage",
+    "SingleChoiceInputResponseMessage",
+    "TextInputRequestMessage",
+    "TextInputResponsetMessage",
+]
 
 
-@wrap_message
 class InputRequestMessage(BaseMessage, ABC):
-    pass
+    prompt: str = ""
+
+    def print(self, f: Optional[Callable[..., Any]] = None) -> None:
+        f = f or print
+        f(self.prompt, flush=True)
+
 
 @wrap_message
 class TextInputRequestMessage(InputRequestMessage):
-    prompt: str = ""
+    pass
+
 
 @wrap_message
 class PasswordInputRequestMessage(InputRequestMessage):
-    prompt: str = ""
+    pass
+
 
 @wrap_message
 class SingleChoiceInputRequestMessage(InputRequestMessage):
-    prompt: str = ""
     choices: list[str]
+
 
 @wrap_message
 class MultipleChoiceInputRequestMessage(InputRequestMessage):
-    prompt: str = ""
     choices: list[str]
 
-@wrap_message
-class InputMessageResponse(BaseMessage, ABC):
+
+class InputResponseMessage(BaseMessage, ABC):
     request: InputRequestMessage
 
+
 @wrap_message
-class TextInputResponsetMessage(InputMessageResponse):
+class TextInputResponsetMessage(InputResponseMessage):
     text: str
     request: TextInputRequestMessage
 
+    def __str__(self) -> str:
+        return self.text
+
+
 @wrap_message
-class PasswordInputResponseMessage(InputMessageResponse):
+class PasswordInputResponseMessage(InputResponseMessage):
     password: str
     request: PasswordInputRequestMessage
 
+    def __str__(self) -> str:
+        return self.password
+
+
 @wrap_message
-class SingleChoiceInputResponseMessage(InputMessageResponse):
+class SingleChoiceInputResponseMessage(InputResponseMessage):
     choice: str
     request: SingleChoiceInputRequestMessage
 
+    def __str__(self) -> str:
+        return self.choice
+
+
 @wrap_message
-class MultipleChoiceInputResponseMessage(InputMessageResponse):
+class MultipleChoiceInputResponseMessage(InputResponseMessage):
     choices: list[str]
     request: MultipleChoiceInputRequestMessage
+
+    def __str__(self) -> str:
+        return str(self.choices)
