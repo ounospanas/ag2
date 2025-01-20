@@ -8,8 +8,6 @@ RUN curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.d
 RUN apt-get update && apt-get -y update
 # added vim and nano for convenience
 RUN apt-get install -y sudo git npm vim nano curl wget git-lfs
-# need the below packages for the documentation
-RUN apt-get install -y sudo libpq-dev postgresql-server-dev-all
 
 # Setup a non-root user 'autogen' with sudo access
 RUN adduser --home /home/autogen --disabled-password --gecos '' autogen
