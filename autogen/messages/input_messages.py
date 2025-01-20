@@ -22,7 +22,7 @@ __all__ = [
 
 
 class InputRequestMessage(BaseMessage, ABC):
-    prompt: str = ""
+    prompt: str
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         f = f or print
