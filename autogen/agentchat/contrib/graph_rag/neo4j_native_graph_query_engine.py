@@ -4,7 +4,7 @@
 
 import asyncio
 import logging
-from typing import List, Optional, Union
+from typing import List, Literal, Optional, Union
 
 from neo4j import GraphDatabase
 from neo4j_graphrag.embeddings import Embedder, OpenAIEmbeddings
@@ -35,7 +35,7 @@ class Neo4jNativeGraphQueryEngine(GraphQueryEngine):
         port: int = 7687,
         username: str = "neo4j",
         password: str = "password",
-        embeddings: Optional[Embedder] = OpenAIEmbeddings(model="text-embedding-3-large"),
+        embeddings: Union[Optional[Embedder], Literal["default"]] = "default",
         embedding_dimension: Optional[int] = 3072,
         llm: Optional[LLMInterface] = OpenAILLM(
             model_name="gpt-4o",
@@ -53,7 +53,7 @@ class Neo4jNativeGraphQueryEngine(GraphQueryEngine):
             port (int): Neo4j port.
             username (str): Neo4j username.
             password (str): Neo4j password.
-            embeddings (Embedder): Embedding model to embed chunk data and retrieve answers.
+            embeddings (Union[Optional[Embedder], Literal["default"]]): Embedding model to embed chunk data and retrieve answers.
             embedding_dimension (int): Dimension of the embeddings for the model.
             llm (LLMInterface): Language model for creating the knowledge graph (returns JSON responses).
             query_llm (LLMInterface): Language model for querying the knowledge graph.
@@ -64,7 +64,9 @@ class Neo4jNativeGraphQueryEngine(GraphQueryEngine):
         """
         self.uri = f"{host}:{port}"
         self.driver = GraphDatabase.driver(self.uri, auth=(username, password))
-        self.embeddings = embeddings
+        self.embeddings: Optional[Embedder] = (
+            embeddings if embeddings != "default" else OpenAIEmbeddings(model="text-embedding-3-large")
+        )
         self.embedding_dimension = embedding_dimension
         self.llm = llm
         self.query_llm = query_llm

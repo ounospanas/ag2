@@ -51,8 +51,6 @@ jobs:
         uses: quarto-dev/quarto-actions/setup@v2
 
       - name: Build documentation
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: ./scripts/docs_build.sh
         working-directory: .
 
@@ -94,8 +92,6 @@ jobs:
         uses: quarto-dev/quarto-actions/setup@v2
 
       - name: Build documentation
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: ./scripts/docs_build.sh
         working-directory: .
 

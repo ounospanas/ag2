@@ -3,6 +3,9 @@
 set -e
 set -x
 
+# Source the docs_install_deps.sh script from the same directory
+source "$(dirname "$0")/docs_install_deps.sh"
+
 install_graphviz_mac() {
     if command -v brew >/dev/null 2>&1; then
         echo "Installing Graphviz using Homebrew..."
@@ -35,19 +38,6 @@ install_graphviz() {
         echo "Unsupported operating system"
         exit 1
     fi
-}
-
-install_packages() {
-    pip install -e ".[docs]"
-    pip install "falkordb" "graphrag_sdk" "neo4j-graphrag" "pypdf" \
-        "pdoc3>=0.11.5" \
-        "pyyaml>=6.0.2" \
-        "termcolor>=2.5.0" \
-        "nbclient>=0.10.2" \
-        "arxiv>=2.1.3" \
-        "flaml[automl]" \
-        "pygraphviz>=1.14" \
-        "replicate"
 }
 
 docs_generate() {
