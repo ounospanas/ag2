@@ -297,7 +297,7 @@ class ToolCallMessage(BasePrintReceivedMessage):
 class TextMessage(BasePrintReceivedMessage):
     """A message class representing a simple text message."""
 
-    content: Optional[Union[str, int, float, bool]] = None  # type: ignore [assignment]
+    content: Optional[Union[str, int, float, bool, list[dict[str, Union[str, dict[str, Any]]]]]] = None  # type: ignore [assignment]
 
     def print(self, f: Optional[Callable[..., Any]] = None) -> None:
         """Prints the message details, including the text content.
