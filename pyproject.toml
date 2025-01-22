@@ -346,6 +346,7 @@ files = [
     "autogen/interop",
     "autogen/agentchat/realtime_agent",
     "autogen/messages",
+    "autogen/import_utils.py",
     "test/test_pydantic.py",
     "test/io",
     "test/tools",
@@ -353,6 +354,8 @@ files = [
     "test/agentchat/realtime_agent",
     "test/messages",
     "test/conftest.py",
+    "test/test_import_utils.py",
+    "test/test_import.py",
 ]
 
 exclude = [
