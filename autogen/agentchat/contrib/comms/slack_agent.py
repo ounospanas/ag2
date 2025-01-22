@@ -1,9 +1,7 @@
 # Copyright (c) 2023 - 2025, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
-import asyncio
-import signal
-import sys
+import time
 from datetime import datetime
 from typing import List, Optional, Tuple
 
@@ -27,18 +25,12 @@ __TIMEOUT__ = 5  # Timeout in seconds
 
 
 class SlackHandler:
-    """Handles Slack client operations and connection management."""
+    """Handles Slack client operations with synchronous functionality."""
 
     def __init__(self, config: SlackConfig):
         self._config = config
         self._web_client = WebClient(token=config.bot_token)
-        self._ready = asyncio.Event()
-        self._shutdown = asyncio.Event()
-        self._thread = None
-        self._loop = None
-        self._error = None
         self._message_replies = {}
-        self._reply_events = {}
 
     def _get_user_name(self, user_id: str) -> str:
         """Get user name from user ID."""
@@ -50,7 +42,7 @@ class SlackHandler:
             pass
         return user_id
 
-    async def validate(self):
+    def validate(self) -> bool:
         """Validate Slack configuration and connection."""
         try:
             # Test API connection
@@ -74,7 +66,6 @@ class SlackHandler:
                     )
                 raise
 
-            self._ready.set()
             return True
 
         except SlackApiError as e:
@@ -91,23 +82,16 @@ class SlackHandler:
                 )
             raise PlatformError(message=f"Slack API error: {str(e)}", platform_error=e, platform_name=__PLATFORM_NAME__)
 
-    def start(self):
+    def start(self) -> bool:
         """Start the Slack client and validate connection."""
         try:
-            # Validate configuration
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                self._loop = loop
-                return asyncio.run_coroutine_threadsafe(self.validate(), loop)
-            else:
-                return loop.run_until_complete(self.validate())
-
+            return self.validate()
         except Exception as e:
             raise PlatformError(
                 message=f"Error starting Slack client: {str(e)}", platform_error=e, platform_name=__PLATFORM_NAME__
             )
 
-    async def send_message(self, message: str) -> Tuple[str, Optional[str]]:
+    def send_message(self, message: str) -> Tuple[str, Optional[str]]:
         """Send a message to the Slack channel.
 
         Args:
@@ -150,7 +134,7 @@ class SlackHandler:
                 message=f"Failed to send message: {str(e)}", platform_error=e, platform_name=__PLATFORM_NAME__
             )
 
-    async def wait_for_replies(self, message_id: str, timeout_minutes: int = 5, max_replies: int = 0) -> List[dict]:
+    def wait_for_replies(self, message_id: str, timeout_minutes: int = 5, max_replies: int = 0) -> List[dict]:
         """Wait for replies to a specific message using polling.
 
         Args:
@@ -164,89 +148,59 @@ class SlackHandler:
         if not message_id:
             return []
 
-        # Initialize reply tracking
+        # Initialize tracking for this message
         self._message_replies[message_id] = []
-        event = asyncio.Event()
-        self._reply_events[message_id] = {"event": event, "max_replies": max_replies}
+        end_time = time.time() + (timeout_minutes * 60) if timeout_minutes > 0 else None
 
-        async def poll_for_replies():
-            while not event.is_set():
-                try:
-                    response = self._web_client.conversations_replies(channel=self._config.channel_id, ts=message_id)
+        while True:
+            try:
+                # Check if timeout has expired and return any replies we have
+                if end_time and time.time() > end_time:
+                    return self._message_replies[message_id]
 
-                    # Process any new replies
-                    for msg in response["messages"][1:]:  # Skip the first message (original)
-                        if msg["ts"] not in [r["id"] for r in self._message_replies[message_id]]:
-                            reply_data = {
-                                "content": msg.get("text", ""),
-                                "author": self._get_user_name(msg.get("user")),
-                                "timestamp": datetime.fromtimestamp(float(msg.get("ts", 0))).isoformat(),
-                                "id": msg.get("ts"),
-                            }
+                # Get replies from Slack
+                response = self._web_client.conversations_replies(channel=self._config.channel_id, ts=message_id)
 
-                            if "files" in msg:
-                                attachments = [
-                                    f"(Attachment: {f.get('name')}, URL: {f.get('url_private')})" for f in msg["files"]
-                                ]
-                                if attachments:
-                                    reply_data["content"] += f" {' '.join(attachments)}"
+                # Process any new replies
+                for msg in response["messages"][1:]:  # Skip the first message (original)
+                    if msg["ts"] not in [r["id"] for r in self._message_replies[message_id]]:
+                        reply_data = {
+                            "content": msg.get("text", ""),
+                            "author": self._get_user_name(msg.get("user")),
+                            "timestamp": datetime.fromtimestamp(float(msg.get("ts", 0))).isoformat(),
+                            "id": msg.get("ts"),
+                        }
 
-                            self._message_replies[message_id].append(reply_data)
+                        if "files" in msg:
+                            attachments = [
+                                f"(Attachment: {f.get('name')}, URL: {f.get('url_private')})" for f in msg["files"]
+                            ]
+                            if attachments:
+                                reply_data["content"] += f" {' '.join(attachments)}"
 
-                            # Check if we've hit max replies
-                            if max_replies > 0 and len(self._message_replies[message_id]) >= max_replies:
-                                event.set()
-                                break
+                        self._message_replies[message_id].append(reply_data)
 
-                except SlackApiError as e:
-                    if e.response["error"] == "rate_limited":
-                        await asyncio.sleep(float(e.response.headers.get("Retry-After", 1)))
-                    else:
-                        raise
+                        # Check if we've hit max replies
+                        if max_replies > 0 and len(self._message_replies[message_id]) >= max_replies:
+                            return self._message_replies[message_id]
 
-                # Sleep before next poll
-                await asyncio.sleep(1)
+            except SlackApiError as e:
+                if e.response["error"] == "rate_limited":
+                    time.sleep(float(e.response.headers.get("Retry-After", 1)))
+                else:
+                    raise
 
-        try:
-            # Start polling task
-            poll_task = asyncio.create_task(poll_for_replies())
-
-            if timeout_minutes > 0:
-                try:
-                    await asyncio.wait_for(event.wait(), timeout=timeout_minutes * 60)
-                except asyncio.TimeoutError:
-                    if not self._message_replies[message_id]:
-                        raise PlatformError(
-                            message=f"Timeout waiting for replies after {timeout_minutes} minutes",
-                            platform_name=__PLATFORM_NAME__,
-                        )
-            else:
-                await event.wait()
-
-        finally:
-            # Cancel polling task
-            if "poll_task" in locals():
-                poll_task.cancel()
-                try:
-                    await poll_task
-                except asyncio.CancelledError:
-                    pass
-
-            # Cleanup and return replies
-            replies = self._message_replies.pop(message_id, [])
-            self._reply_events.pop(message_id, None)
-            return replies
+            # Sleep before next poll
+            time.sleep(1)
 
     def cleanup_reply_monitoring(self, message_id: str):
         """Clean up reply monitoring for a specific message."""
         self._message_replies.pop(message_id, None)
-        self._reply_events.pop(message_id, None)
 
     def shutdown(self):
         """Shutdown the Slack client."""
-        if self._thread and self._thread.is_alive():
-            self._shutdown.set()
-            self._thread.join(timeout=2)
+        # Nothing needed for synchronous operation
+        pass
 
 
 class SlackExecutor(PlatformExecutorAgent):
@@ -254,28 +208,9 @@ class SlackExecutor(PlatformExecutorAgent):
 
     def __init__(self, platform_config: SlackConfig, reply_monitor_config: Optional[ReplyMonitorConfig] = None):
         super().__init__(platform_config, reply_monitor_config)
-
         self._slack = SlackHandler(platform_config)
-
-        # Register signal handlers
-        signal.signal(signal.SIGINT, self._signal_handler)
-        signal.signal(signal.SIGTERM, self._signal_handler)
-
-        # Start Slack client
+        # Validate connection on initialization
         self._slack.start()
-
-    def _signal_handler(self, signum, frame):
-        """Handle shutdown signals."""
-        self.shutdown()
-        sys.exit(0)
-
-    def shutdown(self):
-        """Clean shutdown of the Slack client."""
-        self._slack.shutdown()
-
-    def __del__(self):
-        """Cleanup when object is destroyed."""
-        self.shutdown()
 
     def send_to_platform(self, message: str) -> Tuple[str, Optional[str]]:
         """Send a message to Slack channel.
@@ -286,12 +221,7 @@ class SlackExecutor(PlatformExecutorAgent):
         Returns:
             Tuple[str, Optional[str]]: Status message and message ID if successful
         """
-        loop = asyncio.new_event_loop()
-        try:
-            asyncio.set_event_loop(loop)
-            return loop.run_until_complete(self._slack.send_message(message))
-        finally:
-            loop.close()
+        return self._slack.send_message(message)
 
     def _format_replies(self, replies: List[dict]) -> List[str]:
         """Format replies for display."""
@@ -315,23 +245,20 @@ class SlackExecutor(PlatformExecutorAgent):
         if not self.reply_monitor_config:
             return []
 
-        loop = asyncio.new_event_loop()
-        try:
-            asyncio.set_event_loop(loop)
-            replies = loop.run_until_complete(
-                self._slack.wait_for_replies(
-                    msg_id,
-                    timeout_minutes=self.reply_monitor_config.timeout_minutes,
-                    max_replies=self.reply_monitor_config.max_reply_messages,
-                )
-            )
-            return self._format_replies(replies)
-        finally:
-            loop.close()
+        replies = self._slack.wait_for_replies(
+            msg_id,
+            timeout_minutes=self.reply_monitor_config.timeout_minutes,
+            max_replies=self.reply_monitor_config.max_reply_messages,
+        )
+        return self._format_replies(replies)
 
     def cleanup_monitoring(self, msg_id: str):
-        """Clean up reply monitoring resources."""
+        """Clean up reply monitoring for a specific message."""
         self._slack.cleanup_reply_monitoring(msg_id)
+
+    def shutdown(self):
+        """Clean shutdown of the Slack client."""
+        self._slack.cleanup_reply_monitoring(None)  # Cleanup any ongoing monitoring
 
 
 class SlackAgent(CommsPlatformAgent):
