@@ -7,7 +7,7 @@ import sys
 import tempfile
 import textwrap
 from pathlib import Path
-from typing import Generator
+from typing import Generator, Union
 
 import pytest
 
@@ -70,7 +70,7 @@ def test_cleanup_tmp_dirs_if_no_metadata() -> None:
 
 class TestAddFrontMatterToMetadataMdx:
     def test_without_metadata_mdx(self) -> None:
-        front_matter_dict = {
+        front_matter_dict: dict[str, Union[str, Union[list[str] | None]]] = {
             "title": "some title",
             "link": "/notebooks/some-title",
             "description": "some description",
@@ -120,7 +120,7 @@ export const notebooksMetadata = [
             )
 
     def test_with_metadata_mdx(self) -> None:
-        front_matter_dict = {
+        front_matter_dict: dict[str, Union[str, Union[list[str] | None]]] = {
             "title": "some title",
             "link": "/notebooks/some-title",
             "description": "some description",
@@ -247,7 +247,7 @@ class TestAddBlogsToNavigation:
             "blog/2023-04-21-LLM-tuning-math/index",
         ]
 
-    def test_get_sorted_files(self, test_dir: Path, expected: str) -> None:
+    def test_get_sorted_files(self, test_dir: Path, expected: list[str]) -> None:
         actual = get_sorted_files(test_dir, "blog")
         assert actual == expected, actual
 

@@ -25,7 +25,7 @@ from datetime import datetime
 from multiprocessing import current_process
 from pathlib import Path
 from textwrap import dedent, indent
-from typing import Dict, List, Tuple, Union, Any
+from typing import Any, Collection, Dict, List, Sequence, Tuple, Union
 
 from termcolor import colored
 
@@ -475,7 +475,9 @@ def convert_mdx_image_blocks(content: str, rendered_mdx: Path, website_dir: Path
 
 
 # rendered_notebook is the final mdx file
-def post_process_mdx(rendered_mdx: Path, source_notebooks: Path, front_matter: dict[str, Union[str, list[str], None]], website_dir: Path) -> None:
+def post_process_mdx(
+    rendered_mdx: Path, source_notebooks: Path, front_matter: dict[str, Union[str, list[str], None]], website_dir: Path
+) -> None:
     with open(rendered_mdx, encoding="utf-8") as f:
         content = f.read()
 
@@ -650,7 +652,7 @@ def generate_nav_group(input_dir: Path, group_header: str, prefix: str) -> Dict[
     return {"group": group_header, "pages": sorted_dir_files}
 
 
-def extract_example_group(metadata_path: Path) -> Dict[str, Union[str, List[Union[str, Dict[str, str]]]]]:
+def extract_example_group(metadata_path: Path) -> dict[str, Sequence[Collection[str]]]:
     # Read NotebooksMetadata.mdx and extract metadata links
     with open(metadata_path, encoding="utf-8") as f:
         content = f.read()
@@ -659,7 +661,7 @@ def extract_example_group(metadata_path: Path) -> Dict[str, Union[str, List[Unio
         end = content.rfind("]")
         if start == -1 or end == -1:
             print("Could not find notebooksMetadata in the file")
-            return
+            return {}
         metadata_str = content[start + 32 : end + 1]
         notebooks_metadata = json.loads(metadata_str)
 
@@ -707,10 +709,13 @@ def update_navigation_with_notebooks(website_dir: Path) -> None:
     # add talks to navigation
     talks_dir = website_dir / "talks"
     talks_section = generate_nav_group(talks_dir, "Talks", "talks")
+    talks_section_pages = (
+        [talks_section["pages"]] if isinstance(talks_section["pages"], str) else talks_section["pages"]
+    )
 
     # Add "talks/future_talks/index" item at the beginning of the list
-    future_talks_index = talks_section["pages"].pop()
-    talks_section["pages"].insert(0, future_talks_index)
+    future_talks_index = talks_section_pages.pop()
+    talks_section_pages.insert(0, future_talks_index)
     mint_config["navigation"].append(talks_section)
 
     # add blogs to navigation
@@ -739,7 +744,7 @@ def fix_internal_references(content: str, root_path: Path, current_file_path: Pa
         current_file_path: Path of the current file being processed
     """
 
-    def resolve_link(match):
+    def resolve_link(match: re.Match[str]) -> str:
         display_text, raw_path = match.groups()
         try:
             path_parts = raw_path.split("#")
@@ -962,7 +967,7 @@ def main() -> None:
     filtered_notebooks = []
     for notebook in collected_notebooks:
         reason = skip_reason_or_none_if_ok(notebook)
-        if reason:
+        if reason and isinstance(reason, str):
             print(fmt_skip(notebook, reason))
         else:
             filtered_notebooks.append(notebook)
