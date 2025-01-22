@@ -8,7 +8,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-try:
+from autogen.import_utils import optional_import_block
+from autogen.oai.mistral import MistralAIClient, calculate_mistral_cost
+
+with optional_import_block() as result:
     from mistralai import (
         AssistantMessage,  # noqa: F401
         Function,  # noqa: F401
@@ -20,13 +23,8 @@ try:
         UserMessage,  # noqa: F401
     )
 
-    from autogen.oai.mistral import MistralAIClient, calculate_mistral_cost
 
-    skip = False
-except ImportError:
-    MistralAIClient = object
-    InternalServerError = object
-    skip = True
+skip = not result.is_successful
 
 
 # Fixtures for mock data

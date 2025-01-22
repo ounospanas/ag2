@@ -12,15 +12,12 @@ from unittest.mock import MagicMock
 import pytest
 
 from autogen import OpenAIWrapper
+from autogen.import_utils import optional_import_block
 
 from ..conftest import Credentials, reason
 
-try:
+with optional_import_block() as result:
     from openai import OpenAI  # noqa: F401
-except ImportError:
-    skip = True
-else:
-    skip = False
 
     # raises exception if openai>=1 is installed and something is wrong with imports
     # otherwise the test will be skipped
@@ -30,6 +27,8 @@ else:
         ChoiceDeltaToolCall,
         ChoiceDeltaToolCallFunction,
     )
+
+skip = not result.is_successful
 
 
 @pytest.mark.openai
@@ -191,6 +190,8 @@ def test__update_tool_calls_from_chunk() -> None:
 
 
 # todo: remove when OpenAI removes functions from the API
+
+
 @pytest.mark.openai
 @pytest.mark.skipif(skip, reason=reason)
 def test_chat_functions_stream(credentials_gpt_4o_mini: Credentials) -> None:
@@ -221,6 +222,8 @@ def test_chat_functions_stream(credentials_gpt_4o_mini: Credentials) -> None:
 
 
 # test for tool support instead of the deprecated function calls
+
+
 @pytest.mark.openai
 @pytest.mark.skipif(skip, reason=reason)
 def test_chat_tools_stream(credentials_gpt_4o_mini: Credentials) -> None:

@@ -12,20 +12,20 @@ import pytest
 from sentence_transformers import SentenceTransformer
 
 from autogen import AssistantAgent
+from autogen.agentchat.contrib.retrieve_user_proxy_agent import (
+    RetrieveUserProxyAgent,
+)
+from autogen.import_utils import optional_import_block
 
 from ....conftest import Credentials
 
-try:
+with optional_import_block() as result:
+    import chromadb  # noqa: F401
     import pgvector  # noqa: F401
+    from IPython import get_ipython  # noqa: F401
 
-    from autogen.agentchat.contrib.retrieve_user_proxy_agent import (
-        RetrieveUserProxyAgent,
-    )
-except ImportError:
-    skip = True
-else:
-    skip = False
 
+skip = not result.is_successful
 
 test_dir = os.path.join(os.path.dirname(__file__), "../../..", "test_files")
 

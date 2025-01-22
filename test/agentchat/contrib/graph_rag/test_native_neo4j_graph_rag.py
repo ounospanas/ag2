@@ -7,19 +7,22 @@ import sys
 
 import pytest
 
+from autogen.agentchat.contrib.graph_rag.document import Document, DocumentType
+from autogen.agentchat.contrib.graph_rag.neo4j_native_graph_query_engine import (
+    GraphStoreQueryResult,
+    Neo4jNativeGraphQueryEngine,
+)
+from autogen.import_utils import optional_import_block
+
 from ....conftest import reason
 
-try:
-    from autogen.agentchat.contrib.graph_rag.document import Document, DocumentType
-    from autogen.agentchat.contrib.graph_rag.neo4j_native_graph_query_engine import (
-        GraphStoreQueryResult,
-        Neo4jNativeGraphQueryEngine,
-    )
+with optional_import_block() as result:
+    from neo4j import GraphDatabase  # noqa: F401
+    from neo4j_graphrag.embeddings import Embedder  # noqa: F401
 
-except ImportError:
-    skip = True
-else:
-    skip = False
+
+skip = not result.is_successful
+
 
 # Configure the logging
 logging.basicConfig(level=logging.INFO)

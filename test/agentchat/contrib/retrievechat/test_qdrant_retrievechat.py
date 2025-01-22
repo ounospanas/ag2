@@ -12,29 +12,26 @@ import sys
 import pytest
 
 from autogen import AssistantAgent
+from autogen.agentchat.contrib.qdrant_retrieve_user_proxy_agent import (
+    QdrantRetrieveUserProxyAgent,
+    create_qdrant_from_dir,
+    query_qdrant,
+)
+from autogen.import_utils import optional_import_block
 
 from ....conftest import Credentials
 
-try:
+with optional_import_block() as result:
     import fastembed  # noqa: F401
     from qdrant_client import QdrantClient
 
-    from autogen.agentchat.contrib.qdrant_retrieve_user_proxy_agent import (
-        QdrantRetrieveUserProxyAgent,
-        create_qdrant_from_dir,
-        query_qdrant,
-    )
 
-    QDRANT_INSTALLED = True
-except ImportError:
-    QDRANT_INSTALLED = False
+QDRANT_INSTALLED = result.is_successful
 
-try:
+with optional_import_block() as result:
     import openai  # noqa: F401
-except ImportError:
-    skip = True
-else:
-    skip = False
+
+skip = not result.is_successful
 
 
 @pytest.mark.openai

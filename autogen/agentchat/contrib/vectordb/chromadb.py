@@ -7,24 +7,26 @@
 import os
 from typing import Callable
 
+from ....import_utils import optional_import_block, require_optional_import
 from .base import Document, ItemID, QueryResults, VectorDB
 from .utils import chroma_results_to_query_results, filter_results_by_distance, get_logger
 
-try:
+with optional_import_block() as result:
     import chromadb
-
-    if chromadb.__version__ < "0.4.15":
-        raise ImportError("Please upgrade chromadb to version 0.4.15 or later.")
     import chromadb.errors
     import chromadb.utils.embedding_functions as ef
     from chromadb.api.models.Collection import Collection
-except ImportError:
-    raise ImportError("Please install chromadb: `pip install chromadb`")
+
+if result.is_successful:
+    if chromadb.__version__ < "0.4.15":
+        raise ImportError("Please upgrade chromadb to version 0.4.15 or later.")
+
 
 CHROMADB_MAX_BATCH_SIZE = os.environ.get("CHROMADB_MAX_BATCH_SIZE", 40000)
 logger = get_logger(__name__)
 
 
+@require_optional_import("chromadb", "retrievechat")
 class ChromaVectorDB(VectorDB):
     """A vector database that uses ChromaDB as the backend."""
 
@@ -67,7 +69,7 @@ class ChromaVectorDB(VectorDB):
 
     def create_collection(
         self, collection_name: str, overwrite: bool = False, get_or_create: bool = True
-    ) -> Collection:
+    ) -> "Collection":
         """Create a collection in the vector database.
         Case 1. if the collection does not exist, create the collection.
         Case 2. the collection exists, if overwrite is True, it will overwrite the collection.
@@ -109,7 +111,7 @@ class ChromaVectorDB(VectorDB):
         else:
             raise ValueError(f"Collection {collection_name} already exists.")
 
-    def get_collection(self, collection_name: str = None) -> Collection:
+    def get_collection(self, collection_name: str = None) -> "Collection":
         """Get the collection from the vector database.
 
         Args:
@@ -147,7 +149,7 @@ class ChromaVectorDB(VectorDB):
             self.active_collection = None
 
     def _batch_insert(
-        self, collection: Collection, embeddings=None, ids=None, metadatas=None, documents=None, upsert=False
+        self, collection: "Collection", embeddings=None, ids=None, metadatas=None, documents=None, upsert=False
     ) -> None:
         batch_size = int(CHROMADB_MAX_BATCH_SIZE)
         for i in range(0, len(documents), min(batch_size, len(documents))):

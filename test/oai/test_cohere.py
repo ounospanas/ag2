@@ -10,13 +10,13 @@ import os
 
 import pytest
 
-try:
-    from autogen.oai.cohere import CohereClient, calculate_cohere_cost
+from autogen.import_utils import optional_import_block
+from autogen.oai.cohere import CohereClient, calculate_cohere_cost
 
-    skip = False
-except ImportError:
-    CohereClient = object
-    skip = True
+with optional_import_block() as result:
+    from cohere import Client as Cohere  # noqa: F401
+
+skip = not result.is_successful
 
 
 reason = "Cohere dependency not installed!"

@@ -11,27 +11,27 @@ import os
 import unittest
 from unittest.mock import patch
 
+import numpy as np
 import pytest
 import requests
 
-try:
-    import numpy as np
+from autogen.agentchat.contrib.img_utils import (
+    convert_base64_to_data_uri,
+    extract_img_paths,
+    get_image_data,
+    get_pil_image,
+    gpt4v_formatter,
+    llava_formatter,
+    message_formatter_pil_to_b64,
+    num_tokens_from_gpt_image,
+)
+from autogen.import_utils import optional_import_block
+
+with optional_import_block() as result:
     from PIL import Image
 
-    from autogen.agentchat.contrib.img_utils import (
-        convert_base64_to_data_uri,
-        extract_img_paths,
-        get_image_data,
-        get_pil_image,
-        gpt4v_formatter,
-        llava_formatter,
-        message_formatter_pil_to_b64,
-        num_tokens_from_gpt_image,
-    )
-except ImportError:
-    skip = True
-else:
-    skip = False
+
+skip = not result.is_successful
 
 
 base64_encoded_image = (

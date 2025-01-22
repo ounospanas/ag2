@@ -15,22 +15,17 @@ from autogen.agentchat.contrib.math_user_proxy_agent import (
     _add_print_to_last_line,
     _remove_print,
 )
+from autogen.import_utils import optional_import_block
 
 from ..conftest import Credentials
 
-try:
+with optional_import_block() as result:
     from openai import OpenAI  # noqa: F401
-except ImportError:
-    skip = True
-else:
-    skip = False
+
+skip = not result.is_successful
 
 
 @pytest.mark.openai
-@pytest.mark.skipif(
-    skip or sys.platform in ["darwin", "win32"],
-    reason="do not run on MacOS or windows",
-)
 def test_math_user_proxy_agent(
     credentials_gpt_4o_mini: Credentials,
 ):

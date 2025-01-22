@@ -8,14 +8,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-try:
-    from autogen.oai.groq import GroqClient, calculate_groq_cost
+from autogen.import_utils import optional_import_block
+from autogen.oai.groq import GroqClient, calculate_groq_cost
 
-    skip = False
-except ImportError:
-    GroqClient = object
-    InternalServerError = object
-    skip = True
+with optional_import_block() as result:
+    from groq import Groq  # noqa: F401
+
+skip = not result.is_successful
 
 
 # Fixtures for mock data

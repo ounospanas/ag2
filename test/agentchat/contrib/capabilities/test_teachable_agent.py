@@ -9,16 +9,17 @@
 import pytest
 
 from autogen import ConversableAgent
+from autogen.agentchat.contrib.capabilities.teachability import Teachability
 from autogen.formatting_utils import colored
+from autogen.import_utils import optional_import_block
 
 from ....conftest import Credentials
 
-try:
-    from autogen.agentchat.contrib.capabilities.teachability import Teachability
-except ImportError:
-    skip = True
-else:
-    skip = False
+with optional_import_block() as result:
+    import chromadb  # noqa: F401
+
+
+skip = not result.is_successful
 
 
 # Specify the model to use by uncommenting one of the following lines.
