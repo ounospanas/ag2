@@ -180,15 +180,14 @@ bedrock = ["boto3>=1.34.149"]
 
 # test dependencies
 test = [
-    "ipykernel",
-    "nbconvert",
-    "nbformat",
-    "pre-commit",
-    "pytest-cov>=5",
-    "pytest-asyncio",
-    "pytest>=8,<9",
-    "pandas",
-    "fastapi>=0.115.0,<1",
+    "ipykernel==6.29.5",
+    "nbconvert==7.16.5",
+    "nbformat==5.10.4",
+    "pytest-cov==6.0.0",
+    "pytest-asyncio==0.25.2",
+    "pytest==8.3.4",
+    "pandas==2.2.3",
+    "fastapi==0.115.6",
 ]
 
 # docs dependencies
@@ -212,8 +211,9 @@ lint = [
 ]
 
 dev = [
+    "toml==0.10.2",
     "pyautogen[lint,test,types,docs]",
-    "pre-commit==4.0.1",
+    "pre-commit==4.1.0",
     "detect-secrets==1.5.0",
     "uv==0.5.21",
 ]
@@ -271,7 +271,7 @@ fix = true
 line-length = 120
 target-version = 'py39'
 #include = ["autogen", "test", "docs"]
-#exclude = []
+exclude = ["setup_*.py"]
 
 [tool.ruff.lint]
 # Enable Pyflakes `E` and `F` codes by default.
