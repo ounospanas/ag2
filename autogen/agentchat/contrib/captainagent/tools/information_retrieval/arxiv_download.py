@@ -4,10 +4,6 @@
 
 
 from ......coding.func_with_reqs import with_requirements
-from ......import_utils import optional_import_block
-
-with optional_import_block():
-    import arxiv
 
 
 @with_requirements(["arxiv"])

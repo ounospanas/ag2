@@ -53,7 +53,7 @@ class Neo4jNativeGraphQueryEngine(GraphQueryEngine):
             port (int): Neo4j port.
             username (str): Neo4j username.
             password (str): Neo4j password.
-            embeddings (Union[Optional[Embedder], Literal["default"]]): Embedding model to embed chunk data and retrieve answers.
+            embeddings (Embedder): Embedding model to embed chunk data and retrieve answers.
             embedding_dimension (int): Dimension of the embeddings for the model.
             llm (LLMInterface): Language model for creating the knowledge graph (returns JSON responses).
             query_llm (LLMInterface): Language model for querying the knowledge graph.
