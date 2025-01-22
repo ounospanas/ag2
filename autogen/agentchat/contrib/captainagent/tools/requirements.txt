@@ -1,10 +1,10 @@
 markdownify
 arxiv
 pymupdf
-wikipedia-api
+wikipedia - api
 easyocr
-python-pptx
-openai-whisper
+python - pptx
+openai - whisper
 pandas
 scipy
-sentence-transformers
+sentence - transformers

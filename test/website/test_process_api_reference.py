@@ -10,11 +10,16 @@ from pathlib import Path
 import pytest
 
 # Add the ../../website directory to sys.path
-sys.path.append(str(Path(__file__).resolve().parent.parent.parent / "website"))
+website_path = Path(__file__).resolve().parents[2] / "website"
+assert website_path.exists()
+assert website_path.is_dir()
+sys.path.append(str(website_path))
+
 from process_api_reference import generate_mint_json_from_template, move_files_excluding_index
 
 
-def create_test_directory_structure(tmp_path):
+@pytest.fixture
+def api_dir(tmp_path: Path) -> None:
     """Helper function to create test directory structure"""
     # Create autogen directory
     autogen_dir = tmp_path / "autogen"
@@ -48,11 +53,8 @@ def create_test_directory_structure(tmp_path):
     return tmp_path
 
 
-def test_move_files_excluding_index(tmp_path):
+def test_move_files_excluding_index(api_dir):
     """Test that files are moved correctly excluding index.md"""
-    # Setup the test directory structure
-    api_dir = create_test_directory_structure(tmp_path)
-
     # Call the function under test
     move_files_excluding_index(api_dir)
 
