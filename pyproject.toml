@@ -193,7 +193,11 @@ test = [
 
 # docs dependencies
 docs = [
-    "pyautogen[retrievechat-mongodb, retrievechat-pgvector, retrievechat-qdrant, anthropic, cosmosdb, neo4j, jupyter-executor, anthropic, bedrock, cerebras, cohere, gemini, groq, mistral, ollama, together]",
+    "pdoc3==0.11.5",
+    "jinja2==3.1.5",
+    "pyyaml==6.0.2",
+    "termcolor==2.5.0",
+    "nbclient==0.10.2",
 ]
 
 types = [
@@ -208,7 +212,7 @@ lint = [
 ]
 
 dev = [
-    "pyautogen[lint,test,types]",
+    "pyautogen[lint,test,types,docs]",
     "pre-commit==4.0.1",
     "detect-secrets==1.5.0",
     "uv==0.5.21",
