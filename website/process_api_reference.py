@@ -15,7 +15,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 from jinja2 import Template
 
@@ -55,7 +55,7 @@ def run_pdoc3(api_dir: Path) -> None:
         sys.exit(1)
 
 
-def read_file_content(file_path: str) -> str:
+def read_file_content(file_path: Path) -> str:
     """Read content from a file.
 
     Args:
@@ -116,7 +116,7 @@ def add_prefix(path: str, parent_groups: Optional[list[str]] = None) -> str:
 
 def create_nav_structure(paths: list[str], parent_groups: Optional[list[str]] = None) -> list[Any]:
     """Convert list of file paths into nested navigation structure."""
-    groups = {}
+    groups: dict[str, list[str]] = {}
     pages = []
     parent_groups = parent_groups or []
 

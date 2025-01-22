@@ -6,6 +6,7 @@ import json
 import sys
 import tempfile
 from pathlib import Path
+from typing import Generator
 
 import pytest
 
@@ -19,7 +20,7 @@ from process_api_reference import generate_mint_json_from_template, move_files_e
 
 
 @pytest.fixture
-def api_dir(tmp_path: Path) -> None:
+def api_dir(tmp_path: Path) -> Path:
     """Helper function to create test directory structure"""
     # Create autogen directory
     autogen_dir = tmp_path / "autogen"
@@ -53,7 +54,7 @@ def api_dir(tmp_path: Path) -> None:
     return tmp_path
 
 
-def test_move_files_excluding_index(api_dir):
+def test_move_files_excluding_index(api_dir: Path) -> None:
     """Test that files are moved correctly excluding index.md"""
     # Call the function under test
     move_files_excluding_index(api_dir)
@@ -81,7 +82,7 @@ def test_move_files_excluding_index(api_dir):
 
 
 @pytest.fixture
-def template_content():
+def template_content() -> str:
     """Fixture providing the template JSON content."""
     template = """
     {
@@ -105,14 +106,14 @@ def template_content():
 
 
 @pytest.fixture
-def temp_dir():
+def temp_dir() -> Generator[Path, None, None]:
     """Fixture providing a temporary directory."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         yield Path(tmp_dir)
 
 
 @pytest.fixture
-def template_file(temp_dir, template_content):
+def template_file(temp_dir: Path, template_content: str) -> Path:
     """Fixture creating a template file in a temporary directory."""
     template_path = temp_dir / "mint-json-template.json.jinja"
     with open(template_path, "w") as f:
@@ -121,12 +122,12 @@ def template_file(temp_dir, template_content):
 
 
 @pytest.fixture
-def target_file(temp_dir):
+def target_file(temp_dir: Path) -> Path:
     """Fixture providing the target mint.json path."""
     return temp_dir / "mint.json"
 
 
-def test_generate_mint_json_from_template(template_file, target_file, template_content):
+def test_generate_mint_json_from_template(template_file: Path, target_file: Path, template_content: str) -> None:
     """Test that mint.json is generated correctly from template."""
     # Run the function
     generate_mint_json_from_template(template_file, target_file)
@@ -142,7 +143,7 @@ def test_generate_mint_json_from_template(template_file, target_file, template_c
     assert actual == expected
 
 
-def test_generate_mint_json_existing_file(template_file, target_file, template_content):
+def test_generate_mint_json_existing_file(template_file: Path, target_file: Path, template_content: str) -> None:
     """Test that function works when mint.json already exists."""
     # Create an existing mint.json with different content
     existing_content = {"name": "existing"}
@@ -160,7 +161,7 @@ def test_generate_mint_json_existing_file(template_file, target_file, template_c
     assert actual == expected
 
 
-def test_generate_mint_json_missing_template(target_file):
+def test_generate_mint_json_missing_template(target_file: Path) -> None:
     """Test handling of missing template file."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         nonexistent_template = Path(tmp_dir) / "nonexistent.template"
