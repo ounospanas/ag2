@@ -50,14 +50,6 @@ jobs:
         run: ./scripts/docs_build.sh
         working-directory: .
 
-      - name: Prepare website content
-        run: |
-          # Create a temporary directory for filtered content
-          mkdir -p temp_website
-
-          # Copy files except .ipynb, node_modules, .quarto, .gitignore, and temp_website
-          find . -type f -not -path "*/node_modules/*" -not -path "*/.quarto/*" -not -path "./temp_website/*" -not -name "*.ipynb" -not -name ".gitignore" -exec cp --parents {} temp_website/ \;
-
   mintlify-release:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
