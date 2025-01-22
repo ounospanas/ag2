@@ -81,7 +81,8 @@ def test_move_files_excluding_index(tmp_path):
 @pytest.fixture
 def template_content():
     """Fixture providing the template JSON content."""
-    return {
+    template = """
+    {
         "name": "AG2",
         "logo": {"dark": "/logo/ag2-white.svg", "light": "/logo/ag2.svg"},
         "navigation": [
@@ -91,20 +92,14 @@ def template_content():
                 "pages": [
                     "docs/installation/Installation",
                     "docs/installation/Docker",
-                    "docs/installation/Optional-Dependencies",
-                ],
+                    "docs/installation/Optional-Dependencies"
+                ]
             },
-            {"group": "API Reference", "pages": ["PLACEHOLDER"]},
-            # {
-            #     "group": "AutoGen Studio",
-            #     "pages": [
-            #         "docs/autogen-studio/getting-started",
-            #         "docs/autogen-studio/usage",
-            #         "docs/autogen-studio/faqs",
-            #     ],
-            # },
-        ],
+            {"group": "API Reference", "pages": ["PLACEHOLDER"]}
+        ]
     }
+    """
+    return template
 
 
 @pytest.fixture
@@ -117,9 +112,9 @@ def temp_dir():
 @pytest.fixture
 def template_file(temp_dir, template_content):
     """Fixture creating a template file in a temporary directory."""
-    template_path = temp_dir / "mint-json-template.json"
+    template_path = temp_dir / "mint-json-template.json.jinja"
     with open(template_path, "w") as f:
-        json.dump(template_content, f, indent=2)
+        f.write(template_content)
     return template_path
 
 
@@ -139,9 +134,10 @@ def test_generate_mint_json_from_template(template_file, target_file, template_c
 
     # Verify the contents
     with open(target_file) as f:
-        generated_content = json.load(f)
+        actual = json.load(f)
 
-    assert generated_content == template_content
+    expected = json.loads(template_content)
+    assert actual == expected
 
 
 def test_generate_mint_json_existing_file(template_file, target_file, template_content):
@@ -156,9 +152,10 @@ def test_generate_mint_json_existing_file(template_file, target_file, template_c
 
     # Verify the contents were overwritten
     with open(target_file) as f:
-        generated_content = json.load(f)
+        actual = json.load(f)
 
-    assert generated_content == template_content
+    expected = json.loads(template_content)
+    assert actual == expected
 
 
 def test_generate_mint_json_missing_template(target_file):
