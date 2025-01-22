@@ -3,9 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 import os
 
-from PIL import Image
-
 from ......coding.func_with_reqs import with_requirements
+from ......import_utils import optional_import_block
+
+with optional_import_block():
+    from PIL import Image
 
 
 @with_requirements(["transformers", "torch"], ["transformers", "torch", "PIL", "os"])
