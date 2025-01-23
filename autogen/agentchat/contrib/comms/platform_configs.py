@@ -144,25 +144,23 @@ class WhatsAppConfig(BasePlatformConfig):
 class TelegramConfig(BasePlatformConfig):
     """Telegram configuration using Bot API.
 
-    To get started:
-    1. Create bot with @BotFather
-    2. Get the bot token from BotFather
-    3. Get chat_id by:
-       - For direct messages: Send message to bot and use getUpdates API
-         (/start, then check https://api.telegram.org/bot<YourBOTToken>/getUpdates)
-       - For group: Add bot to group and use getUpdates API
-         (add bot to group, send a message, then check getUpdates)
+    Args:
+        bot_token (str): Bot token from BotFather (starts with numbers:ABC...).
+        destination_id (str): Bot's channel Id, Group Id with bot in it, or Channel with bot in it
+
+    Instructions on finding the right id:
+    https://gist.github.com/nafiesl/4ad622f344cd1dc3bb1ecbe468ff9f8a
     """
 
     bot_token: str
-    """Bot token from BotFather (starts with numbers:ABC...)."""
+    """Bot token"""
 
-    chat_id: str
-    """Chat or group ID where messages will be sent (can be negative for groups)."""
+    destination_id: str
+    """Bot's Channel Id, Group's Id, or Channel's Id. Ensure permissions are set for Channel."""
 
     def validate_config(self) -> bool:
         if not self.bot_token:
             raise ValueError("bot_token is required")
-        if not self.chat_id:
-            raise ValueError("chat_id is required")
+        if not self.destination_id:
+            raise ValueError("destination_id is required")
         return True

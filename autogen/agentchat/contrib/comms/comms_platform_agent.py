@@ -247,10 +247,7 @@ class CommsPlatformAgent(ConversableAgent):
         if decision.should_send:
             try:
                 # Send message and get tracking ID
-                iostream = IOStream.get_default()
-                iostream.print("_executor_reply_function before send")
                 status, msg_id = self.executor_agent.send_to_platform(decision.message_to_post)
-                iostream.print("_executor_reply_function after sent")
 
                 if not msg_id:
                     return True, f"Message sent but unable to track replies: {status}"

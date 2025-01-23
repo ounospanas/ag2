@@ -2,17 +2,15 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 import asyncio
-import logging
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
+import telegram
 from telegram import Update
 from telegram.ext import (
     Application,
     ApplicationBuilder,
     ContextTypes,
-    MessageHandler,
-    filters,
 )
 
 from .comms_platform_agent import (
@@ -21,12 +19,10 @@ from .comms_platform_agent import (
 )
 from .platform_configs import ReplyMonitorConfig, TelegramConfig
 from .platform_errors import (
+    PlatformAuthenticationError,
     PlatformConnectionError,
     PlatformError,
 )
-
-logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 __PLATFORM_NAME__ = "Telegram"
 
@@ -43,35 +39,39 @@ class TelegramHandler:
     async def initialize(self) -> None:
         """Initialize the Telegram application."""
         try:
-            self._app = ApplicationBuilder().token(self._config.bot_token).build()
-
-            # Add handler for replies
-            self._app.add_handler(
-                MessageHandler(
-                    (filters.REPLY | filters.IS_AUTOMATIC_FORWARD) & (filters.TEXT | filters.ATTACHMENT),
-                    self._handle_reply,
-                )
+            self._app = (
+                ApplicationBuilder()
+                .token(self._config.bot_token)
+                .connection_pool_size(8)  # Increase connection pool
+                .get_updates_connection_pool_size(8)  # Dedicated pool for updates
+                .pool_timeout(30.0)  # Longer pool timeout
+                .build()
             )
 
-            # Initialize and start application with polling
+            # Start the application
             await self._app.initialize()
             await self._app.start()
-            await self._app.updater.start_polling()
 
             # Verify chat access
             try:
-                await self._app.bot.get_chat(self._config.chat_id)
-            except Exception:
+                await self._app.bot.get_chat(self._config.destination_id)
+            except telegram.error.Forbidden:
                 raise PlatformConnectionError(
-                    message=f"Could not access chat: {self._config.chat_id}", platform_name=__PLATFORM_NAME__
+                    message=f"Could not access chat: {self._config.destination_id}", platform_name=__PLATFORM_NAME__
                 )
 
+        except telegram.error.InvalidToken as e:
+            raise PlatformAuthenticationError(
+                message="Invalid bot token", platform_error=e, platform_name=__PLATFORM_NAME__
+            )
         except Exception as e:
-            raise PlatformError(message=f"Error initializing Telegram: {str(e)}", platform_name=__PLATFORM_NAME__)
+            raise PlatformError(
+                message=f"Error initializing Telegram: {str(e)}", platform_error=e, platform_name=__PLATFORM_NAME__
+            )
 
     async def _handle_reply(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle incoming reply messages."""
-        print(f"Received update: {update}")  # Debug print
+        # print(f"Received update: {update}")  # Debug print
 
         if not update.message and not update.channel_post:
             return
@@ -82,7 +82,7 @@ class TelegramHandler:
             return
 
         reply_to_id = str(msg.reply_to_message.message_id)
-        print(f"Found reply to message {reply_to_id}")  # Debug print
+        # print(f"Found reply to message {reply_to_id}")  # Debug print
 
         if reply_to_id in self._message_replies:
             reply_data = {
@@ -104,7 +104,7 @@ class TelegramHandler:
             elif msg.voice:
                 reply_data["content"] += " (Attachment: voice)"
 
-            print(f"Adding reply: {reply_data}")  # Debug print
+            # print(f"Adding reply: {reply_data}")  # Debug print
             self._message_replies[reply_to_id].append(reply_data)
 
             # Set event if we're waiting for this reply
@@ -136,7 +136,7 @@ class TelegramHandler:
 
                 for chunk in chunks:
                     sent_message = await self._app.bot.send_message(
-                        chat_id=self._config.chat_id,
+                        chat_id=self._config.destination_id,
                         text=chunk,
                         parse_mode="HTML",
                         reply_to_message_id=first_message.message_id if first_message else None,
@@ -147,7 +147,7 @@ class TelegramHandler:
                 return "Message sent (split into chunks)", str(first_message.message_id)
             else:
                 sent_message = await self._app.bot.send_message(
-                    chat_id=self._config.chat_id, text=message, parse_mode="HTML"
+                    chat_id=self._config.destination_id, text=message, parse_mode="HTML"
                 )
                 return "Message sent successfully", str(sent_message.message_id)
 
@@ -164,7 +164,7 @@ class TelegramHandler:
         if not self._app:
             await self.initialize()
 
-        print(f"Starting to wait for replies to message {message_id}")
+        # print(f"Starting to wait for replies to message {message_id}")
 
         # Initialize tracking for this message
         self._message_replies[message_id] = []
@@ -185,7 +185,7 @@ class TelegramHandler:
                     )
 
                     for update in updates:
-                        print(f"Got update: {update.to_dict()}")
+                        # print(f"Got update: {update.to_dict()}")
                         if update.update_id >= offset:
                             offset = update.update_id + 1
 
@@ -200,7 +200,7 @@ class TelegramHandler:
 
                         # Check if this is a reply to our message
                         if msg.reply_to_message and str(msg.reply_to_message.message_id) == message_id:
-                            print(f"Found reply to message {message_id}")
+                            # print(f"Found reply to message {message_id}")
                             reply_data = {
                                 "content": msg.text or "",
                                 "author": msg.from_user.username if msg.from_user else "Channel",
@@ -220,30 +220,41 @@ class TelegramHandler:
                             elif msg.voice:
                                 reply_data["content"] += " (Attachment: voice)"
 
-                            print(f"Adding reply: {reply_data}")
+                            # print(f"Adding reply: {reply_data}")
                             self._message_replies[message_id].append(reply_data)
 
                             # Check if we've hit max replies
                             if max_replies > 0 and len(self._message_replies[message_id]) >= max_replies:
-                                print(f"Got max replies ({max_replies}), returning")
+                                # print(f"Got max replies ({max_replies}), returning")
                                 return self._message_replies[message_id]
 
-                except Exception as e:
-                    print(f"Error during polling: {e}")
+                except Exception:
+                    pass
+                    # print(f"Error during polling: {e}")
 
                 await asyncio.sleep(1)  # Small delay between polls
 
-            print(f"Timeout reached after {timeout_minutes} minutes")
+            # print(f"Timeout reached after {timeout_minutes} minutes")
 
         finally:
-            print(f"Returning {len(self._message_replies.get(message_id, []))} replies")
+            # print(f"Returning {len(self._message_replies.get(message_id, []))} replies")
             return self._message_replies.pop(message_id, [])
 
     async def cleanup(self):
-        """Cleanup resources."""
-        if self._app and self._app.running:
-            await self._app.stop()
-            await self._app.shutdown()
+        """Cleanup monitoring resources without shutting down app."""
+        # print("Cleaning up monitoring resources...")
+        try:
+            self._message_replies.clear()
+            self._last_update_id = 0
+            # print("Cleanup successful")
+        except Exception:
+            # print(f"Error during cleanup: {e}")
+            pass
+
+    def cleanup_reply_monitoring(self, message_id: str):
+        """Clean up reply monitoring for a specific message."""
+        if message_id:
+            self._message_replies.pop(message_id, None)
 
 
 class TelegramExecutor(PlatformExecutorAgent):
@@ -265,9 +276,13 @@ class TelegramExecutor(PlatformExecutorAgent):
             asyncio.set_event_loop(loop)
 
         try:
+            # Make sure app is initialized
+            if not self._telegram._app:
+                loop.run_until_complete(self._telegram.initialize())
+
             return loop.run_until_complete(self._telegram.send_message(message))
         finally:
-            if need_new_loop and not loop.is_closed():
+            if need_new_loop and loop and not loop.is_closed():
                 loop.close()
 
     def _format_replies(self, replies: List[dict]) -> List[str]:
@@ -308,20 +323,15 @@ class TelegramExecutor(PlatformExecutorAgent):
 
     def cleanup_monitoring(self, msg_id: str):
         """Clean up reply monitoring for a specific message."""
-        if msg_id:
-            need_new_loop = False
-            try:
-                loop = asyncio.get_event_loop()
-            except RuntimeError:
-                need_new_loop = True
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-
-            try:
+        if self._telegram and msg_id:
+            self._telegram.cleanup_reply_monitoring(msg_id)
+            if not self._telegram._message_replies:
+                try:
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
                 loop.run_until_complete(self._telegram.cleanup())
-            finally:
-                if need_new_loop and not loop.is_closed():
-                    loop.close()
 
 
 class TelegramAgent(CommsPlatformAgent):
