@@ -12,7 +12,7 @@ import inspect
 import os
 import time
 import unittest
-from typing import Annotated, Any, Callable, Literal, Optional
+from typing import Annotated, Any, Callable, Literal, Union
 from unittest.mock import MagicMock
 
 import pytest
@@ -1582,7 +1582,6 @@ def test_context_variables():
     assert agent._context_variables == expected_final_context
 
 
-@pytest.mark.skip(reason="This test is failing. We need to investigate the issue.")
 @pytest.mark.gemini
 def test_gemini_with_tools_parameters_set_to_is_annotated_with_none_as_default_value(
     credentials_gemini_pro: Credentials,
@@ -1599,8 +1598,11 @@ def test_gemini_with_tools_parameters_set_to_is_annotated_with_none_as_default_v
     @user_proxy.register_for_execution()
     @agent.register_for_llm(description="Login function")
     def login(
-        additional_notes: Annotated[Optional[str], "Additional notes"] = None,
+        # additional_notes: Annotated[Optional[str], "Additional notes"] = None,
+        additional_notes: Union[str, int],
+        # additional_notes: Annotated[str, "Additional notes"] = "abc",
     ) -> str:
+        mock()
         return "Login successful."
 
     user_proxy.initiate_chat(agent, message="Please login", max_turns=2)

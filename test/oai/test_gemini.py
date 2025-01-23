@@ -431,3 +431,44 @@ def test_extract_json_response(gemini_client):
         match="Failed to parse response as valid JSON matching the schema for Structured Output: Expecting value:",
     ):
         gemini_client._convert_json_response(no_json_response)
+
+
+def test_create_gemini_function_parameters_with_anyof_tool_parameter_type() -> None:
+    function_parameter = {
+        "type": "object",
+        "properties": {
+            "additional_notes": {"anyOf": [{"type": "string"}, {"type": "integer"}], "description": "additional_notes"}
+        },
+        "required": ["additional_notes"],
+    }
+    gemini_function_parameter = GeminiClient._create_gemini_function_parameters(function_parameter)
+    # 'type' is replaced with 'type_' and value is set to 'OBJECT'
+    expected = {
+        "properties": {
+            "additional_notes": {"anyOf": [{"type": "string"}, {"type": "integer"}], "description": "additional_notes"}
+        },
+        "required": ["additional_notes"],
+        "type_": "OBJECT",
+    }
+    assert gemini_function_parameter == expected
+
+
+def test_create_gemini_function_declaration_with_anyof_tool_parameter_type() -> None:
+    tool = {
+        "type": "function",
+        "function": {
+            "description": "Login function",
+            "name": "login",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "additional_notes": {
+                        "anyOf": [{"type": "string"}, {"type": "integer"}],
+                        "description": "additional_notes",
+                    }
+                },
+                "required": ["additional_notes"],
+            },
+        },
+    }
+    GeminiClient._create_gemini_function_declaration(tool)

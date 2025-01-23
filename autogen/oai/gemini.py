@@ -587,14 +587,22 @@ class GeminiClient:
             return [Tool(function_declarations=functions)]
 
     @staticmethod
+    def _check_properties_have_anyof_key(properties: dict[str, Any]) -> bool:
+        """Check if any of the properties have 'anyOf' key."""
+        raise NotImplementedError("This method is not implemented yet.")
+
+    @staticmethod
     def _create_gemini_function_declaration(tool: dict) -> "FunctionDeclaration":
         function_declaration = FunctionDeclaration()
         function_declaration.name = tool["function"]["name"]
         function_declaration.description = tool["function"]["description"]
         if len(tool["function"]["parameters"]["properties"]) != 0:
-            function_declaration.parameters = GeminiClient._create_gemini_function_parameters(
+            gemini_function_parameters = GeminiClient._create_gemini_function_parameters(
                 copy.deepcopy(tool["function"]["parameters"])
             )
+            # TODO: Remove this assert!!!
+            assert gemini_function_parameters is None, gemini_function_parameters
+            function_declaration.parameters = gemini_function_parameters
 
         return function_declaration
 
@@ -652,7 +660,8 @@ class GeminiClient:
     @staticmethod
     def _create_gemini_function_parameters(function_parameter: dict[str, any]) -> dict[str, any]:
         """Convert function parameters to Gemini format, recursive"""
-        function_parameter["type_"] = function_parameter["type"].upper()
+        if "type" in function_parameter:
+            function_parameter["type_"] = function_parameter["type"].upper()
 
         # Parameter properties and items
         if "properties" in function_parameter:
