@@ -22,6 +22,7 @@ from .platform_errors import (
 
 __PLATFORM_NAME__ = "Slack"  # Platform name for messages
 __TIMEOUT__ = 5  # Timeout in seconds
+__REPLY_POLL_INTERVAL__ = 2  # Interval in seconds for polling for replies
 
 
 class SlackHandler:
@@ -191,7 +192,7 @@ class SlackHandler:
                     raise
 
             # Sleep before next poll
-            time.sleep(1)
+            time.sleep(__REPLY_POLL_INTERVAL__)
 
     def cleanup_reply_monitoring(self, message_id: str):
         """Clean up reply monitoring for a specific message."""

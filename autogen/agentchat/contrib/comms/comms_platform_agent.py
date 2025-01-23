@@ -22,10 +22,10 @@ __DECISION_AGENT_SYSTEM_MESSAGE__ = "You are an AI assistant that determines if 
 class PlatformMessageDecision(BaseModel):
     """The structured output format for platform message decisions."""
 
-    message_to_post: str = Field(description="The message that should be posted to the platform")
     should_send: bool = Field(
         description="Whether the message should actually be sent to the platform, if in doubt, do not send.",
     )
+    message_to_post: str = Field(description="The message that should be posted to the platform")
 
 
 class PlatformDecisionAgent(ConversableAgent):
@@ -200,7 +200,7 @@ class CommsPlatformAgent(ConversableAgent):
         message = self.message_to_send(self, messages)
 
         # Put into our structured output format so the executor can process it in _executor_reply_function
-        decision = PlatformMessageDecision(message_to_post=message or "", should_send=message is not None)
+        decision = PlatformMessageDecision(should_send=message is not None, message_to_post=message or "")
 
         return True, decision.model_dump_json()
 
@@ -247,7 +247,10 @@ class CommsPlatformAgent(ConversableAgent):
         if decision.should_send:
             try:
                 # Send message and get tracking ID
+                iostream = IOStream.get_default()
+                iostream.print("_executor_reply_function before send")
                 status, msg_id = self.executor_agent.send_to_platform(decision.message_to_post)
+                iostream.print("_executor_reply_function after sent")
 
                 if not msg_id:
                     return True, f"Message sent but unable to track replies: {status}"

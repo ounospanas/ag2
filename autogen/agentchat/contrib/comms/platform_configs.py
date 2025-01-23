@@ -149,17 +149,16 @@ class TelegramConfig(BasePlatformConfig):
     2. Get the bot token from BotFather
     3. Get chat_id by:
        - For direct messages: Send message to bot and use getUpdates API
+         (/start, then check https://api.telegram.org/bot<YourBOTToken>/getUpdates)
        - For group: Add bot to group and use getUpdates API
+         (add bot to group, send a message, then check getUpdates)
     """
 
     bot_token: str
-    """Bot token from BotFather."""
+    """Bot token from BotFather (starts with numbers:ABC...)."""
 
     chat_id: str
-    """Chat or group ID where messages will be sent."""
-
-    api_base: str = "https://api.telegram.org"
-    """API base URL, can be changed for local deployments."""
+    """Chat or group ID where messages will be sent (can be negative for groups)."""
 
     def validate_config(self) -> bool:
         if not self.bot_token:

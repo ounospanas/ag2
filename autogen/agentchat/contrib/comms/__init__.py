@@ -10,6 +10,10 @@ from .slack_agent import (
     SlackAgent,
     SlackConfig,
 )
+from .telegram_agent import (
+    TelegramAgent,
+    TelegramConfig,
+)
 
 __all__ = [
     "DiscordAgent",
@@ -17,4 +21,6 @@ __all__ = [
     "ReplyMonitorConfig",
     "SlackAgent",
     "SlackConfig",
+    "TelegramAgent",
+    "TelegramConfig",
 ]
