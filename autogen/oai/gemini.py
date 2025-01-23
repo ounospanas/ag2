@@ -65,8 +65,17 @@ with optional_import_block():
     import google.generativeai as genai
     import vertexai
     from PIL import Image
-    from google.ai.generativelanguage import Content, FunctionCall, FunctionDeclaration, FunctionResponse, Part, Tool
-    from google.ai.generativelanguage_v1beta.types import Schema
+    from google.ai.generativelanguage import (
+        Content,
+        FunctionCall,
+        FunctionDeclaration,
+        FunctionResponse,
+        Part,
+        Schema,
+        Tool,
+    )
+
+    # from google.ai.generativelanguage_v1beta.types import Schema
     from google.auth.credentials import Credentials
     from google.generativeai.types import GenerateContentResponse
     from jsonschema import ValidationError
