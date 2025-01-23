@@ -112,9 +112,9 @@ class TelegramHandler:
             self._app = (
                 ApplicationBuilder()
                 .token(self._config.bot_token)
-                .connection_pool_size(8)  # Increase connection pool
-                .get_updates_connection_pool_size(8)  # Dedicated pool for updates
-                .pool_timeout(30.0)  # Longer pool timeout
+                .connection_pool_size(8)
+                .get_updates_connection_pool_size(8)
+                .pool_timeout(30.0)
                 .build()
             )
 
@@ -182,7 +182,6 @@ class TelegramHandler:
         """Start the Telegram client and wait for validation."""
         try:
             self._start_background_thread()
-            # Wait for validation in appropriate context
             loop = asyncio.new_event_loop()
             try:
                 return loop.run_until_complete(self.validate())
@@ -386,8 +385,7 @@ class TelegramExecutor(PlatformExecutorAgent):
             replies = future.result()
             return self._format_replies(replies)
 
-        except Exception as e:
-            print(f"Error waiting for replies: {str(e)}")
+        except Exception:
             return []
 
     def cleanup_monitoring(self, msg_id: str):
