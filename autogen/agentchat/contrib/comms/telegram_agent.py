@@ -1,9 +1,21 @@
 # Copyright (c) 2023 - 2025, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
+"""Agent for sending messages on Telegram.
+
+This agent is able to:
+- Decide if it should send a message
+- Send a message to a specific Discord channel
+- Monitor the channel for replies to that message
+
+Installation:
+pip install ag2[commsagent-telegram]
+"""
+
 import asyncio
 import threading
 import time
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional, Tuple
 
@@ -17,7 +29,7 @@ from .comms_platform_agent import (
     CommsPlatformAgent,
     PlatformExecutorAgent,
 )
-from .platform_configs import ReplyMonitorConfig, TelegramConfig
+from .platform_configs import BaseCommsPlatformConfig, ReplyMonitorConfig
 from .platform_errors import (
     PlatformAuthenticationError,
     PlatformConnectionError,
@@ -27,6 +39,32 @@ from .platform_errors import (
 
 __PLATFORM_NAME__ = "Telegram"
 __TIMEOUT__ = 5  # Timeout in seconds
+
+
+@dataclass
+class TelegramConfig(BaseCommsPlatformConfig):
+    """Telegram configuration using Bot API.
+
+    Args:
+        bot_token (str): Bot token from BotFather (starts with numbers:ABC...).
+        destination_id (str): Bot's channel Id, Group Id with bot in it, or Channel with bot in it
+
+    Instructions on finding the right id:
+    https://gist.github.com/nafiesl/4ad622f344cd1dc3bb1ecbe468ff9f8a
+    """
+
+    bot_token: str
+    """Bot token"""
+
+    destination_id: str
+    """Bot's Channel Id, Group's Id, or Channel's Id. Ensure permissions are set for Channel."""
+
+    def validate_config(self) -> bool:
+        if not self.bot_token:
+            raise ValueError("bot_token is required")
+        if not self.destination_id:
+            raise ValueError("destination_id is required")
+        return True
 
 
 class TelegramHandler:
@@ -283,7 +321,10 @@ class TelegramHandler:
 
 
 class TelegramExecutor(PlatformExecutorAgent):
-    """Telegram-specific executor agent."""
+    """Telegram-specific executor agent.
+
+    See the PlatformExecutorAgent for further details.
+    """
 
     def __init__(self, platform_config: TelegramConfig, reply_monitor_config: Optional[ReplyMonitorConfig] = None):
         super().__init__(platform_config, reply_monitor_config)
@@ -399,13 +440,15 @@ class TelegramExecutor(PlatformExecutorAgent):
 
 
 class TelegramAgent(CommsPlatformAgent):
-    """Agent for Telegram communication."""
+    """Agent for Telegram communication.
+
+    See the CommsPlatformAgent for further details.
+    """
 
     def __init__(
         self,
         name: str,
         platform_config: TelegramConfig,
-        send_config: dict,
         message_to_send: Optional[callable] = None,
         reply_monitor_config: Optional[ReplyMonitorConfig] = None,
         auto_reply: str = "Message sent to Telegram",
@@ -427,7 +470,6 @@ class TelegramAgent(CommsPlatformAgent):
             name=name,
             platform_config=platform_config,
             executor_agent=telegram_executor,
-            send_config=send_config,
             message_to_send=message_to_send,
             reply_monitor_config=reply_monitor_config,
             auto_reply=auto_reply,

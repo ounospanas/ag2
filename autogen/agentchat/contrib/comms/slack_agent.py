@@ -1,7 +1,19 @@
 # Copyright (c) 2023 - 2025, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
+"""Agent for sending messages on Slack.
+
+This agent is able to:
+- Decide if it should send a message
+- Send a message to a specific Slack channel
+- Monitor the channel for replies to that message
+
+Installation:
+pip install ag2[commsagent-slack]
+"""
+
 import time
+from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Optional, Tuple
 
@@ -12,7 +24,7 @@ from .comms_platform_agent import (
     CommsPlatformAgent,
     PlatformExecutorAgent,
 )
-from .platform_configs import ReplyMonitorConfig, SlackConfig
+from .platform_configs import BaseCommsPlatformConfig, ReplyMonitorConfig
 from .platform_errors import (
     PlatformAuthenticationError,
     PlatformConnectionError,
@@ -23,6 +35,39 @@ from .platform_errors import (
 __PLATFORM_NAME__ = "Slack"  # Platform name for messages
 __TIMEOUT__ = 5  # Timeout in seconds
 __REPLY_POLL_INTERVAL__ = 2  # Interval in seconds for polling for replies
+
+
+@dataclass
+class SlackConfig(BaseCommsPlatformConfig):
+    """Slack-specific configuration.
+
+    To get started:
+    1. Create Slack App in your workspace
+    2. Add Bot User OAuth token under OAuth & Permissions
+    3. Install app to workspace
+    4. Add bot to desired channel
+    """
+
+    bot_token: str
+    """Bot User OAuth Token starting with xoxb-."""
+
+    channel_id: str
+    """Channel ID where messages will be sent."""
+
+    signing_secret: str
+    """Signing secret for verifying requests from Slack."""
+
+    app_token: Optional[str] = None
+    """App-level token starting with xapp- (required for Socket Mode)."""
+
+    def validate_config(self) -> bool:
+        if not self.bot_token or not self.bot_token.startswith("xoxb-"):
+            raise ValueError("Valid Slack bot_token required (should start with xoxb-)")
+        if not self.channel_id:
+            raise ValueError("channel_id is required")
+        if not self.signing_secret:
+            raise ValueError("signing_secret is required")
+        return True
 
 
 class SlackHandler:
@@ -205,7 +250,10 @@ class SlackHandler:
 
 
 class SlackExecutor(PlatformExecutorAgent):
-    """Slack-specific executor agent."""
+    """Slack-specific executor agent.
+
+    See the PlatformExecutorAgent for further details.
+    """
 
     def __init__(self, platform_config: SlackConfig, reply_monitor_config: Optional[ReplyMonitorConfig] = None):
         super().__init__(platform_config, reply_monitor_config)
@@ -263,13 +311,15 @@ class SlackExecutor(PlatformExecutorAgent):
 
 
 class SlackAgent(CommsPlatformAgent):
-    """Agent for Slack communication."""
+    """Agent for Slack communication.
+
+    See the CommsPlatformAgent for further details.
+    """
 
     def __init__(
         self,
         name: str,
         platform_config: SlackConfig,
-        send_config: dict,
         message_to_send: Optional[
             callable
         ] = None,  # The function to determine the message to send, returns None to indicate do not send a message, otherwise determined automatically
@@ -293,7 +343,6 @@ class SlackAgent(CommsPlatformAgent):
             name=name,
             platform_config=platform_config,
             executor_agent=slack_executor,
-            send_config=send_config,
             message_to_send=message_to_send,
             reply_monitor_config=reply_monitor_config,
             auto_reply=auto_reply,

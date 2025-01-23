@@ -1,6 +1,17 @@
 # Copyright (c) 2023 - 2025, Owners of https://github.com/ag2ai
 #
 # SPDX-License-Identifier: Apache-2.0
+"""Agent for sending messages on Discord.
+
+This agent is able to:
+- Decide if it should send a message
+- Send a message to a specific Telegram channel, group, or the bot's channel
+- Monitor the channel for replies to that message
+
+Installation:
+pip install ag2[commsagent-discord]
+"""
+
 import asyncio
 import signal
 import sys
@@ -12,9 +23,8 @@ from typing import List, Optional, Tuple
 
 import discord
 
-# from discord.ext import commands
 from .comms_platform_agent import (
-    BasePlatformConfig,
+    BaseCommsPlatformConfig,
     CommsPlatformAgent,
     PlatformExecutorAgent,
 )
@@ -32,7 +42,7 @@ __TIMEOUT__ = 5  # Timeout in seconds
 
 
 @dataclass
-class DiscordConfig(BasePlatformConfig):
+class DiscordConfig(BaseCommsPlatformConfig):
     """Discord-specific configuration."""
 
     bot_token: str
@@ -358,7 +368,10 @@ class DiscordHandler:
 
 
 class DiscordExecutor(PlatformExecutorAgent):
-    """Discord-specific executor agent."""
+    """Discord-specific executor agent.
+
+    See the PlatformExecutorAgent for further details.
+    """
 
     def __init__(self, platform_config: DiscordConfig, reply_monitor_config: Optional[ReplyMonitorConfig] = None):
         super().__init__(platform_config, reply_monitor_config)
@@ -482,13 +495,15 @@ class DiscordExecutor(PlatformExecutorAgent):
 
 
 class DiscordAgent(CommsPlatformAgent):
-    """Agent for Discord communication."""
+    """Agent for Discord communication.
+
+    See the CommsPlatformAgent for further details.
+    """
 
     def __init__(
         self,
         name: str,
         platform_config: DiscordConfig,
-        send_config: dict,
         message_to_send: Optional[
             callable
         ] = None,  # The function to determine the message to send, returns None to indicate do not send a message, otherwise determined automatically
@@ -512,7 +527,6 @@ class DiscordAgent(CommsPlatformAgent):
             name=name,
             platform_config=platform_config,
             executor_agent=discord_executor,
-            send_config=send_config,
             message_to_send=message_to_send,
             reply_monitor_config=reply_monitor_config,
             auto_reply=auto_reply,
