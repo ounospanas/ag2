@@ -2,11 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from pydantic import BaseModel, Field
 
 
-@dataclass
-class BaseCommsPlatformConfig(ABC):
+class BaseCommsPlatformConfig(BaseModel, ABC):
     """Base configuration for all communication platform configs."""
 
     @abstractmethod
@@ -18,13 +17,18 @@ class BaseCommsPlatformConfig(ABC):
         """
         pass
 
+    class Config:
+        extra = "allow"
 
-@dataclass
-class ReplyMonitorConfig:
+
+class ReplyMonitorConfig(BaseModel):
     """Configuration for handling platform replies."""
 
-    timeout_minutes: int = 1
+    timeout_minutes: int = Field(default=1, gt=0)
     """How long to wait for replies before timing out."""
 
-    max_reply_messages: int = 1
+    max_reply_messages: int = Field(default=1, gt=0)
     """Maximum number of messages to collect before returning."""
+
+    class Config:
+        extra = "allow"

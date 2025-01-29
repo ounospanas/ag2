@@ -17,11 +17,11 @@ import signal
 import sys
 import threading
 import time
-from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Optional, Tuple
 
 import discord
+from pydantic import Field
 
 from .comms_platform_agent import (
     BaseCommsPlatformConfig,
@@ -41,13 +41,12 @@ __PLATFORM_NAME__ = "Discord"  # Platform name for messages
 __TIMEOUT__ = 5  # Timeout in seconds
 
 
-@dataclass
 class DiscordConfig(BaseCommsPlatformConfig):
     """Discord-specific configuration."""
 
-    bot_token: str
-    channel_name: str
-    guild_name: Optional[str] = None
+    bot_token: str = Field(..., description="Discord bot token")
+    channel_name: str = Field(..., description="Channel name where messages will be sent")
+    guild_name: str = Field(..., description="Guild (server) name where the channel is located")
 
     @property
     def intents(self) -> discord.Intents:
@@ -63,6 +62,9 @@ class DiscordConfig(BaseCommsPlatformConfig):
         if not all([self.bot_token, self.guild_name, self.channel_name]):
             raise ValueError("bot_token, guild_name, and channel_name are required")
         return True
+
+    class Config:
+        extra = "allow"
 
 
 class DiscordHandler:

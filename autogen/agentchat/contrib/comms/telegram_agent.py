@@ -15,11 +15,11 @@ pip install ag2[commsagent-telegram]
 import asyncio
 import threading
 import time
-from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional, Tuple
 
 import telegram
+from pydantic import Field
 from telegram.ext import (
     Application,
     ApplicationBuilder,
@@ -41,7 +41,6 @@ __PLATFORM_NAME__ = "Telegram"
 __TIMEOUT__ = 5  # Timeout in seconds
 
 
-@dataclass
 class TelegramConfig(BaseCommsPlatformConfig):
     """Telegram configuration using Bot API.
 
@@ -53,11 +52,8 @@ class TelegramConfig(BaseCommsPlatformConfig):
     https://gist.github.com/nafiesl/4ad622f344cd1dc3bb1ecbe468ff9f8a
     """
 
-    bot_token: str
-    """Bot token"""
-
-    destination_id: str
-    """Bot's Channel Id, Group's Id, or Channel's Id. Ensure permissions are set for Channel."""
+    bot_token: str = Field(..., description="Bot token")
+    destination_id: str = Field(..., description="Bot's Channel Id, Group's Id, or Channel's Id")
 
     def validate_config(self) -> bool:
         if not self.bot_token:
@@ -65,6 +61,9 @@ class TelegramConfig(BaseCommsPlatformConfig):
         if not self.destination_id:
             raise ValueError("destination_id is required")
         return True
+
+    class Config:
+        extra = "allow"
 
 
 class TelegramHandler:
