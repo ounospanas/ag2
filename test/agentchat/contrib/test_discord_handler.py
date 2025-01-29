@@ -1,7 +1,7 @@
 import asyncio
 import threading
-from typing import Dict, List, Optional, Union, Tuple
-from unittest.mock import MagicMock, AsyncMock
+from typing import Dict, List, Optional, Tuple, Union
+from unittest.mock import AsyncMock, MagicMock
 
 import discord
 import pytest
