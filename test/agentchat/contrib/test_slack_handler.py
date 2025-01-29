@@ -5,7 +5,7 @@ import asyncio
 import threading
 from typing import Dict, List, Optional, Union, Tuple
 
-from autogen.agentchat.contrib.comms.slack_agent import SlackHandler
+from autogen.agentchat.contrib.comms.slack_agent import SlackHandler, SlackConfig
 from autogen.agentchat.contrib.comms.platform_errors import (
     PlatformAuthenticationError,
     PlatformConnectionError,
@@ -15,20 +15,20 @@ from autogen.agentchat.contrib.comms.platform_errors import (
 
 @pytest.fixture
 def slack_handler():
-    handler = SlackHandler(bot_token="xoxb-fake", channel_id="ABC123", signing_secret="secret")
-    handler._client = MagicMock()
-    handler._client.chat_postMessage = AsyncMock()
-    handler._loop = asyncio.new_event_loop()
-    handler._thread = threading.current_thread()
-    handler._message_replies = {}
-    handler.silent = False
-    return handler
+    config = SlackConfig(bot_token="mock_test_token", channel_id="mock_channel", signing_secret="mock_secret")
+    handler = SlackHandler(config=config)
+    with patch.object(handler, '_slack_client', new=MagicMock()) as mock_client:
+        mock_client.chat_postMessage = AsyncMock()
+        with patch.object(handler, '_ready', new=asyncio.Event()) as ready_event:
+            ready_event.set()
+            return handler
 
 @pytest.mark.asyncio
 async def test_slack_handler_start(slack_handler):
-    slack_handler._client.auth_test = AsyncMock(return_value={"ok": True})
-    assert await slack_handler.start() is True
-    slack_handler._client.auth_test.assert_called_once()
+    with patch.object(slack_handler, '_client') as mock_client:
+        mock_client.auth_test = AsyncMock(return_value={"ok": True})
+        assert await slack_handler.start() is True
+        mock_client.auth_test.assert_called_once()
 
 @pytest.mark.asyncio
 async def test_slack_handler_start_auth_error(slack_handler):
