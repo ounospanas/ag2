@@ -9,7 +9,7 @@ This agent is able to:
 - Monitor the channel for replies to that message
 
 Installation:
-pip install ag2[commsagent-slack]
+pip install ag2[comms-slack]
 """
 
 import time
