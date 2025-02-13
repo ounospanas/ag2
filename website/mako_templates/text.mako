@@ -141,9 +141,6 @@ def clean_docstring(text):
     # Enclose angle brackets like <agent> or <some.text> that aren't HTML tags (e.g., <item />) or already in ``
     text = re.sub(r'(?<!`)<([^/\s>]+)(?:\s[^>]*)?>(?!`)', lambda m: f'`{m.group(0)}`', text)
 
-    # If Attributes:\n is found, make it bold and add one more line break before and after
-    text = text.replace('Attributes:\n', '<br/><b>Attributes:</b><br/>')
-
     # Step 2: Convert single newlines to HTML breaks, but preserve paragraphs
     # Period followed by newline -> period + break
     text = re.sub(r'\.\s*\n(?!\n)', '.<br/>', text)
@@ -246,11 +243,11 @@ ${signature}
 ${cleaned_docstring | deflist}
 
 % if len(params) > 0:
-${format_param_table(params, cleaned_docstring)}
+${format_param_table(params, func.docstring)}
 % endif
 
 % if returns:
-${format_returns_table(returns, cleaned_docstring)}
+${format_returns_table(returns, func.docstring)}
 % endif
 
 <br />
