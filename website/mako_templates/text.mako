@@ -119,6 +119,45 @@
       return ret_val
 %>
 
+<%!
+def clean_docstring(text):
+    """Format docstring text with consistent line breaks and safe characters.
+
+    Args:
+        text: The docstring text to clean
+
+    Returns:
+        Cleaned text with:
+        - Escaped special characters
+        - Single newlines after periods/colons converted to HTML breaks
+        - Code blocks properly formatted
+    """
+    if not text:
+        return ''
+
+    # Step 1: Escape special characters that could cause rendering issues
+    text = text.replace('{', '\\{')  # Escape curly braces
+
+    # Enclose angle brackets like <agent> or <some.text> that aren't HTML tags (e.g., <item />) or already in ``
+    text = re.sub(r'(?<!`)<([^/\s>]+)(?:\s[^>]*)?>(?!`)', lambda m: f'`{m.group(0)}`', text)
+
+    # If Attributes:\n is found, make it bold and add one more line break before and after
+    text = text.replace('Attributes:\n', '<br/><b>Attributes:</b><br/>')
+
+    # Step 2: Convert single newlines to HTML breaks, but preserve paragraphs
+    # Period followed by newline -> period + break
+    text = re.sub(r'\.\s*\n(?!\n)', '.<br/>', text)
+
+    # Colon followed by newline -> colon + break
+    text = re.sub(r':\s*\n(?!\n)', ': <br/>', text)
+
+    # Step 3: Fix code block formatting
+    # Ensure code blocks start on new lines, not after breaks
+    text = text.replace('<br/>```python', '\n```python')
+
+    return text
+%>
+
 <%def name="deflist(s)">
 % if 'Args:' in s:
 ${indent(s.split('Args:')[0])}
@@ -198,7 +237,7 @@ ${'####'} ${func.name}
             signature = f"{func.name}({', '.join(params)}) -> {returns}"
 
         signature = signature.replace('{', '\{').replace("<", "&lt;")
-        cleaned_docstring = func.docstring.replace('{', '\{').replace("<", "&lt;")
+        cleaned_docstring = clean_docstring(func.docstring)
 %>
 ```python
 ${signature}
@@ -227,7 +266,7 @@ ${'####'} ${var.name}
         if annot:
             annot = f"({annot}) "
 
-        cleaned_docstring = var.docstring.replace('{', '\{').replace("<", "&lt;")
+        cleaned_docstring = clean_docstring(var.docstring)
         if not cleaned_docstring:
             cleaned_docstring = '<br />'
 %>
@@ -254,7 +293,7 @@ title: ${cls.module.name}.${cls.name}
 
    signature = signature.replace('{', '\{').replace("<", "&lt;")
 
-   cleaned_docstring = cls.docstring.replace('{', '\{').replace("<", "&lt;")
+   cleaned_docstring = clean_docstring(cls.docstring)
 %>
 
 ```python
