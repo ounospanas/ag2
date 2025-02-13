@@ -100,8 +100,8 @@
           # Convert multiple spaces to single space but preserve intended line breaks
           description = ' '.join(description.split())
           # Escape { and < characters to prevent it from being interpreted as special markdown characters
-          description = description.replace('{', '\{').replace("<", "&lt;")
-          default = default.replace('{', '\{').replace("<", "&lt;")
+          description = description.replace('{', '\{').replace("<", "").replace("```python ", "```")
+          default = default.replace('{', '\{').replace("<", "")
           # Add line breaks before numbered points
           description = re.sub(r'(?<!\d)\. ', '.<br/><br/>', description)
 
@@ -233,7 +233,6 @@ ${'####'} ${func.name}
         else:
             signature = f"{func.name}({', '.join(params)}) -> {returns}"
 
-        signature = signature.replace('{', '\{').replace("<", "&lt;")
         cleaned_docstring = clean_docstring(func.docstring)
 %>
 ```python
@@ -287,8 +286,6 @@ title: ${cls.module.name}.${cls.name}
        signature = f"{cls.name}(\n    {formatted_params}\n)"
    else:
        signature = f"{cls.name}({', '.join(params)})"
-
-   signature = signature.replace('{', '\{').replace("<", "&lt;")
 
    cleaned_docstring = clean_docstring(cls.docstring)
 %>
