@@ -3,6 +3,37 @@
 <%!
   import re
 
+  from autogen.doc_utils import _PDOC_MODULE_EXPORT_MAPPINGS
+
+  def get_doc_path(type_val):
+    """Get documentation path for autogen types.
+
+    Args:
+        type_val: The type value that may contain autogen types, potentially in a union
+
+    Returns:
+        String with documentation links for autogen types if available
+    """
+    # Handle union types (separated by |)
+    if '|' in type_val:
+        types = [t.strip().replace("\\", "") for t in type_val.split('|')]
+        processed_types = []
+        for t in types:
+            if 'autogen.' in t:
+                docs_path = _PDOC_MODULE_EXPORT_MAPPINGS.get(t, t)
+                sym_link = f"[{t.split('.')[-1].strip()}](/docs/api-reference/{docs_path.replace('.','/').strip()})"
+                processed_types.append(sym_link)
+            else:
+                processed_types.append(t)
+        return ' \| '.join(processed_types)
+
+    # Handle single type
+    if 'autogen.' in type_val:
+        docs_path = _PDOC_MODULE_EXPORT_MAPPINGS.get(type_val, type_val)
+        symbol = type_val.split('.')[-1].strip()
+        return f"[{symbol}](/docs/api-reference/{docs_path.replace('.','/')}/{symbol})"
+    return type_val
+
   def indent(s, spaces=4):
       new = s.replace('\n', '\n' + ' ' * spaces)
       return ' ' * spaces + new.strip()
@@ -109,7 +140,7 @@
           # Format the table cell
           formatted_desc = f"{description}<br/><br/>" if description else ''
           if type_val != '-':
-              formatted_desc += f"**Type:** `{type_val}`"
+              formatted_desc += f"**Type:** {get_doc_path(type_val)}"
           if default != '-' and default != '"-"':
               formatted_desc += f"<br/><br/>**Default:** {default}"
 
