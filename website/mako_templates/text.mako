@@ -16,12 +16,13 @@
     """
     # Handle union types (separated by |)
     if '|' in type_val:
-        types = [t.strip().replace("\\", "") for t in type_val.split('|')]
+        types = [t.replace("\\", "").strip() for t in type_val.split('|')]
         processed_types = []
         for t in types:
             if 'autogen.' in t:
-                docs_path = _PDOC_MODULE_EXPORT_MAPPINGS.get(t, t)
-                sym_link = f"[{t.split('.')[-1].strip()}](/docs/api-reference/{docs_path.replace('.','/').strip()})"
+                symbol = t.split('.')[-1].strip()
+                docs_path = _PDOC_MODULE_EXPORT_MAPPINGS.get(t, None)
+                sym_link = f"[{symbol}](/docs/api-reference/{docs_path.replace('.','/').strip()}/{symbol})" if docs_path else f"[{symbol}](/docs/api-reference/{t.replace('.','/').strip()})"
                 processed_types.append(sym_link)
             else:
                 processed_types.append(t)
