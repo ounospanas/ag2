@@ -3,37 +3,53 @@
 <%!
   import re
 
+  import pdoc
+
   from autogen.doc_utils import _PDOC_MODULE_EXPORT_MAPPINGS
 
-  def get_doc_path(type_val):
-    """Get documentation path for autogen types.
+  link_prefix = ''
+  show_inherited_members = True
+
+  def make_link(dobj: pdoc.Doc, current_module, name=None) -> str:
+    """Mirror the HTML template's link function but generate markdown links.
 
     Args:
-        type_val: The type value that may contain autogen types, potentially in a union
+        dobj: The doc object to link to.
+        name: The name to display for the link. If None, the doc object's qualname is used.
 
     Returns:
-        String with documentation links for autogen types if available
+        [text](url) format instead of <a> tags.
     """
-    # Handle union types (separated by |)
-    if '|' in type_val:
-        types = [t.replace("\\", "").strip() for t in type_val.split('|')]
-        processed_types = []
-        for t in types:
-            if 'autogen.' in t:
-                symbol = t.split('.')[-1].strip()
-                docs_path = _PDOC_MODULE_EXPORT_MAPPINGS.get(t, None)
-                sym_link = f"[{symbol}](/docs/api-reference/{docs_path.replace('.','/').strip()}/{symbol})" if docs_path else f"[{symbol}](/docs/api-reference/{t.replace('.','/').strip()})"
-                processed_types.append(sym_link)
-            else:
-                processed_types.append(t)
-        return ' \| '.join(processed_types)
+    name = name or dobj.qualname + ('()' if isinstance(dobj, pdoc.Function) else '')
+    ##   if isinstance(dobj, pdoc.External) and not external_links:
+    if isinstance(dobj, pdoc.External):
+        ## print("=" * 50)
+        ## print(f"{isinstance(dobj, pdoc.External)=}, {dobj.qualname=}, {name=}")
+        ## print("=" * 50)
+        fullname = f"{dobj.module}.{dobj.name}" if dobj.module else dobj.name
+        if fullname in _PDOC_MODULE_EXPORT_MAPPINGS:
+            # The autogen types which comes are the one's that are decorated with @export_module
+            symbol_name = fullname.split('.')[-1]
+            new_path = _PDOC_MODULE_EXPORT_MAPPINGS[fullname]
+            url = f"/docs/api-reference/{new_path.replace('.','/')}/{symbol_name}"
+            return f'[{symbol_name}]({url})'
+        else:
+            return name
 
-    # Handle single type
-    if 'autogen.' in type_val:
-        docs_path = _PDOC_MODULE_EXPORT_MAPPINGS.get(type_val, type_val)
-        symbol = type_val.split('.')[-1].strip()
-        return f"[{symbol}](/docs/api-reference/{docs_path.replace('.','/')}/{symbol})"
-    return type_val
+    elif 'autogen' in dobj.refname:
+        if dobj.refname in _PDOC_MODULE_EXPORT_MAPPINGS:
+            symbol_name = fullname.split('.')[-1]
+            new_path = _PDOC_MODULE_EXPORT_MAPPINGS[fullname]
+            url = f"/docs/api-reference/{new_path.replace('.','/')}/{symbol_name}"
+            return f'[{symbol_name}]({url})'
+        else:
+            symbol_name = dobj.refname.split('.')[-1]
+            url = dobj.refname.replace("autogen.", "").replace('.', '/')
+            return f'[{symbol_name}]({url})'
+
+    url = dobj.url(relative_to=current_module, link_prefix=link_prefix,
+                    top_ancestor=not show_inherited_members)
+    return f'[{name}]({url})'
 
   def indent(s, spaces=4):
       new = s.replace('\n', '\n' + ' ' * spaces)
@@ -99,14 +115,17 @@
 
       return param_desc
 
-  def format_param_table(params, docstring):
+  def format_param_table(params, obj, docstring):
       # remove self and * from params
       params = [param for param in params if not param.startswith('self:') and param != 'self' and param != '*']
 
       if not params:
           return ""
+
       param_descriptions = extract_param_descriptions(docstring)
       table = "| Name | Description |\n|--|--|\n"
+
+      link = lambda dobj, name=None: make_link(dobj, obj.module, name)
 
       for param in params:
           # Split the parameter into name and type annotation
@@ -122,6 +141,8 @@
               else:
                   type_val = type_default.replace('|', '\\|')
                   default = '-'
+
+              type_val = type_val if type_val else '-'
           else:
               name = param.strip()
               type_val = '-'
@@ -141,7 +162,8 @@
           # Format the table cell
           formatted_desc = f"{description}<br/><br/>" if description else ''
           if type_val != '-':
-              formatted_desc += f"**Type:** {get_doc_path(type_val)}"
+            ##   formatted_desc += f"**Type:** {get_doc_path(type_val)}"
+              formatted_desc += f"**Type:** {type_val}"
           if default != '-' and default != '"-"':
               formatted_desc += f"<br/><br/>**Default:** {default}"
 
@@ -257,8 +279,9 @@ ${metadata}
 ${'####'} ${func.name}
 
 <%
-        returns = show_type_annotations and func.return_annotation() or ''
-        params = func.params(annotate=show_type_annotations)
+        link = lambda dobj, name=None: make_link(dobj, func.module, name)
+        returns = show_type_annotations and func.return_annotation(link=link) or ''
+        params = func.params(annotate=show_type_annotations, link=link)
         if len(params) > 2:
             formatted_params = ',\n    '.join(params)
             signature = f"{func.name}(\n    {formatted_params}\n) -> {returns}"
@@ -274,7 +297,7 @@ ${signature}
 ${cleaned_docstring | deflist}
 
 % if len(params) > 0:
-${format_param_table(params, func.docstring)}
+${format_param_table(params, func, func.docstring)}
 % endif
 
 % if returns:
@@ -312,7 +335,8 @@ title: ${cls.module.name}.${cls.name}
 </h2>
 
 <%
-   params = cls.params(annotate=show_type_annotations)
+   link = lambda dobj, name=None: make_link(dobj, cls.module, name)
+   params = cls.params(annotate=show_type_annotations, link=link)
    if len(params) > 2:
        formatted_params = ',\n    '.join(params)
        signature = f"{cls.name}(\n    {formatted_params}\n)"
@@ -328,7 +352,7 @@ ${signature}
 ${cleaned_docstring | deflist}
 
 % if len(params) > 0:
-${format_param_table(params, cleaned_docstring)}
+${format_param_table(params, cls, cleaned_docstring)}
 % endif
 
 <%
