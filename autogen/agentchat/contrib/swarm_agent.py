@@ -137,11 +137,14 @@ class OnCondition:  # noqa: N801
         target: The agent to hand off to or the nested chat configuration. Can be a ConversableAgent or a Dict.
             If a Dict, it should follow the convention of the nested chat configuration, with the exception of a carryover configuration which is unique to Swarms.
             Swarm Nested chat documentation: https://docs.ag2.ai/docs/user-guide/advanced-concepts/swarm-deep-dive#registering-handoffs-to-a-nested-chat
-        condition (Union[str, ContextStr, Callable[..., Any]]): The condition for transitioning to the target agent, evaluated by the LLM.
+        condition (Optional[Union[str, ContextStr, Callable[..., Any]]]): The condition for transitioning to the target agent, evaluated by the LLM. Cannot be used with `func_condition`.
             If a string or Callable, no automatic context variable substitution occurs.
             If a ContextStr, context variable substitution occurs.
             The Callable signature is:
                 def my_condition_string(agent: ConversableAgent, messages: list[Dict[str, Any]]) -> str
+        func_condition (Optional[Callable[..., Any]]): The Python function to call to determine if this OnCondition should be used, cannot be used with 'condition'.
+            The Callable signature is:
+                def my_condition_func(agent: ConversableAgent, messages: list[Dict[str, Any]]) -> bool
         available (Union[Callable, str]): Optional condition to determine if this OnCondition is included for the LLM to evaluate. Can be a Callable or a string.
             If a string, it will look up the value of the context variable with that name, which should be a bool, to determine whether it should include this condition.
             The Callable signature is:
@@ -150,7 +153,8 @@ class OnCondition:  # noqa: N801
     """
 
     target: Union[ConversableAgent, dict[str, Any]] = None
-    condition: Union[str, ContextStr, Callable[..., Any]] = ""
+    condition: Optional[Union[str, ContextStr, Callable[..., Any]]] = None
+    func_condition: Optional[Callable[..., Any]] = None
     available: Optional[Union[Callable, str]] = None
 
     def __post_init__(self):
@@ -158,13 +162,21 @@ class OnCondition:  # noqa: N801
         if self.target is not None:
             assert isinstance(self.target, (ConversableAgent, dict)), "'target' must be a ConversableAgent or a dict"
 
-        # Ensure they have a condition
-        if isinstance(self.condition, str):
-            assert self.condition.strip(), "'condition' must be a non-empty string"
+        # Ensure they don't have both a condition and func_condition
+        if self.condition is not None and self.func_condition is not None:
+            raise ValueError("Cannot have both 'condition' and 'func_condition' in an OnCondition")
+
+        if self.condition is not None:
+            # Ensure they have a condition
+            if isinstance(self.condition, str):
+                assert self.condition.strip(), "'condition' must be a non-empty string"
+            else:
+                assert isinstance(self.condition, (ContextStr, Callable)), (
+                    "'condition' must be a string, ContextStr, or callable"
+                )
         else:
-            assert isinstance(self.condition, (ContextStr, Callable)), (
-                "'condition' must be a string, ContextStr, or callable"
-            )
+            # Ensure they have a func_condition if they don't have a condition
+            assert self.func_condition is not None, "Either 'condition' or 'func_condition' must be provided"
 
         if self.available is not None:
             assert isinstance(self.available, (Callable, str)), "'available' must be a callable or a string"
