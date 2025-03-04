@@ -43,7 +43,7 @@ You can directly create [`AssistantAgent`](/docs/api-reference/autogen/Assistant
 - The function name will be used as the tool name.
 
 ### Registering Handoffs to agents
-While you can create functions to decide who the next agent to call is, we provide a quick way to register the handoff using [`OnCondition`](/docs/api-reference/autogen/OnCondition). Internally, a transition function is created and added to the LLM configuration directly.
+While you can create functions to decide who the next agent to call is, we provide a quick way to register the handoff using [`OnCondition`](/docs/api-reference/autogen/OnCondition). Internally, a transition tool is created and added to the LLM configuration directly.
 
 
 ```python
@@ -74,6 +74,48 @@ def transfer_to_agent_3():
     return agent_3
 
 agent_1 = AssistantAgent("agent_1", llm_config=llm_config, functions=[transfer_to_agent_2, transfer_to_agent_3])
+```
+
+### Registering function-based Handoffs to agents
+The Handoffs in the above example will be evaluated by an LLM, as they are represented as tools for the agent to choose from. An alternative to the LLM-based Handoff is a function-based Handoff, where a Python function is evaluated instead. These are evaluated before the LLM-based Handoffs.
+
+These function-based Handoffs are useful for scenarios where you want a transition to an agent, or nested chat, to occur based on context variables or the state of messages.
+
+The function, associated with the `OnCondition`'s `func_condition` parameter, returns `True` to indicate that the transition is to be used, and `False` otherwise.
+
+
+```python
+from autogen import AssistantAgent, OnCondition, register_hand_off
+# llm_config = ...
+agent_1 = AssistantAgent("agent_1", llm_config=llm_config)
+agent_2 = AssistantAgent("agent_2", llm_config=llm_config)
+agent_3 = AssistantAgent("agent_3", llm_config=llm_config)
+
+context_vars = {
+    "task_completed": True
+}
+
+# Our function-based condition
+def transfer_if_task_complete(agent: ConversableAgent, messages: list[dict[str, Any]]) -> bool:
+    return agent.get_context("task_completed", False)
+
+# Register the handoff for agent_1
+# If the task_completed context variable is True it will transfer from agent_1 to agent_2
+# If task_completed is False, the second OnCondition will be evaluated with agent_1's LLM
+register_hand_off(
+    agent=agent_1,
+    hand_to=[
+        OnCondition(
+            target=agent_2,
+            func_condition=transfer_if_task_complete,
+        ),
+        OnCondition(
+            target=agent_3,
+            condition="Always transition to agent_3"
+        ),
+    ]
+)
+
 ```
 
 ### SwarmResult
