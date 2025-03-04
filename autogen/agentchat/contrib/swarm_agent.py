@@ -10,7 +10,7 @@ from enum import Enum
 from functools import partial
 from inspect import signature
 from types import MethodType
-from typing import Any, Callable, Optional, Tuple, Union
+from typing import Any, Callable, Optional, Union
 
 from pydantic import BaseModel, field_serializer
 
@@ -96,8 +96,15 @@ class AfterWork:  # noqa: N801
                 def my_selection_message(agent: ConversableAgent, messages: list[dict[str, Any]]) -> str
     """
 
-    agent: Union[AfterWorkOption, ConversableAgent, str, Callable[..., Any]]
-    next_agent_selection_msg: Optional[Union[str, ContextStr, Callable[..., Any]]] = None
+    agent: Union[
+        AfterWorkOption,
+        ConversableAgent,
+        str,
+        Callable[[ConversableAgent, list[dict[str, Any]], GroupChat], Union[AfterWorkOption, ConversableAgent, str]],
+    ]
+    next_agent_selection_msg: Optional[
+        Union[str, ContextStr, Callable[[ConversableAgent, list[dict[str, Any]]], str]]
+    ] = None
 
     def __post_init__(self):
         if isinstance(self.agent, str):
@@ -153,9 +160,9 @@ class OnCondition:  # noqa: N801
     """
 
     target: Union[ConversableAgent, dict[str, Any]] = None
-    condition: Optional[Union[str, ContextStr, Callable[..., Any]]] = None
-    func_condition: Optional[Callable[..., Any]] = None
-    available: Optional[Union[Callable, str]] = None
+    condition: Optional[Union[str, ContextStr, Callable[[ConversableAgent, list[dict[str, Any]]], str]]] = None
+    func_condition: Optional[Callable[[ConversableAgent, list[dict[str, Any]]], bool]] = None
+    available: Optional[Union[Callable[[ConversableAgent, list[dict[str, Any]]], bool], str]] = None
 
     def __post_init__(self):
         # Ensure valid types
@@ -249,10 +256,10 @@ def _link_agents_to_swarm_manager(agents: list[Agent], group_chat_manager: Agent
 
 def _run_func_onconditions(
     agent: ConversableAgent,
-    messages: Optional[list[dict]] = None,
+    messages: Optional[list[dict[str, Any]]] = None,
     sender: Optional[Agent] = None,
     config: Optional[Any] = None,
-) -> Tuple[bool, Union[str, dict, None]]:
+) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
     """Run Python function-based OnConditions for an agent before any other reply function."""
     for on_condition in agent._swarm_func_onconditions:
         is_available = True
@@ -466,7 +473,9 @@ def _cleanup_temp_user_messages(chat_result: ChatResult) -> None:
 def _prepare_groupchat_auto_speaker(
     groupchat: GroupChat,
     last_swarm_agent: ConversableAgent,
-    after_work_next_agent_selection_msg: Optional[Union[str, ContextStr, Callable[..., Any]]],
+    after_work_next_agent_selection_msg: Optional[
+        Union[str, ContextStr, Callable[[ConversableAgent, list[dict[str, Any]]], str]]
+    ],
 ) -> None:
     """Prepare the group chat for auto speaker selection, includes updating or restore the groupchat speaker selection message.
 
@@ -751,7 +760,14 @@ def initiate_swarm_chat(
     swarm_manager_args: Optional[dict[str, Any]] = None,
     max_rounds: int = 20,
     context_variables: Optional[dict[str, Any]] = None,
-    after_work: Optional[Union[AfterWorkOption, Callable[..., Any]]] = AfterWork(AfterWorkOption.TERMINATE),
+    after_work: Optional[
+        Union[
+            AfterWorkOption,
+            Callable[
+                [ConversableAgent, list[dict[str, Any]], GroupChat], Union[AfterWorkOption, ConversableAgent, str]
+            ],
+        ]
+    ] = AfterWork(AfterWorkOption.TERMINATE),
     exclude_transit_message: bool = True,
 ) -> tuple[ChatResult, dict[str, Any], ConversableAgent]:
     """Initialize and run a swarm chat
@@ -840,7 +856,14 @@ async def a_initiate_swarm_chat(
     swarm_manager_args: Optional[dict[str, Any]] = None,
     max_rounds: int = 20,
     context_variables: Optional[dict[str, Any]] = None,
-    after_work: Optional[Union[AfterWorkOption, Callable[..., Any]]] = AfterWork(AfterWorkOption.TERMINATE),
+    after_work: Optional[
+        Union[
+            AfterWorkOption,
+            Callable[
+                [ConversableAgent, list[dict[str, Any]], GroupChat], Union[AfterWorkOption, ConversableAgent, str]
+            ],
+        ]
+    ] = AfterWork(AfterWorkOption.TERMINATE),
     exclude_transit_message: bool = True,
 ) -> tuple[ChatResult, dict[str, Any], ConversableAgent]:
     """Initialize and run a swarm chat asynchronously
