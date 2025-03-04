@@ -252,9 +252,9 @@ In a swarm, the context variables are shared amongst the swarm's agents. As cont
 
 ### What is the difference between OnCondition and AfterWork?
 
-When registering an [`OnCondition`](/docs/api-reference/autogen/OnCondition) handoff, we are creating a function schema to be passed to the LLM. The LLM will decide whether to call this function.
+When registering an [`OnCondition`](/docs/api-reference/autogen/OnCondition) handoff we are either, creating a tool schema to be passed to the LLM where the LLM will decide whether to call this tool, or we are setting up Python-based functions to be evaluated before the agent uses their LLM.
 
-When registering an [`AfterWork`](/docs/api-reference/autogen/AfterWork) handoff, we are defining the fallback mechanism when no tool calls are suggested. This is a higher level of control from the swarm chat level.
+When registering an [`AfterWork`](/docs/api-reference/autogen/AfterWork) handoff, we are defining the fallback mechanism when no tool calls are suggested or OnCondition Python-based functions are used. This is a higher level of control from the swarm chat level.
 
 ### When to pass in a user agent?
 
