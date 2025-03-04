@@ -425,6 +425,8 @@ convention = "google"
 files = [
     "autogen/agentchat/contrib/rag",
     "autogen/agentchat/contrib/graph_rag",
+    "autogen/agentchat/contrib/swarm_agent.py",
+    "autogen/agentchat/agent.py",
     "autogen/agentchat/realtime_agent",
     "autogen/agents",
     "autogen/coding",
@@ -440,6 +442,7 @@ files = [
     "website/*.py",
     "test/agentchat/contrib/rag",
     "test/agentchat/contrib/graph_rag",
+    "test/agentchat/contrib/test_swarm_agent.py",
     "test/agentchat/realtime_agent",
     "test/agents",
     "test/conftest.py",
