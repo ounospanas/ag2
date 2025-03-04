@@ -10,7 +10,7 @@ from enum import Enum
 from functools import partial
 from inspect import signature
 from types import MethodType
-from typing import Any, Callable, Optional, Union
+from typing import Any, Callable, Optional, Tuple, Union
 
 from pydantic import BaseModel, field_serializer
 
@@ -89,11 +89,11 @@ class AfterWork:  # noqa: N801
     Args:
         agent: The agent to hand off to or the after work option. Can be a ConversableAgent, a string name of a ConversableAgent, an AfterWorkOption, or a Callable.
             The Callable signature is:
-                def my_after_work_func(last_speaker: ConversableAgent, messages: list[Dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, ConversableAgent, str]:
+                def my_after_work_func(last_speaker: ConversableAgent, messages: list[dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, ConversableAgent, str]:
         next_agent_selection_msg: Optional[Union[str, Callable[..., Any]]]: Optional message to use for the agent selection (in internal group chat), only valid for when agent is AfterWorkOption.SWARM_MANAGER.
             If a string, it will be used as a template and substitute the context variables.
             If a Callable, it should have the signature:
-                def my_selection_message(agent: ConversableAgent, messages: list[Dict[str, Any]]) -> str
+                def my_selection_message(agent: ConversableAgent, messages: list[dict[str, Any]]) -> str
     """
 
     agent: Union[AfterWorkOption, ConversableAgent, str, Callable[..., Any]]
@@ -134,21 +134,21 @@ class OnCondition:  # noqa: N801
     """Defines a condition for transitioning to another agent or nested chats
 
     Args:
-        target: The agent to hand off to or the nested chat configuration. Can be a ConversableAgent or a Dict.
-            If a Dict, it should follow the convention of the nested chat configuration, with the exception of a carryover configuration which is unique to Swarms.
+        target: The agent to hand off to or the nested chat configuration. Can be a ConversableAgent or a dict.
+            If a dict, it should follow the convention of the nested chat configuration, with the exception of a carryover configuration which is unique to Swarms.
             Swarm Nested chat documentation: https://docs.ag2.ai/docs/user-guide/advanced-concepts/swarm-deep-dive#registering-handoffs-to-a-nested-chat
-        condition (Optional[Union[str, ContextStr, Callable[..., Any]]]): The condition for transitioning to the target agent, evaluated by the LLM. Cannot be used with `func_condition`.
+        condition (Optional[Union[str, ContextStr, Callable[..., Any]]]): The condition for transitioning to the target agent, evaluated by the LLM. Cannot be used in conjunction with 'func_condition'.
             If a string or Callable, no automatic context variable substitution occurs.
             If a ContextStr, context variable substitution occurs.
             The Callable signature is:
-                def my_condition_string(agent: ConversableAgent, messages: list[Dict[str, Any]]) -> str
-        func_condition (Optional[Callable[..., Any]]): The Python function to call to determine if this OnCondition should be used, cannot be used with 'condition'.
+                def my_condition_string(agent: ConversableAgent, messages: list[dict[str, Any]]) -> str
+        func_condition (Optional[Callable[..., Any]]): The Python function to call to determine if this OnCondition should be used, cannot be used in conjunction with 'condition'.
             The Callable signature is:
-                def my_condition_func(agent: ConversableAgent, messages: list[Dict[str, Any]]) -> bool
+                def my_condition_func(agent: ConversableAgent, messages: list[dict[str, Any]]) -> bool
         available (Union[Callable, str]): Optional condition to determine if this OnCondition is included for the LLM to evaluate. Can be a Callable or a string.
             If a string, it will look up the value of the context variable with that name, which should be a bool, to determine whether it should include this condition.
             The Callable signature is:
-                def my_available_func(agent: ConversableAgent, messages: list[Dict[str, Any]]) -> bool
+                def my_available_func(agent: ConversableAgent, messages: list[dict[str, Any]]) -> bool
 
     """
 
@@ -174,9 +174,13 @@ class OnCondition:  # noqa: N801
                 assert isinstance(self.condition, (ContextStr, Callable)), (
                     "'condition' must be a string, ContextStr, or callable"
                 )
-        else:
+        elif self.func_condition is not None:
             # Ensure they have a func_condition if they don't have a condition
-            assert self.func_condition is not None, "Either 'condition' or 'func_condition' must be provided"
+            assert self.func_condition is not None and isinstance(self.func_condition, Callable), (
+                "Either 'condition' or 'func_condition' must be provided"
+            )
+        else:
+            raise ValueError("Either 'condition' or 'func_condition' must be provided")
 
         if self.available is not None:
             assert isinstance(self.available, (Callable, str)), "'available' must be a callable or a string"
@@ -215,13 +219,67 @@ def _establish_swarm_agent(agent: ConversableAgent):
     # Store conditional functions (and their OnCondition instances) to add/remove later when transitioning to this agent
     agent._swarm_conditional_functions = {}
 
+    # Store the Python function-based OnConditions for evaluation (list[OnCondition])
+    agent._swarm_func_onconditions = []
+
     # Register the hook to update agent state (except tool executor)
     agent.register_hook("update_agent_state", _update_conditional_functions)
+
+    # Register a reply function to run Python function-based OnConditions before any other reply function
+    agent.register_reply(trigger=([Agent, None]), reply_func=_run_func_onconditions, position=0)
 
     agent._get_display_name = MethodType(_swarm_agent_str, agent)
 
     # Mark this agent as established as a swarm agent
     agent._swarm_is_established = True
+
+
+def _link_agents_to_swarm_manager(agents: list[Agent], group_chat_manager: Agent) -> None:
+    """Link all agents to the GroupChatManager so they can access the underlying GroupChat and other agents.
+
+    This is primarily used so that agents can set the tool executor's _swarm_next_agent attribute to control
+    the next agent programmatically.
+
+    Does not link the Tool Executor agent.
+    """
+    for agent in agents:
+        if agent.name not in [__TOOL_EXECUTOR_NAME__]:
+            agent._swarm_manager = group_chat_manager
+
+
+def _run_func_onconditions(
+    agent: ConversableAgent,
+    messages: Optional[list[dict]] = None,
+    sender: Optional[Agent] = None,
+    config: Optional[Any] = None,
+) -> Tuple[bool, Union[str, dict, None]]:
+    """Run Python function-based OnConditions for an agent before any other reply function."""
+    for on_condition in agent._swarm_func_onconditions:
+        is_available = True
+
+        if on_condition.available is not None:
+            if isinstance(on_condition.available, Callable):
+                is_available = on_condition.available(agent, next(iter(agent.chat_messages.values())))
+            elif isinstance(on_condition.available, str):
+                is_available = agent.get_context(on_condition.available) or False
+
+        if is_available and on_condition.func_condition(agent, messages):
+            # Condition has been met, we'll set the Tool Executor's _swarm_next_agent
+            # attribute and that will be picked up on the next iteration when
+            # _determine_next_agent is called
+            for agent in agent._swarm_manager.groupchat.agents:
+                if agent.name == __TOOL_EXECUTOR_NAME__:
+                    agent._swarm_next_agent = on_condition.target
+                    break
+
+            if isinstance(on_condition.target, ConversableAgent):
+                transfer_name = on_condition.target.name
+            else:
+                transfer_name = "a nested chat"
+
+            return True, "[Handing off to " + transfer_name + "]"
+
+    return False, None
 
 
 def _prepare_swarm_agents(
@@ -297,7 +355,9 @@ def _create_nested_chats(agent: ConversableAgent, nested_chat_agents: list[Conve
     for i, nested_chat_handoff in enumerate(agent._swarm_nested_chat_handoffs):
         nested_chats: dict[str, Any] = nested_chat_handoff["nested_chats"]
         condition = nested_chat_handoff["condition"]
+        func_condition = nested_chat_handoff["func_condition"]
         available = nested_chat_handoff["available"]
+        handoff_position = nested_chat_handoff["handoff_position"]
 
         # Create a nested chat agent specifically for this nested chat
         nested_chat_agent = ConversableAgent(name=f"nested_chat_{agent.name}_{i + 1}")
@@ -318,7 +378,13 @@ def _create_nested_chats(agent: ConversableAgent, nested_chat_agents: list[Conve
         nested_chat_agents.append(nested_chat_agent)
 
         # Nested chat is triggered through an agent transfer to this nested chat agent
-        register_hand_off(agent, OnCondition(nested_chat_agent, condition, available))
+        register_hand_off(
+            agent,
+            OnCondition(
+                target=nested_chat_agent, condition=condition, func_condition=func_condition, available=available
+            ),
+            position=handoff_position,
+        )
 
 
 def _process_initial_messages(
@@ -413,7 +479,7 @@ def _prepare_groupchat_auto_speaker(
             if a string, it will be use the string a the prompt template, no context variable substitution however '{agentlist}' will be substituted for a list of agents.
             if a ContextStr, it will substitute the agentlist first and then the context variables
             if a Callable, it will not substitute the agentlist or context variables, signature:
-                def my_selection_message(agent: ConversableAgent, messages: list[Dict[str, Any]]) -> str
+                def my_selection_message(agent: ConversableAgent, messages: list[dict[str, Any]]) -> str
     """
 
     def substitute_agentlist(template: str) -> str:
@@ -707,13 +773,13 @@ def initiate_swarm_chat(
 
             Callable: A custom function that takes the current agent, messages, and groupchat as arguments and returns an AfterWorkOption or a ConversableAgent (by reference or string name).
                 ```python
-                def custom_afterwork_func(last_speaker: ConversableAgent, messages: List[Dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, ConversableAgent, str]:
+                def custom_afterwork_func(last_speaker: ConversableAgent, messages: list[dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, ConversableAgent, str]:
                 ```
         exclude_transit_message:  all registered handoff function call and responses messages will be removed from message list before calling an LLM.
             Note: only with transition functions added with `register_handoff` will be removed. If you pass in a function to manage workflow, it will not be removed. You may register a cumstomized hook to `process_all_messages_before_reply` to remove that.
     Returns:
         ChatResult:     Conversations chat history.
-        Dict[str, Any]: Updated Context variables.
+        dict[str, Any]: Updated Context variables.
         ConversableAgent:     Last speaker.
     """
     tool_execution, nested_chat_agents = _prepare_swarm_agents(initial_agent, agents, exclude_transit_message)
@@ -742,6 +808,10 @@ def initiate_swarm_chat(
 
     # Point all ConversableAgent's context variables to this function's context_variables
     _setup_context_variables(tool_execution, agents, manager, context_variables or {})
+
+    # Link all agents with the GroupChatManager to allow access to the group chat
+    # and other agents, particularly the tool executor for setting _swarm_next_agent
+    _link_agents_to_swarm_manager(groupchat.agents, manager)  # Commented out as the function is not defined
 
     if len(processed_messages) > 1:
         last_agent, last_message = manager.resume(messages=processed_messages)
@@ -792,13 +862,13 @@ async def a_initiate_swarm_chat(
 
             Callable: A custom function that takes the current agent, messages, and groupchat as arguments and returns an AfterWorkOption or a ConversableAgent (by reference or string name).
                 ```python
-                def custom_afterwork_func(last_speaker: ConversableAgent, messages: list[Dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, ConversableAgent, str]:
+                def custom_afterwork_func(last_speaker: ConversableAgent, messages: list[dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, ConversableAgent, str]:
                 ```
         exclude_transit_message:  all registered handoff function call and responses messages will be removed from message list before calling an LLM.
             Note: only with transition functions added with `register_handoff` will be removed. If you pass in a function to manage workflow, it will not be removed. You may register a cumstomized hook to `process_all_messages_before_reply` to remove that.
     Returns:
         ChatResult:     Conversations chat history.
-        Dict[str, Any]: Updated Context variables.
+        dict[str, Any]: Updated Context variables.
         ConversableAgent:     Last speaker.
     """
     tool_execution, nested_chat_agents = _prepare_swarm_agents(initial_agent, agents, exclude_transit_message)
@@ -886,12 +956,15 @@ def _set_to_tool_execution(agent: ConversableAgent):
 def register_hand_off(
     agent: ConversableAgent,
     hand_to: Union[list[Union[OnCondition, AfterWork]], OnCondition, AfterWork],
+    position: Optional[int] = None,
 ):
     """Register a function to hand off to another agent.
 
     Args:
         agent: The agent to register the hand off with.
         hand_to: A list of OnCondition's and an, optional, AfterWork condition
+        position: The position in the list to insert the OnCondition (only applies to Python-based conditions in OnConditions where the target is a nested chat and hand_to parameter is an OnCondition)
+            This maintains the position of the handoff for target = nested chat, python-based conditions (func_condition=), because they are order-sensitive and should be evaluated in the order they are specified in code.
 
     Hand off template:
     def transfer_to_agent_name() -> ConversableAgent:
@@ -907,9 +980,13 @@ def register_hand_off(
     if not isinstance(hand_to, (list, OnCondition, AfterWork)):
         raise ValueError("hand_to must be a list of OnCondition or AfterWork")
 
+    if position is not None and not isinstance(hand_to, OnCondition):
+        raise ValueError("Position can only be set when hand_to is an OnCondition")
+
     if isinstance(hand_to, (OnCondition, AfterWork)):
         hand_to = [hand_to]
 
+    func_condition_position = 0
     for transit in hand_to:
         if isinstance(transit, AfterWork):
             assert isinstance(transit.agent, (AfterWorkOption, ConversableAgent, str, Callable)), (
@@ -921,36 +998,53 @@ def register_hand_off(
             if isinstance(transit.target, ConversableAgent):
                 # Transition to agent
 
-                # Create closure with current loop transit value
-                # to ensure the condition matches the one in the loop
-                def make_transfer_function(current_transit: OnCondition):
-                    def transfer_to_agent() -> ConversableAgent:
-                        return current_transit.target
+                # If LLM based hand-off:
+                if transit.condition is not None:
+                    # Create closure with current loop transit value
+                    # to ensure the condition matches the one in the loop
+                    def make_transfer_function(current_transit: OnCondition):
+                        def transfer_to_agent() -> ConversableAgent:
+                            return current_transit.target
 
-                    return transfer_to_agent
+                        return transfer_to_agent
 
-                transfer_func = make_transfer_function(transit)
+                    transfer_func = make_transfer_function(transit)
 
-                # Store function to add/remove later based on it being 'available'
-                # Function names are made unique and allow multiple OnCondition's to the same agent
-                base_func_name = f"transfer_{agent.name}_to_{transit.target.name}"
-                func_name = base_func_name
-                count = 2
-                while func_name in agent._swarm_conditional_functions:
-                    func_name = f"{base_func_name}_{count}"
-                    count += 1
+                    # Store function to add/remove later based on it being 'available'
+                    # Function names are made unique and allow multiple OnCondition's to the same agent
+                    base_func_name = f"transfer_{agent.name}_to_{transit.target.name}"
+                    func_name = base_func_name
+                    count = 2
+                    while func_name in agent._swarm_conditional_functions:
+                        func_name = f"{base_func_name}_{count}"
+                        count += 1
 
-                # Store function to add/remove later based on it being 'available'
-                agent._swarm_conditional_functions[func_name] = (transfer_func, transit)
+                    # Store function to add/remove later based on it being 'available'
+                    agent._swarm_conditional_functions[func_name] = (transfer_func, transit)
+
+                else:
+                    # Python function-based hand-off
+                    if position is not None:
+                        # For nested chat targets, we get to this point after processing all hand-offs so
+                        # we need to insert it back at the correct position
+                        agent._swarm_func_onconditions.insert(position, transit)
+                    else:
+                        agent._swarm_func_onconditions.append(transit)
 
             elif isinstance(transit.target, dict):
                 # Transition to a nested chat
                 # We will store them here and establish them in the initiate_swarm_chat
                 agent._swarm_nested_chat_handoffs.append({
                     "nested_chats": transit.target,
+                    "func_condition": transit.func_condition,
                     "condition": transit.condition,
                     "available": transit.available,
+                    "handoff_position": func_condition_position,  # Keep track of where it was in the handoff list order so we can re-add it in the same order
                 })
+
+            #
+            if transit.func_condition is not None:
+                func_condition_position += 1
 
         else:
             raise ValueError("Invalid hand off condition, must be either OnCondition or AfterWork")

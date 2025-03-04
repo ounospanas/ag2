@@ -72,7 +72,7 @@ register_hand_off(
     agent=agent_1,
     hand_to=[OnCondition(
         target={
-            "chat_queue": [nested_chats],
+            "chat_queue": nested_chats,
             "config": Any,
             "reply_func_from_nested_chats": None,
             "use_async": False

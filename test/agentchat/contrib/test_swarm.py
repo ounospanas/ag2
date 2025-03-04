@@ -20,6 +20,7 @@ from autogen.agentchat.contrib.swarm_agent import (
     _determine_next_agent,
     _prepare_swarm_agents,
     _process_initial_messages,
+    _run_func_onconditions,
     _setup_context_variables,
     a_initiate_swarm_chat,
     initiate_swarm_chat,
@@ -1372,6 +1373,208 @@ def test_swarmresult_afterworkoption_tool_swarmresult():
         dummy_agent, dummy_agent, AfterWorkOption.TERMINATE, AfterWorkOption.TERMINATE
     )
     assert next_speaker == dummy_agent, "Expected the auto speaker selection mode for AfterWorkOption.SWARM_MANAGER"
+
+
+def test_oncondition_python_func_init():
+    """Tests that a Python function-based OnCondition is handled correctly"""
+
+    def oncondition_func_condition(agent: ConversableAgent, messages: list[dict[str, Any]]) -> bool:
+        return False
+
+    dummy_agent = ConversableAgent("dummy_1")
+    another_agent = ConversableAgent("another_agent")
+
+    # 1. Test Python-based OnCondition initialisation
+    register_hand_off(
+        agent=dummy_agent,
+        hand_to=OnCondition(target=another_agent, func_condition=oncondition_func_condition),
+    )
+
+    # Test that the condition function is correctly stored in the OnCondition object
+    assert len(dummy_agent._swarm_func_onconditions) == 1
+    assert dummy_agent._swarm_func_onconditions[0] == OnCondition(
+        target=another_agent, func_condition=oncondition_func_condition
+    )
+
+    # 2. Ensure that we can't create an OnCondition with both a condition and func_condition
+    with pytest.raises(ValueError):
+        register_hand_off(
+            agent=dummy_agent,
+            hand_to=OnCondition(target=another_agent, condition="test", func_condition=oncondition_func_condition),
+        )
+
+    # 3. Ensure they have either the condition or func_condition
+    with pytest.raises(ValueError, match="Either 'condition' or 'func_condition' must be provided"):
+        register_hand_off(
+            agent=dummy_agent,
+            hand_to=OnCondition(target=another_agent),
+        )
+
+
+def test_oncondition_python_func_handoffs():
+    """Tests hand-offs for OnConditions with python functions"""
+
+    first_agent = ConversableAgent("agent_1")
+    second_agent = ConversableAgent("agent_2")
+    third_agent = ConversableAgent("agent_3")
+    tool_executor = ConversableAgent(__TOOL_EXECUTOR_NAME__)
+
+    # Mock swarm's inner group chat and tool executor
+    groupchat = GroupChat(agents=[first_agent, second_agent, third_agent, tool_executor], messages=[])
+    swarm_manager = GroupChatManager(groupchat=groupchat)
+    for agent in [first_agent, second_agent, third_agent]:
+        agent._swarm_manager = swarm_manager
+        agent._swarm_func_onconditions = []
+    tool_executor._swarm_next_agent = None
+
+    # 1. No OnConditions registered
+    final, reply_message = _run_func_onconditions(first_agent, [{"role": "user", "content": "Test"}])
+
+    assert not final
+    assert reply_message is None
+
+    # 2. OnCondition with no available condition and returns True to hand off
+    def go_to_second(agent: ConversableAgent, messages: list[dict[str, Any]]) -> bool:
+        return True
+
+    first_to_second_oncondition = OnCondition(target=second_agent, func_condition=go_to_second)
+
+    register_hand_off(
+        agent=first_agent,
+        hand_to=first_to_second_oncondition,
+    )
+
+    final, reply_message = _run_func_onconditions(first_agent, [{"role": "user", "content": "Test"}])
+
+    assert final
+    assert reply_message == "[Handing off to agent_2]"
+
+    # 2. OnCondition with no available condition and returns False to not hand off
+    first_agent._swarm_func_onconditions = []
+
+    def dont_go_to_second(agent: ConversableAgent, messages: list[dict[str, Any]]) -> bool:
+        return False
+
+    first_to_second_oncondition = OnCondition(target=second_agent, func_condition=dont_go_to_second)
+
+    register_hand_off(
+        agent=first_agent,
+        hand_to=first_to_second_oncondition,
+    )
+
+    final, reply_message = _run_func_onconditions(first_agent, [{"role": "user", "content": "Test"}])
+
+    assert not final
+    assert reply_message is None
+
+    # 3. Add a second OnCondition which returns True to hand off
+    def go_to_third(agent: ConversableAgent, messages: list[dict[str, Any]]) -> bool:
+        return True
+
+    first_to_third_oncondition = OnCondition(target=third_agent, func_condition=go_to_third)
+
+    register_hand_off(
+        agent=first_agent,
+        hand_to=first_to_third_oncondition,
+    )
+
+    final, reply_message = _run_func_onconditions(first_agent, [{"role": "user", "content": "Test"}])
+
+    assert final
+    assert reply_message == "[Handing off to agent_3]"
+
+    # 4. OnCondition with available set to false
+    first_agent._swarm_func_onconditions = []
+
+    first_agent.set_context("am_not_available", False)
+
+    first_to_second_unavailable_oncondition = OnCondition(
+        target=second_agent, func_condition=go_to_second, available="am_not_available"
+    )
+
+    register_hand_off(
+        agent=first_agent,
+        hand_to=first_to_second_unavailable_oncondition,
+    )
+
+    final, reply_message = _run_func_onconditions(first_agent, [{"role": "user", "content": "Test"}])
+
+    assert not final
+    assert reply_message is None
+
+    # 5. OnCondition with available as a Callable set to True
+    first_agent._swarm_func_onconditions = []
+
+    def is_available(agent: ConversableAgent, messages: list[dict[str, Any]]) -> bool:
+        return True
+
+    first_to_second_available_oncondition = OnCondition(
+        target=second_agent, func_condition=go_to_second, available=is_available
+    )
+
+    register_hand_off(
+        agent=first_agent,
+        hand_to=first_to_second_available_oncondition,
+    )
+
+    first_agent._oai_messages[second_agent] = [{"role": "user", "content": "Test"}]
+    final, reply_message = _run_func_onconditions(first_agent, [{"role": "user", "content": "Test"}])
+
+    assert final
+    assert reply_message == "[Handing off to agent_2]"
+
+    # 6. OnCondition with target as a nested chat
+    first_agent._swarm_func_onconditions = []
+    my_carryover_config = {
+        "summary_method": "reflection_with_llm",
+        "summary_args": {"summary_prompt": "Summarise the conversation into bullet points."},
+    }
+
+    nested_chats = [
+        {
+            "recipient": second_agent,
+            "summary_method": "reflection_with_llm",
+            "summary_prompt": "Summarize the conversation into bullet points.",
+            "carryover_config": my_carryover_config,
+        },
+        {
+            "recipient": third_agent,
+            "message": "Write a poem about the context.",
+            "max_turns": 1,
+            "summary_method": "last_msg",
+        },
+    ]
+
+    def transfer_to_nested_chat(agent: ConversableAgent, messages: list[dict[str, Any]]) -> bool:
+        return True
+
+    def fallback_condition(agent: ConversableAgent, messages: list[dict[str, Any]]) -> bool:
+        return True
+
+    nested_chat_dict = {
+        "chat_queue": nested_chats,
+        "config": Any,
+        "reply_func_from_nested_chats": None,
+        "use_async": False,
+    }
+
+    register_hand_off(
+        agent=first_agent,
+        hand_to=[
+            OnCondition(target=nested_chat_dict, func_condition=transfer_to_nested_chat),  # , available=is_available),
+            OnCondition(target=third_agent, func_condition=fallback_condition),
+        ],
+    )
+
+    # Establish the nested chat agent and handoff
+    nested_chat_agents = []
+    _create_nested_chats(first_agent, nested_chat_agents)
+
+    first_agent._oai_messages[nested_chat_agents[0]] = [{"role": "user", "content": "Test"}]
+    final, reply_message = _run_func_onconditions(first_agent, [{"role": "user", "content": "Test"}])
+
+    assert final
+    assert reply_message == "[Handing off to nested_chat_agent_1_1]"
 
 
 if __name__ == "__main__":
