@@ -6,7 +6,7 @@ from typing import Any, Literal, Optional
 
 from pydantic import BaseModel
 
-from autogen import Agent, ConversableAgent, GroupChat
+from autogen import ConversableAgent, GroupChat
 
 from .context_str import ContextStr
 
@@ -46,7 +46,7 @@ class AfterWorkTargetAgent(AfterWorkTarget):
 
     agent_name: str
 
-    def __init__(self, agent: Agent, **data):
+    def __init__(self, agent: ConversableAgent, **data):
         # Pass the agent name through Pydantic's initialization
         data["agent_name"] = agent.name
         super().__init__(**data)
