@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     # Avoid circular import
     from ..conversable_agent import ConversableAgent
     from ..groupchat import GroupChat
-    
+
 __all__ = ["AfterWorkOption"]
 
 AfterWorkOption = Literal["terminate", "revert_to_user", "stay", "group_manager"]
