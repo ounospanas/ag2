@@ -18,7 +18,7 @@ AfterWorkOption = Literal["terminate", "revert_to_user", "stay", "group_manager"
 
 
 class AfterWorkTarget(BaseModel):
-    """Base class for all after-work targets."""
+    """Base class for all AfterWork targets."""
 
     def resolve(self, last_speaker: ConversableAgent, messages: list[dict[str, Any]], groupchat: GroupChat) -> Any:
         """Resolve to a concrete agent or option."""
@@ -30,9 +30,8 @@ class AfterWorkTargetOption(AfterWorkTarget):
 
     option: AfterWorkOption
 
-    def __init__(self, option_value: AfterWorkOption, **data):
-        data["option"] = option_value
-        super().__init__(**data)
+    def __init__(self, option: AfterWorkOption, **data):
+        super().__init__(option=option, **data)
 
     def resolve(
         self, last_speaker: ConversableAgent, messages: list[dict[str, Any]], groupchat: GroupChat
@@ -47,9 +46,8 @@ class AfterWorkTargetAgent(AfterWorkTarget):
     agent_name: str
 
     def __init__(self, agent: ConversableAgent, **data):
-        # Pass the agent name through Pydantic's initialization
-        data["agent_name"] = agent.name
-        super().__init__(**data)
+        # Store the name from the agent for serialisation
+        super().__init__(agent_name=agent.name, **data)
 
     def resolve(
         self, last_speaker: ConversableAgent, messages: list[dict[str, Any]], groupchat: GroupChat
@@ -65,6 +63,9 @@ class AfterWorkTargetAgentName(AfterWorkTarget):
     """Target that represents an agent name directly."""
 
     agent_name: str
+
+    def __init__(self, agent_name: str, **data):
+        super().__init__(agent_name=agent_name, **data)
 
     def resolve(self, last_speaker: ConversableAgent, messages: list[dict[str, Any]], groupchat: GroupChat) -> str:
         """Resolve to the agent name string."""
@@ -87,6 +88,9 @@ class AfterWorkSelectionMessageString(AfterWorkSelectionMessage):
 
     template: str
 
+    def __init__(self, template: str, **data):
+        super().__init__(template=template, **data)
+
     def get_message(self, agent: Any, messages: list[dict[str, Any]]) -> str:
         """Get the message string."""
         return self.template
@@ -96,6 +100,9 @@ class AfterWorkSelectionMessageContextStr(AfterWorkSelectionMessage):
     """Selection message that uses a ContextStr template."""
 
     context_str_template: str
+
+    def __init__(self, context_str_template: str, **data):
+        super().__init__(context_str_template=context_str_template, **data)
 
     def get_message(self, agent: ConversableAgent, messages: list[dict[str, Any]]) -> str:
         """Get the formatted message with context variables substituted."""
