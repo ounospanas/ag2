@@ -23,13 +23,11 @@ from ..user_proxy_agent import UserProxyAgent
 from ..utils import ContextExpression
 from .after_work import (
     AfterWork,
-    AfterWorkOption,
     AfterWorkSelectionMessage,
-    AfterWorkTargetAgent,
-    AfterWorkTargetOption,
 )
 from .context_str import ContextStr
 from .context_variables import __CONTEXT_VARIABLES_PARAM_NAME__, ContextVariables
+from .transition_target import AfterWorkOptionTarget, AgentTarget, TransitionOption
 
 __all__ = [
     "OnCondition",
@@ -43,47 +41,6 @@ __all__ = [
 
 # Created tool executor's name
 __TOOL_EXECUTOR_NAME__ = "_Swarm_Tool_Executor"
-
-
-'''
-@dataclass
-@export_module("autogen")
-class AfterWork:  # noqa: N801
-    """Handles the next step in the conversation when an agent doesn't suggest a tool call or a handoff.
-
-    Args:
-        agent (Union[AfterWorkOption, ConversableAgent, str, Callable[..., Any]]): The agent to hand off to or the after work option. Can be a ConversableAgent, a string name of a ConversableAgent, an AfterWorkOption, or a Callable.
-            The Callable signature is:
-                def my_after_work_func(last_speaker: ConversableAgent, messages: list[dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, ConversableAgent, str]:
-        next_agent_selection_msg (Optional[Union[str, Callable[..., Any]]]): Optional message to use for the agent selection (in internal group chat), only valid for when agent is AfterWorkOption.SWARM_MANAGER.
-            If a string, it will be used as a template and substitute the context variables.
-            If a Callable, it should have the signature:
-                def my_selection_message(agent: ConversableAgent, messages: list[dict[str, Any]]) -> str
-    """
-
-    agent: Union[AfterWorkOption, ConversableAgent, str, Callable[..., Any]]
-    next_agent_selection_msg: Optional[
-        Union[str, ContextStr, Callable[[ConversableAgent, list[dict[str, Any]]], str]]
-    ] = None
-
-    def __post_init__(self) -> None:
-        if isinstance(self.agent, str):
-            self.agent = AfterWorkOption(self.agent.upper())
-
-        # next_agent_selection_msg is only valid for when agent is AfterWorkOption.SWARM_MANAGER, but isn't mandatory
-        if self.next_agent_selection_msg is not None:
-            if not (
-                isinstance(self.next_agent_selection_msg, (str, ContextStr)) or callable(self.next_agent_selection_msg)
-            ):
-                raise ValueError("next_agent_selection_msg must be a string, ContextStr, or a Callable")
-
-            if self.agent != "group_manager":
-                warnings.warn(
-                    "next_agent_selection_msg is only valid for agent='group_manager'. Ignoring the value.",
-                    UserWarning,
-                )
-                self.next_agent_selection_msg = None
-'''
 
 
 @dataclass
@@ -201,7 +158,7 @@ def _establish_swarm_agent(agent: ConversableAgent) -> None:
         """Customise the __str__ method to show the agent name for transition messages."""
         return f"Swarm agent --> {self.name}"
 
-    agent._swarm_after_work: AfterWorkTargetAgent = None
+    agent._swarm_after_work: AfterWork = None
     agent._swarm_after_work_selection_msg: AfterWorkSelectionMessage = None
 
     # Store nested chats hand offs as we'll establish these in the initiate_swarm_chat
@@ -439,7 +396,7 @@ def _create_nested_chats(agent: ConversableAgent, nested_chat_agents: list[Conve
         )
 
         # After the nested chat is complete, transfer back to the parent agent
-        register_hand_off(nested_chat_agent, AfterWork(target=AfterWorkTargetAgent(agent)))
+        register_hand_off(nested_chat_agent, AfterWork(target=AgentTarget(agent)))
 
         return nested_chat_agent
 
@@ -607,7 +564,7 @@ def _determine_next_agent(
     tool_execution: ConversableAgent,
     swarm_agent_names: list[str],
     user_agent: Optional[UserProxyAgent],
-    swarm_after_work: Optional[Union[AfterWorkOption, Callable[..., Any]]],
+    swarm_after_work: Optional[Union[TransitionOption, Callable[..., Any]]],
 ) -> Optional[Union[Agent, Literal["auto"]]]:
     """Determine the next agent in the conversation.
 
@@ -633,7 +590,7 @@ def _determine_next_agent(
         next_agent: Optional[Agent] = tool_execution._swarm_next_agent  # type: ignore[attr-defined]
         tool_execution._swarm_next_agent = None  # type: ignore[attr-defined]
 
-        if not isinstance(next_agent, AfterWorkOption):
+        if not isinstance(next_agent, TransitionOption):
             # Check for string, access agent from group chat.
 
             if isinstance(next_agent, str):
@@ -690,7 +647,7 @@ def _determine_next_agent(
             raise ValueError(f"Invalid agent name in after_work: {after_work_condition}")
     elif isinstance(after_work_condition, ConversableAgent):
         return after_work_condition
-    elif isinstance(after_work_condition, AfterWorkOption):
+    elif isinstance(after_work_condition, TransitionOption):
         if after_work_condition == "terminate":
             return None
         elif after_work_condition == "revert_to_user":
@@ -709,7 +666,7 @@ def create_swarm_transition(
     tool_execution: ConversableAgent,
     swarm_agent_names: list[str],
     user_agent: Optional[UserProxyAgent],
-    swarm_after_work: Optional[Union[AfterWorkOption, Callable[..., Any]]],
+    swarm_after_work: Optional[Union[TransitionOption, Callable[..., Any]]],
 ) -> Callable[[ConversableAgent, GroupChat], Optional[Union[Agent, Literal["auto"]]]]:
     """Creates a transition function for swarm chat with enclosed state for the use_initial_agent.
 
@@ -767,7 +724,7 @@ def _create_swarm_manager(
     # Ensure that our manager has an LLM Config if we have any AfterWorkOption.SWARM_MANAGER after works
     if manager.llm_config is False:
         for agent in agents:
-            if agent._swarm_after_work and agent._swarm_after_work.target == AfterWorkTargetOption("group_manager"):
+            if agent._swarm_after_work and agent._swarm_after_work.target == AfterWorkOptionTarget("group_manager"):
                 raise ValueError(
                     "The swarm manager doesn't have an LLM Config and it is required for AfterWorkOption.SWARM_MANAGER. Use the swarm_manager_args to specify the LLM Config for the swarm manager."
                 )
@@ -836,9 +793,9 @@ def initiate_group_chat(
     context_variables: Optional[ContextVariables] = None,
     after_work: Optional[
         Union[
-            AfterWorkOption,
+            TransitionOption,
             Callable[
-                [ConversableAgent, list[dict[str, Any]], GroupChat], Union[AfterWorkOption, ConversableAgent, str]
+                [ConversableAgent, list[dict[str, Any]], GroupChat], Union[TransitionOption, ConversableAgent, str]
             ],
         ]
     ] = "terminate",
@@ -939,9 +896,9 @@ async def a_initiate_group_chat(
     context_variables: Optional[ContextVariables] = None,
     after_work: Optional[
         Union[
-            AfterWorkOption,
+            TransitionOption,
             Callable[
-                [ConversableAgent, list[dict[str, Any]], GroupChat], Union[AfterWorkOption, ConversableAgent, str]
+                [ConversableAgent, list[dict[str, Any]], GroupChat], Union[TransitionOption, ConversableAgent, str]
             ],
         ]
     ] = "terminate",
@@ -982,7 +939,7 @@ class SwarmResult(BaseModel):
     """Encapsulates the possible return values for a swarm agent function."""
 
     values: str = ""
-    agent: Optional[Union[ConversableAgent, AfterWorkOption, str]] = None
+    agent: Optional[Union[ConversableAgent, TransitionOption, str]] = None
     context_variables: ContextVariables
 
     @field_serializer("agent", when_used="json")

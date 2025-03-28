@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 from .... import Agent, ConversableAgent, UpdateSystemMessage
 from ....agentchat.contrib.rag.query_engine import RAGQueryEngine
-from ....agentchat.group.after_work import AfterWork, AfterWorkTargetAgent, AfterWorkTargetOption
+from ....agentchat.group.after_work import AfterWork
 from ....agentchat.group.context_variables import ContextVariables
 from ....agentchat.group.multi_agent_chat import (
     OnCondition,
@@ -21,6 +21,7 @@ from ....agentchat.group.multi_agent_chat import (
     initiate_group_chat,
     register_hand_off,
 )
+from ....agentchat.group.transition_target import AfterWorkOptionTarget, AgentTarget
 from ....agentchat.utils import ContextExpression
 from ....doc_utils import export_module
 from ....llm_config import LLMConfig
@@ -277,7 +278,7 @@ class DocAgent(ConversableAgent):
         register_hand_off(
             agent=self._triage_agent,
             hand_to=[
-                AfterWork(AfterWorkTargetAgent(self._task_manager_agent)),
+                AfterWork(AgentTarget(self._task_manager_agent)),
             ],
         )
 
@@ -403,28 +404,28 @@ class DocAgent(ConversableAgent):
                     "Call this function if all work is done and a summary will be created",
                     available=summary_task,
                 ),
-                AfterWork(target=AfterWorkTargetOption("stay")),
+                AfterWork(target=AfterWorkOptionTarget("stay")),
             ],
         )
 
         register_hand_off(
             agent=self._data_ingestion_agent,
             hand_to=[
-                AfterWork(AfterWorkTargetAgent(self._task_manager_agent)),
+                AfterWork(AgentTarget(self._task_manager_agent)),
             ],
         )
 
         register_hand_off(
             agent=self._query_agent,
             hand_to=[
-                AfterWork(AfterWorkTargetAgent(self._task_manager_agent)),
+                AfterWork(AgentTarget(self._task_manager_agent)),
             ],
         )
 
         register_hand_off(
             agent=self._summary_agent,
             hand_to=[
-                AfterWork(AfterWorkTargetOption("terminate")),
+                AfterWork(AfterWorkOptionTarget("terminate")),
             ],
         )
 
@@ -432,7 +433,7 @@ class DocAgent(ConversableAgent):
         register_hand_off(
             agent=self._error_agent,
             hand_to=[
-                AfterWork(AfterWorkTargetOption("terminate")),
+                AfterWork(AfterWorkOptionTarget("terminate")),
             ],
         )
 
