@@ -5,7 +5,6 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from ...oai import OpenAIWrapper
 from .context_variables import ContextVariables
 
 __all__ = ["ContextStr"]
@@ -36,11 +35,13 @@ class ContextStr:
         Returns:
             Optional[str]: The formatted string with context variables substituted.
         """
-        return OpenAIWrapper.instantiate(
-            template=self.template,
-            context=context_variables.to_dict(),
-            allow_format_str_template=True,
-        )
+
+        context = context_variables.to_dict()
+
+        if not context:
+            return self.template
+
+        return self.template.format(**context)
 
     def __str__(self) -> str:
         return f"ContextStr, unformatted: {self.template}"

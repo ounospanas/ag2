@@ -2,14 +2,17 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional
 
 from pydantic import BaseModel
 
-from autogen import ConversableAgent, GroupChat
-
 from .context_str import ContextStr
 
+if TYPE_CHECKING:
+    # Avoid circular import
+    from ..conversable_agent import ConversableAgent
+    from ..groupchat import GroupChat
+    
 __all__ = ["AfterWorkOption"]
 
 AfterWorkOption = Literal["terminate", "revert_to_user", "stay", "group_manager"]
@@ -20,7 +23,7 @@ AfterWorkOption = Literal["terminate", "revert_to_user", "stay", "group_manager"
 class AfterWorkTarget(BaseModel):
     """Base class for all AfterWork targets."""
 
-    def resolve(self, last_speaker: ConversableAgent, messages: list[dict[str, Any]], groupchat: GroupChat) -> Any:
+    def resolve(self, last_speaker: "ConversableAgent", messages: list[dict[str, Any]], groupchat: "GroupChat") -> Any:
         """Resolve to a concrete agent or option."""
         raise NotImplementedError("Requires subclasses to implement.")
 
@@ -34,7 +37,7 @@ class AfterWorkTargetOption(AfterWorkTarget):
         super().__init__(option=option, **data)
 
     def resolve(
-        self, last_speaker: ConversableAgent, messages: list[dict[str, Any]], groupchat: GroupChat
+        self, last_speaker: "ConversableAgent", messages: list[dict[str, Any]], groupchat: "GroupChat"
     ) -> AfterWorkOption:
         """Resolve to the option value."""
         return self.option
@@ -45,13 +48,13 @@ class AfterWorkTargetAgent(AfterWorkTarget):
 
     agent_name: str
 
-    def __init__(self, agent: ConversableAgent, **data):
+    def __init__(self, agent: "ConversableAgent", **data):
         # Store the name from the agent for serialisation
         super().__init__(agent_name=agent.name, **data)
 
     def resolve(
-        self, last_speaker: ConversableAgent, messages: list[dict[str, Any]], groupchat: GroupChat
-    ) -> ConversableAgent:
+        self, last_speaker: "ConversableAgent", messages: list[dict[str, Any]], groupchat: "GroupChat"
+    ) -> "ConversableAgent":
         """Resolve to the actual agent object."""
         for agent in groupchat.agents:
             if agent.name == self.agent_name:
@@ -67,7 +70,7 @@ class AfterWorkTargetAgentName(AfterWorkTarget):
     def __init__(self, agent_name: str, **data):
         super().__init__(agent_name=agent_name, **data)
 
-    def resolve(self, last_speaker: ConversableAgent, messages: list[dict[str, Any]], groupchat: GroupChat) -> str:
+    def resolve(self, last_speaker: "ConversableAgent", messages: list[dict[str, Any]], groupchat: "GroupChat") -> str:
         """Resolve to the agent name string."""
         return self.agent_name
 
@@ -78,7 +81,7 @@ class AfterWorkTargetAgentName(AfterWorkTarget):
 class AfterWorkSelectionMessage(BaseModel):
     """Base class for all AfterWork selection message types."""
 
-    def get_message(self, agent: Any, messages: list[dict[str, Any]]) -> str:
+    def get_message(self, agent: "ConversableAgent", messages: list[dict[str, Any]]) -> str:
         """Get the formatted message."""
         raise NotImplementedError("Requires subclasses to implement.")
 
@@ -104,7 +107,7 @@ class AfterWorkSelectionMessageContextStr(AfterWorkSelectionMessage):
     def __init__(self, context_str_template: str, **data):
         super().__init__(context_str_template=context_str_template, **data)
 
-    def get_message(self, agent: ConversableAgent, messages: list[dict[str, Any]]) -> str:
+    def get_message(self, agent: "ConversableAgent", messages: list[dict[str, Any]]) -> str:
         """Get the formatted message with context variables substituted."""
         context_str = ContextStr(self.context_str_template)
         return context_str.format(agent.context_variables)
