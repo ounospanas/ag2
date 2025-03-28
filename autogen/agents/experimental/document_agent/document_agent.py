@@ -12,10 +12,9 @@ from pydantic import BaseModel, Field
 
 from .... import Agent, ConversableAgent, UpdateSystemMessage
 from ....agentchat.contrib.rag.query_engine import RAGQueryEngine
+from ....agentchat.group.after_work import AfterWork, AfterWorkTargetAgent, AfterWorkTargetOption
 from ....agentchat.group.context_variables import ContextVariables
 from ....agentchat.group.multi_agent_chat import (
-    AfterWork,
-    AfterWorkOption,
     OnCondition,
     OnContextCondition,
     SwarmResult,
@@ -278,7 +277,7 @@ class DocAgent(ConversableAgent):
         register_hand_off(
             agent=self._triage_agent,
             hand_to=[
-                AfterWork(self._task_manager_agent),
+                AfterWork(AfterWorkTargetAgent(self._task_manager_agent)),
             ],
         )
 
@@ -401,28 +400,28 @@ class DocAgent(ConversableAgent):
                     "Call this function if all work is done and a summary will be created",
                     available=summary_task,
                 ),
-                AfterWork(AfterWorkOption.STAY),
+                AfterWork(target=AfterWorkTargetOption("stay")),
             ],
         )
 
         register_hand_off(
             agent=self._data_ingestion_agent,
             hand_to=[
-                AfterWork(self._task_manager_agent),
+                AfterWork(AfterWorkTargetAgent(self._task_manager_agent)),
             ],
         )
 
         register_hand_off(
             agent=self._query_agent,
             hand_to=[
-                AfterWork(self._task_manager_agent),
+                AfterWork(AfterWorkTargetAgent(self._task_manager_agent)),
             ],
         )
 
         register_hand_off(
             agent=self._summary_agent,
             hand_to=[
-                AfterWork(AfterWorkOption.TERMINATE),
+                AfterWork(AfterWorkTargetOption("terminate")),
             ],
         )
 
@@ -430,7 +429,7 @@ class DocAgent(ConversableAgent):
         register_hand_off(
             agent=self._error_agent,
             hand_to=[
-                AfterWork(AfterWorkOption.TERMINATE),
+                AfterWork(AfterWorkTargetOption("terminate")),
             ],
         )
 
@@ -468,7 +467,7 @@ class DocAgent(ConversableAgent):
             agents=swarm_agents,
             messages=self._get_document_input_message(messages),
             context_variables=context_variables,
-            after_work=AfterWorkOption.TERMINATE,
+            after_work="terminate",
         )
         if last_speaker == self._error_agent:
             # If we finish with the error agent, we return their message which contains the error

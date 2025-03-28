@@ -6,7 +6,6 @@ import copy
 import inspect
 import warnings
 from dataclasses import dataclass
-from enum import Enum
 from functools import partial
 from types import MethodType
 from typing import Annotated, Any, Callable, Literal, Optional, Union
@@ -23,12 +22,17 @@ from ..conversable_agent import ConversableAgent
 from ..groupchat import SELECT_SPEAKER_PROMPT_TEMPLATE, GroupChat, GroupChatManager
 from ..user_proxy_agent import UserProxyAgent
 from ..utils import ContextExpression
+from .after_work import (
+    AfterWork,
+    AfterWorkOption,
+    AfterWorkSelectionMessage,
+    AfterWorkTargetAgent,
+    AfterWorkTargetOption,
+)
 from .context_str import ContextStr
 from .context_variables import __CONTEXT_VARIABLES_PARAM_NAME__, ContextVariables
 
 __all__ = [
-    "AfterWork",
-    "AfterWorkOption",
     "OnCondition",
     "OnContextCondition",
     "SwarmAgent",
@@ -43,14 +47,7 @@ __all__ = [
 __TOOL_EXECUTOR_NAME__ = "_Swarm_Tool_Executor"
 
 
-@export_module("autogen")
-class AfterWorkOption(Enum):
-    TERMINATE = "TERMINATE"
-    REVERT_TO_USER = "REVERT_TO_USER"
-    STAY = "STAY"
-    SWARM_MANAGER = "SWARM_MANAGER"
-
-
+'''
 @dataclass
 @export_module("autogen")
 class AfterWork:  # noqa: N801
@@ -82,12 +79,13 @@ class AfterWork:  # noqa: N801
             ):
                 raise ValueError("next_agent_selection_msg must be a string, ContextStr, or a Callable")
 
-            if self.agent != AfterWorkOption.SWARM_MANAGER:
+            if self.agent != "group_manager":
                 warnings.warn(
-                    "next_agent_selection_msg is only valid for agent=AfterWorkOption.SWARM_MANAGER. Ignoring the value.",
+                    "next_agent_selection_msg is only valid for agent='group_manager'. Ignoring the value.",
                     UserWarning,
                 )
                 self.next_agent_selection_msg = None
+'''
 
 
 @dataclass
@@ -205,8 +203,8 @@ def _establish_swarm_agent(agent: ConversableAgent) -> None:
         """Customise the __str__ method to show the agent name for transition messages."""
         return f"Swarm agent --> {self.name}"
 
-    agent._swarm_after_work = None  # type: ignore[attr-defined]
-    agent._swarm_after_work_selection_msg = None  # type: ignore[attr-defined]
+    agent._swarm_after_work: AfterWorkTargetAgent = None
+    agent._swarm_after_work_selection_msg: AfterWorkSelectionMessage = None
 
     # Store nested chats hand offs as we'll establish these in the initiate_swarm_chat
     # List of Dictionaries containing the nested_chats and condition
@@ -443,7 +441,7 @@ def _create_nested_chats(agent: ConversableAgent, nested_chat_agents: list[Conve
         )
 
         # After the nested chat is complete, transfer back to the parent agent
-        register_hand_off(nested_chat_agent, AfterWork(agent=agent))
+        register_hand_off(nested_chat_agent, AfterWork(target=AfterWorkTargetAgent(agent)))
 
         return nested_chat_agent
 
@@ -695,13 +693,13 @@ def _determine_next_agent(
     elif isinstance(after_work_condition, ConversableAgent):
         return after_work_condition
     elif isinstance(after_work_condition, AfterWorkOption):
-        if after_work_condition == AfterWorkOption.TERMINATE:
+        if after_work_condition == "terminate":
             return None
-        elif after_work_condition == AfterWorkOption.REVERT_TO_USER:
+        elif after_work_condition == "revert_to_user":
             return None if user_agent is None else user_agent
-        elif after_work_condition == AfterWorkOption.STAY:
+        elif after_work_condition == "stay":
             return last_swarm_speaker
-        elif after_work_condition == AfterWorkOption.SWARM_MANAGER:
+        elif after_work_condition == "group_manager":
             _prepare_groupchat_auto_speaker(groupchat, last_swarm_speaker, after_work_next_agent_selection_msg)
             return "auto"
     else:
@@ -771,11 +769,7 @@ def _create_swarm_manager(
     # Ensure that our manager has an LLM Config if we have any AfterWorkOption.SWARM_MANAGER after works
     if manager.llm_config is False:
         for agent in agents:
-            if (
-                agent._swarm_after_work  # type: ignore[attr-defined]
-                and isinstance(agent._swarm_after_work.agent, AfterWorkOption)  # type: ignore[attr-defined]
-                and agent._swarm_after_work.agent == AfterWorkOption.SWARM_MANAGER  # type: ignore[attr-defined]
-            ):
+            if agent._swarm_after_work and agent._swarm_after_work.target == AfterWorkTargetOption("group_manager"):
                 raise ValueError(
                     "The swarm manager doesn't have an LLM Config and it is required for AfterWorkOption.SWARM_MANAGER. Use the swarm_manager_args to specify the LLM Config for the swarm manager."
                 )
@@ -849,7 +843,7 @@ def initiate_group_chat(
                 [ConversableAgent, list[dict[str, Any]], GroupChat], Union[AfterWorkOption, ConversableAgent, str]
             ],
         ]
-    ] = AfterWorkOption.TERMINATE,
+    ] = "terminate",
     exclude_transit_message: bool = True,
 ) -> tuple[ChatResult, ContextVariables, ConversableAgent]:
     """Initialize and run a group chat
@@ -952,7 +946,7 @@ async def a_initiate_group_chat(
                 [ConversableAgent, list[dict[str, Any]], GroupChat], Union[AfterWorkOption, ConversableAgent, str]
             ],
         ]
-    ] = AfterWorkOption.TERMINATE,
+    ] = "terminate",
     exclude_transit_message: bool = True,
 ) -> tuple[ChatResult, dict[str, Any], ConversableAgent]:
     """Initialize and run a swarm chat asynchronously
@@ -1046,10 +1040,8 @@ def register_hand_off(
 
     for transit in hand_to:
         if isinstance(transit, AfterWork):
-            if not (isinstance(transit.agent, (AfterWorkOption, ConversableAgent, str)) or callable(transit.agent)):
-                raise ValueError(f"Invalid AfterWork agent: {transit.agent}")
-            agent._swarm_after_work = transit  # type: ignore[attr-defined]
-            agent._swarm_after_work_selection_msg = transit.next_agent_selection_msg  # type: ignore[attr-defined]
+            agent._swarm_after_work = transit.target
+            agent._swarm_after_work_selection_msg = transit.selection_message
         elif isinstance(transit, OnCondition):
             if isinstance(transit.target, ConversableAgent):
                 # Transition to agent

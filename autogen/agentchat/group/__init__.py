@@ -2,10 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 #
+from .after_work import AfterWorkOption
 from .context_str import ContextStr
 from .context_variables import ContextVariables
 
 __all__ = [
+    "AfterWorkOption",
     "ContextStr",
     "ContextVariables",
 ]
