@@ -282,11 +282,11 @@ def _run_oncontextconditions(
             if callable(on_condition.available):
                 is_available = on_condition.available(agent, next(iter(agent.chat_messages.values())))
             elif isinstance(on_condition.available, str):
-                is_available = agent.get_context(on_condition.available) or False
+                is_available = agent.context_variables.get(on_condition.available) or False
             elif isinstance(on_condition.available, ContextExpression):
-                is_available = on_condition.available.evaluate(agent._context_variables)
+                is_available = on_condition.available.evaluate(agent.context_variables)
 
-        if is_available and on_condition._context_condition.evaluate(agent._context_variables):
+        if is_available and on_condition._context_condition.evaluate(agent.context_variables):
             # Condition has been met, we'll set the Tool Executor's _swarm_next_agent
             # attribute and that will be picked up on the next iteration when
             # _determine_next_agent is called
@@ -313,7 +313,7 @@ def _modify_context_variables_param(f: Callable[..., Any], context_variables: Co
 
     to:
 
-    def some_function(some_variable: int, context_variables: Annotated[ContextVariables, Depends(on(self._context_variables))]) -> str:
+    def some_function(some_variable: int, context_variables: Annotated[ContextVariables, Depends(on(self.context_variables))]) -> str:
     """
     sig = inspect.signature(f)
 
@@ -561,7 +561,7 @@ def _setup_context_variables(
         context_variables: Context variables to assign to all agents.
     """
     for agent in agents + [tool_execution] + [manager]:
-        agent._context_variables = context_variables
+        agent.context_variables = context_variables
 
 
 def _cleanup_temp_user_messages(chat_result: ChatResult) -> None:
@@ -621,7 +621,7 @@ def _prepare_groupchat_auto_speaker(
 
         # Then replace the context variables
         groupchat.select_speaker_prompt_template = agent_list_replaced_string.format(  # type: ignore[assignment]
-            last_swarm_agent._context_variables
+            last_swarm_agent.context_variables
         )
     elif callable(after_work_next_agent_selection_msg):
         groupchat.select_speaker_prompt_template = substitute_agentlist(
@@ -1175,9 +1175,9 @@ def _update_conditional_functions(agent: ConversableAgent, messages: Optional[li
             if callable(on_condition.available):
                 is_available = on_condition.available(agent, next(iter(agent.chat_messages.values())))
             elif isinstance(on_condition.available, str):
-                is_available = agent.get_context(on_condition.available) or False
+                is_available = agent.context_variables.get(on_condition.available) or False
             elif isinstance(on_condition.available, ContextExpression):
-                is_available = on_condition.available.evaluate(agent._context_variables)
+                is_available = on_condition.available.evaluate(agent.context_variables)
 
         # first remove the function if it exists
         if func_name in agent._function_map:
@@ -1188,7 +1188,7 @@ def _update_conditional_functions(agent: ConversableAgent, messages: Optional[li
         if is_available:
             condition = on_condition.condition
             if isinstance(condition, ContextStr):
-                condition = condition.format(context_variables=agent._context_variables)
+                condition = condition.format(context_variables=agent.context_variables)
             elif callable(condition):
                 condition = condition(agent, messages)
 
@@ -1243,7 +1243,7 @@ def _generate_swarm_tool_reply(
 
                 if isinstance(content, SwarmResult):
                     if content.context_variables != {}:
-                        agent._context_variables.update(content.context_variables)
+                        agent.context_variables.update(content.context_variables)
                     if content.agent is not None:
                         next_agent = content.agent  # type: ignore[assignment]
                 elif isinstance(content, Agent):

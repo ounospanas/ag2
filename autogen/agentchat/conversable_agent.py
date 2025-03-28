@@ -266,7 +266,7 @@ class ConversableAgent(LLMAgent):
         self.register_reply([Agent, None], ConversableAgent.generate_oai_reply)
         self.register_reply([Agent, None], ConversableAgent.a_generate_oai_reply, ignore_async_in_sync_chat=True)
 
-        self._context_variables = context_variables if context_variables is not None else ContextVariables()
+        self.context_variables = context_variables if context_variables is not None else ContextVariables()
 
         self._tools: list[Tool] = []
 
@@ -435,7 +435,7 @@ class ConversableAgent(LLMAgent):
                             # use the context_variables for substitution
                             sys_message = OpenAIWrapper.instantiate(
                                 template=update_func.content_updater,
-                                context=agent._context_variables.to_dict(),
+                                context=agent.context_variables.to_dict(),
                                 allow_format_str_template=True,
                             )
                         else:
@@ -913,51 +913,6 @@ class ConversableAgent(LLMAgent):
                 not use_async if use_async is not None else kwargs.get("ignore_async_in_sync_chat")
             ),
         )
-
-    def get_context(self, key: str, default: Any = None) -> Any:
-        """Get a context variable by key.
-
-        Args:
-            key: The key to look up
-            default: Value to return if key doesn't exist
-        Returns:
-            The value associated with the key, or default if not found
-        """
-        return self._context_variables.get(key, default)
-
-    def set_context(self, key: str, value: Any) -> None:
-        """Set a context variable.
-
-        Args:
-            key: The key to set
-            value: The value to associate with the key
-        """
-        self._context_variables[key] = value
-
-    def update_context(self, context_variables: dict[str, Any]) -> None:
-        """Update multiple context variables at once.
-
-        Args:
-            context_variables: Dictionary of variables to update/add
-        """
-        self._context_variables.update(context_variables)
-
-    def pop_context(self, key: str, default: Any = None) -> Any:
-        """Remove and return a context variable.
-
-        Args:
-            key: The key to remove
-            default: Value to return if key doesn't exist
-        Returns:
-            The value that was removed, or default if key not found
-        """
-        value = self._context_variables.get(key, default)
-
-        # Then remove the key (only if it exists)
-        if key in self._context_variables:
-            self._context_variables.remove(key)
-
-        return value
 
     @property
     def system_message(self) -> str:

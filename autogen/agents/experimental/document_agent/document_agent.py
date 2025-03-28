@@ -6,7 +6,7 @@ import logging
 from copy import deepcopy
 from enum import Enum
 from pathlib import Path
-from typing import Annotated, Any, Optional, Union
+from typing import Annotated, Any, Optional, Union, cast
 
 from pydantic import BaseModel, Field
 
@@ -211,7 +211,7 @@ class DocAgent(ConversableAgent):
         )
         self.register_reply([ConversableAgent, None], self.generate_inner_swarm_reply, position=0)
 
-        self._context_variables: ContextVariables = ContextVariables(
+        self.context_variables: ContextVariables = ContextVariables(
             data={
                 "DocumentsToIngest": [],
                 "DocumentsIngested": [],
@@ -237,9 +237,9 @@ class DocAgent(ConversableAgent):
 
         def update_ingested_documents() -> None:
             """Updates the list of ingested documents, persisted so we can keep a list over multiple replies"""
-            agent_documents_ingested = self._triage_agent.get_context("DocumentsIngested")
+            agent_documents_ingested = self._triage_agent.context_variables.get("DocumentsIngested", [])
             # Update self.documents_ingested with any new documents ingested
-            for doc in agent_documents_ingested:
+            for doc in agent_documents_ingested:  # type: ignore[union-attr]
                 if doc not in self.documents_ingested:
                     self.documents_ingested.append(doc)
 
@@ -346,6 +346,9 @@ class DocAgent(ConversableAgent):
             """Create the summary agent prompt and updates ingested documents"""
             update_ingested_documents()
 
+            documents_to_ingest: list[Ingest] = cast(list[Ingest], agent.context_variables.get("DocumentsToIngest", []))
+            queries_to_run: list[Query] = cast(list[Query], agent.context_variables.get("QueriesToRun", []))
+
             system_message = (
                 "You are a summary agent and you provide a summary of all completed tasks and the list of queries and their answers. "
                 "Output two sections: 'Ingestions:' and 'Queries:' with the results of the tasks. Number the ingestions and queries. "
@@ -357,10 +360,10 @@ class DocAgent(ConversableAgent):
                 "For each query, output the full citation contents and list them one by one,"
                 "format each citation as '\nSource [X] (chunk file_path here):\n\nChunk X:\n(text_chunk here)' and mark a separator between each citation using '\n#########################\n\n'."
                 "If there are no citations at all, DON'T INCLUDE ANY mention of citations.\n"
-                f"Documents ingested: {agent.get_context('DocumentsIngested')}\n"
-                f"Documents left to ingest: {len(agent.get_context('DocumentsToIngest'))}\n"
-                f"Queries left to run: {len(agent.get_context('QueriesToRun'))}\n"
-                f"Query and Answers and Citations: {agent.get_context('QueryResults')}\n"
+                f"Documents ingested: {documents_to_ingest}\n"
+                f"Documents left to ingest: {len(documents_to_ingest)}\n"
+                f"Queries left to run: {len(queries_to_run)}\n"
+                f"Query and Answers and Citations: {queries_to_run}\n"
             )
 
             return system_message
@@ -372,11 +375,11 @@ class DocAgent(ConversableAgent):
         )
 
         def summary_task(agent: ConversableAgent, messages: list[dict[str, Any]]) -> bool:
-            return (
-                len(agent.get_context("DocumentsToIngest")) == 0
-                and len(agent.get_context("QueriesToRun")) == 0
-                and agent.get_context("CompletedTaskCount")
-            )
+            documents_to_ingest: list[Ingest] = cast(list[Ingest], agent.context_variables.get("DocumentsToIngest", []))
+            queries_to_run: list[Query] = cast(list[Query], agent.context_variables.get("QueriesToRun", []))
+            completed_task_count = cast(bool, agent.context_variables.get("CompletedTaskCount", 0))
+
+            return len(documents_to_ingest) == 0 and len(queries_to_run) == 0 and completed_task_count
 
         register_hand_off(
             agent=self._task_manager_agent,

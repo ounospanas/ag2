@@ -107,7 +107,7 @@ class AfterWorkSelectionMessageContextStr(AfterWorkSelectionMessage):
     def get_message(self, agent: ConversableAgent, messages: list[dict[str, Any]]) -> str:
         """Get the formatted message with context variables substituted."""
         context_str = ContextStr(self.context_str_template)
-        return context_str.format(agent._context_variables)
+        return context_str.format(agent.context_variables)
 
 
 # AfterWork
