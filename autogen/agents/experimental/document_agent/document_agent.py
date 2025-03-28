@@ -12,13 +12,14 @@ from pydantic import BaseModel, Field
 
 from .... import Agent, ConversableAgent, UpdateSystemMessage
 from ....agentchat.contrib.rag.query_engine import RAGQueryEngine
-from ....agentchat.contrib.swarm_agent import (
+from ....agentchat.group.context_variables import ContextVariables
+from ....agentchat.group.multi_agent_chat import (
     AfterWork,
     AfterWorkOption,
     OnCondition,
     OnContextCondition,
     SwarmResult,
-    initiate_swarm_chat,
+    initiate_group_chat,
     register_hand_off,
 )
 from ....agentchat.utils import ContextExpression
@@ -211,12 +212,14 @@ class DocAgent(ConversableAgent):
         )
         self.register_reply([ConversableAgent, None], self.generate_inner_swarm_reply, position=0)
 
-        self._context_variables: dict[str, Any] = {
-            "DocumentsToIngest": [],
-            "DocumentsIngested": [],
-            "QueriesToRun": [],
-            "QueryResults": [],
-        }
+        self._context_variables: ContextVariables = ContextVariables(
+            data={
+                "DocumentsToIngest": [],
+                "DocumentsIngested": [],
+                "QueriesToRun": [],
+                "QueryResults": [],
+            }
+        )
 
         self._triage_agent = DocumentTriageAgent(llm_config=llm_config)
 
@@ -442,13 +445,16 @@ class DocAgent(ConversableAgent):
         config: Optional[OpenAIWrapper] = None,
     ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
         """Reply function that generates the inner swarm reply for the DocAgent."""
-        context_variables = {
-            "CompletedTaskCount": 0,
-            "DocumentsToIngest": [],
-            "DocumentsIngested": self.documents_ingested,
-            "QueriesToRun": [],
-            "QueryResults": [],
-        }
+        context_variables: ContextVariables = ContextVariables(
+            data={
+                "CompletedTaskCount": 0,
+                "DocumentsToIngest": [],
+                "DocumentsIngested": self.documents_ingested,
+                "QueriesToRun": [],
+                "QueryResults": [],
+            }
+        )
+
         swarm_agents = [
             self._triage_agent,
             self._task_manager_agent,
@@ -457,7 +463,7 @@ class DocAgent(ConversableAgent):
             self._summary_agent,
             self._error_agent,
         ]
-        chat_result, context_variables, last_speaker = initiate_swarm_chat(
+        chat_result, context_variables, last_speaker = initiate_group_chat(
             initial_agent=self._triage_agent,
             agents=swarm_agents,
             messages=self._get_document_input_message(messages),

@@ -20,23 +20,21 @@ from ...tools.dependency_injection import inject_params, on
 from ..agent import Agent
 from ..chat import ChatResult
 from ..conversable_agent import ConversableAgent
-from ..group.context_str import ContextStr
-from ..group.context_variables import __CONTEXT_VARIABLES_PARAM_NAME__, ContextVariables
 from ..groupchat import SELECT_SPEAKER_PROMPT_TEMPLATE, GroupChat, GroupChatManager
 from ..user_proxy_agent import UserProxyAgent
 from ..utils import ContextExpression
+from .context_str import ContextStr
+from .context_variables import __CONTEXT_VARIABLES_PARAM_NAME__, ContextVariables
 
 __all__ = [
-    "AFTER_WORK",
-    "ON_CONDITION",
     "AfterWork",
     "AfterWorkOption",
     "OnCondition",
     "OnContextCondition",
     "SwarmAgent",
-    "a_initiate_swarm_chat",
+    "a_initiate_group_chat",
     "create_swarm_transition",
-    "initiate_swarm_chat",
+    "initiate_group_chat",
     "register_hand_off",
 ]
 
@@ -92,18 +90,6 @@ class AfterWork:  # noqa: N801
                 self.next_agent_selection_msg = None
 
 
-class AFTER_WORK(AfterWork):  # noqa: N801
-    """Deprecated: Use AfterWork instead. This class will be removed in a future version (TBD)."""
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        warnings.warn(
-            "AFTER_WORK is deprecated and will be removed in a future version (TBD). Use AfterWork instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        super().__init__(*args, **kwargs)
-
-
 @dataclass
 @export_module("autogen")
 class OnCondition:  # noqa: N801
@@ -152,18 +138,6 @@ class OnCondition:  # noqa: N801
             not (isinstance(self.available, (str, ContextExpression)) or callable(self.available))
         ):
             raise ValueError("'available' must be a callable, a string, or a ContextExpression")
-
-
-class ON_CONDITION(OnCondition):  # noqa: N801
-    """Deprecated: Use OnCondition instead. This class will be removed in a future version (TBD)."""
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        warnings.warn(
-            "ON_CONDITION is deprecated and will be removed in a future version (TBD). Use OnCondition instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        super().__init__(*args, **kwargs)
 
 
 @dataclass
@@ -323,7 +297,7 @@ def _modify_context_variables_param(f: Callable[..., Any], context_variables: Co
         for name, param in sig.parameters.items():
             if name == __CONTEXT_VARIABLES_PARAM_NAME__:
                 # Replace with new annotation using Depends
-                new_param = param.replace(annotation=Annotated[dict[str, Any], Depends(on(context_variables))])
+                new_param = param.replace(annotation=Annotated[ContextVariables, Depends(on(context_variables))])
                 new_params.append(new_param)
             else:
                 new_params.append(param)
@@ -860,7 +834,7 @@ def make_remove_function(tool_msgs_to_remove: list[str]) -> Callable[[list[dict[
 
 
 @export_module("autogen")
-def initiate_swarm_chat(
+def initiate_group_chat(
     initial_agent: ConversableAgent,
     messages: Union[list[dict[str, Any]], str],
     agents: list[ConversableAgent],
@@ -877,8 +851,8 @@ def initiate_swarm_chat(
         ]
     ] = AfterWorkOption.TERMINATE,
     exclude_transit_message: bool = True,
-) -> tuple[ChatResult, dict[str, Any], ConversableAgent]:
-    """Initialize and run a swarm chat
+) -> tuple[ChatResult, ContextVariables, ConversableAgent]:
+    """Initialize and run a group chat
 
     Args:
         initial_agent: The first receiving agent of the conversation.
@@ -902,9 +876,9 @@ def initiate_swarm_chat(
         exclude_transit_message:  all registered handoff function call and responses messages will be removed from message list before calling an LLM.
             Note: only with transition functions added with `register_handoff` will be removed. If you pass in a function to manage workflow, it will not be removed. You may register a cumstomized hook to `process_all_messages_before_reply` to remove that.
     Returns:
-        ChatResult:     Conversations chat history.
-        dict[str, Any]: Updated Context variables.
-        ConversableAgent:     Last speaker.
+        ChatResult:         Conversations chat history.
+        ContextVariables:   Updated Context variables.
+        ConversableAgent:   Last speaker.
     """
     context_variables = context_variables or ContextVariables()
 
@@ -963,7 +937,7 @@ def initiate_swarm_chat(
 
 
 @export_module("autogen")
-async def a_initiate_swarm_chat(
+async def a_initiate_group_chat(
     initial_agent: ConversableAgent,
     messages: Union[list[dict[str, Any]], str],
     agents: list[ConversableAgent],
@@ -1005,59 +979,11 @@ async def a_initiate_swarm_chat(
         exclude_transit_message:  all registered handoff function call and responses messages will be removed from message list before calling an LLM.
             Note: only with transition functions added with `register_handoff` will be removed. If you pass in a function to manage workflow, it will not be removed. You may register a cumstomized hook to `process_all_messages_before_reply` to remove that.
     Returns:
-        ChatResult:     Conversations chat history.
-        dict[str, Any]: Updated Context variables.
-        ConversableAgent:     Last speaker.
+        ChatResult:         Conversations chat history.
+        ContextVariables:   Updated Context variables.
+        ConversableAgent:   Last speaker.
     """
-    context_variables = context_variables or ContextVariables()
-    tool_execution, nested_chat_agents = _prepare_swarm_agents(
-        initial_agent, agents, context_variables, exclude_transit_message
-    )
-
-    processed_messages, last_agent, swarm_agent_names, temp_user_list = _process_initial_messages(
-        messages, user_agent, agents, nested_chat_agents
-    )
-
-    # Create transition function (has enclosed state for initial agent)
-    swarm_transition = create_swarm_transition(
-        initial_agent=initial_agent,
-        tool_execution=tool_execution,
-        swarm_agent_names=swarm_agent_names,
-        user_agent=user_agent,
-        swarm_after_work=after_work,
-    )
-
-    groupchat = GroupChat(
-        agents=[tool_execution] + agents + nested_chat_agents + ([user_agent] if user_agent else temp_user_list),
-        messages=[],
-        max_round=max_rounds,
-        speaker_selection_method=swarm_transition,
-    )
-
-    manager = _create_swarm_manager(groupchat, swarm_manager_args, agents)
-
-    # Point all ConversableAgent's context variables to this function's context_variables
-    _setup_context_variables(tool_execution, agents, manager, context_variables)
-
-    if len(processed_messages) > 1:
-        last_agent, last_message = await manager.a_resume(messages=processed_messages)
-        clear_history = False
-    else:
-        last_message = processed_messages[0]
-        clear_history = True
-
-    if last_agent is None:
-        raise ValueError("No agent selected to start the conversation")
-
-    chat_result = await last_agent.a_initiate_chat(  # type: ignore[attr-defined]
-        manager,
-        message=last_message,
-        clear_history=clear_history,
-    )
-
-    _cleanup_temp_user_messages(chat_result)
-
-    return chat_result, context_variables, manager.last_speaker  # type: ignore[return-value]
+    raise NotImplementedError("This function is not implemented yet")
 
 
 class SwarmResult(BaseModel):
@@ -1065,7 +991,7 @@ class SwarmResult(BaseModel):
 
     values: str = ""
     agent: Optional[Union[ConversableAgent, AfterWorkOption, str]] = None
-    context_variables: dict[str, Any] = {}
+    context_variables: ContextVariables
 
     @field_serializer("agent", when_used="json")
     def serialize_agent(self, agent: Union[ConversableAgent, str]) -> str:
