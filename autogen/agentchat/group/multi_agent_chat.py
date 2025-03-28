@@ -4,7 +4,6 @@
 
 import copy
 import inspect
-import warnings
 from dataclasses import dataclass
 from functools import partial
 from types import MethodType
@@ -35,7 +34,6 @@ from .context_variables import __CONTEXT_VARIABLES_PARAM_NAME__, ContextVariable
 __all__ = [
     "OnCondition",
     "OnContextCondition",
-    "SwarmAgent",
     "a_initiate_group_chat",
     "create_swarm_transition",
     "initiate_group_chat",
@@ -1186,22 +1184,3 @@ def _generate_swarm_tool_reply(
 
         return True, tool_message
     return False, None
-
-
-class SwarmAgent(ConversableAgent):
-    """SwarmAgent is deprecated and has been incorporated into ConversableAgent, use ConversableAgent instead. SwarmAgent will be removed in a future version (TBD)"""
-
-    def __init__(self, *args: Any, **kwargs: Any):
-        """Initializes a new instance of the SwarmAgent class.
-
-        Args:
-            *args: Variable length argument list.
-            **kwargs: Arbitrary keyword arguments.
-        """
-        warnings.warn(
-            "SwarmAgent is deprecated and has been incorporated into ConversableAgent, use ConversableAgent instead. SwarmAgent will be removed in a future version (TBD).",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-
-        super().__init__(*args, **kwargs)
