@@ -4,7 +4,6 @@
 
 import copy
 import inspect
-from dataclasses import dataclass
 from functools import partial
 from types import MethodType
 from typing import Annotated, Any, Callable, Literal, Optional, Union
@@ -25,16 +24,13 @@ from .after_work import (
     AfterWork,
     AfterWorkSelectionMessage,
 )
-from .available_condition import AvailableCondition
-from .context_condition import ContextCondition
 from .context_str import ContextStr
 from .context_variables import __CONTEXT_VARIABLES_PARAM_NAME__, ContextVariables
-from .llm_condition import LLMCondition
-from .transition_target import AfterWorkOptionTarget, AgentTarget, TransitionOption, TransitionTarget
+from .on_condition import OnCondition
+from .on_context_condition import OnContextCondition
+from .transition_target import AfterWorkOptionTarget, AgentTarget, TransitionOption
 
 __all__ = [
-    "OnCondition",
-    "OnContextCondition",
     "a_initiate_group_chat",
     "create_swarm_transition",
     "initiate_group_chat",
@@ -44,110 +40,6 @@ __all__ = [
 
 # Created tool executor's name
 __TOOL_EXECUTOR_NAME__ = "_Swarm_Tool_Executor"
-
-
-@dataclass
-@export_module("autogen")
-class OnCondition:  # noqa: N801
-    """Defines a condition for transitioning to another agent or nested chats.
-
-    This is for LLM-based condition evaluation where these conditions are translated into tools and attached to the agent.
-
-    These are evaluated after the OnCondition conditions but before the AfterWork conditions.
-
-    Args:
-        target (Optional[Union[ConversableAgent, dict[str, Any]]]): The agent to hand off to or the nested chat configuration. Can be a ConversableAgent or a Dict.
-            If a Dict, it should follow the convention of the nested chat configuration, with the exception of a carryover configuration which is unique to Swarms.
-            Swarm Nested chat documentation: https://docs.ag2.ai/docs/user-guide/advanced-concepts/swarm-deep-dive#registering-handoffs-to-a-nested-chat
-        condition (Optional[Union[str, ContextStr, Callable[[ConversableAgent, list[dict[str, Any]]], str]]]): The condition for transitioning to the target agent, evaluated by the LLM.
-            If a string or Callable, no automatic context variable substitution occurs.
-            If a ContextStr, context variable substitution occurs.
-            The Callable signature is:
-                def my_condition_string(agent: ConversableAgent, messages: list[Dict[str, Any]]) -> str
-        available (Optional[Union[Callable[[ConversableAgent, list[dict[str, Any]]], bool], str, ContextExpression]]): Optional condition to determine if this OnCondition is included for the LLM to evaluate.
-            If a string, it will look up the value of the context variable with that name, which should be a bool, to determine whether it should include this condition.
-            If a ContextExpression, it will evaluate the logical expression against the context variables. Can use not, and, or, and comparison operators (>, <, >=, <=, ==, !=).
-                Example: ContextExpression("not(${logged_in} and ${is_admin}) or (${guest_checkout})")
-                Example with comparison: ContextExpression("${attempts} >= 3 or ${is_premium} == True or ${tier} == 'gold'")
-            The Callable signature is:
-                def my_available_func(agent: ConversableAgent, messages: list[Dict[str, Any]]) -> bool
-    """
-
-    target: TransitionTarget
-    condition: LLMCondition
-    available: Optional[AvailableCondition] = None
-
-    def __post_init__(self) -> None:
-        # Ensure valid types
-        if (self.target is not None) and (not isinstance(self.target, (ConversableAgent, dict))):
-            raise ValueError("'target' must be a ConversableAgent or a dict")
-
-        # Ensure they have a condition
-        if isinstance(self.condition, str):
-            if not self.condition.strip():
-                raise ValueError("'condition' must be a non-empty string")
-        else:
-            if not isinstance(self.condition, ContextStr) and not callable(self.condition):
-                raise ValueError("'condition' must be a string, ContextStr, or callable")
-
-        if (self.available is not None) and (
-            not (isinstance(self.available, (str, ContextExpression)) or callable(self.available))
-        ):
-            raise ValueError("'available' must be a callable, a string, or a ContextExpression")
-
-
-@dataclass
-@export_module("autogen")
-class OnContextCondition:  # noqa: N801
-    """Defines a condition for transitioning to another agent or nested chats using context variables and the ContextExpression class.
-
-    This is for context variable-based condition evaluation (does not use the agent's LLM).
-
-    These are evaluated before the OnCondition and AfterWork conditions.
-
-    Args:
-        target (Optional[Union[ConversableAgent, dict[str, Any]]]): The agent to hand off to or the nested chat configuration. Can be a ConversableAgent or a Dict.
-            If a Dict, it should follow the convention of the nested chat configuration, with the exception of a carryover configuration which is unique to Swarms.
-            Swarm Nested chat documentation: https://docs.ag2.ai/docs/user-guide/advanced-concepts/swarm-deep-dive#registering-handoffs-to-a-nested-chat
-        condition (Optional[Union[str, ContextExpression]]): The condition for transitioning to the target agent, evaluated by the LLM.
-            If a string, it needs to represent a context variable key and the value will be evaluated as a boolean
-            If a ContextExpression, it will evaluate the logical expression against the context variables. If it is True, the transition will occur.
-                Can use not, and, or, and comparison operators (>, <, >=, <=, ==, !=).
-                Example: ContextExpression("not(${logged_in} and ${is_admin}) or (${guest_checkout})")
-                Example with comparison: ContextExpression("${attempts} >= 3 or ${is_premium} == True or ${tier} == 'gold'")
-        available (Optional[Union[Callable[[ConversableAgent, list[dict[str, Any]]], bool], str, ContextExpression]]): Optional condition to determine if this OnContextCondition is included for the LLM to evaluate.
-            If a string, it will look up the value of the context variable with that name, which should be a bool, to determine whether it should include this condition.
-            If a ContextExpression, it will evaluate the logical expression against the context variables. Can use not, and, or, and comparison operators (>, <, >=, <=, ==, !=).
-            The Callable signature is:
-                def my_available_func(agent: ConversableAgent, messages: list[Dict[str, Any]]) -> bool
-
-    """
-
-    target: TransitionTarget
-    condition: ContextCondition
-    available: Optional[AvailableCondition] = None
-
-    def __post_init__(self) -> None:
-        # Ensure valid types
-        if (self.target is not None) and (not isinstance(self.target, (ConversableAgent, dict))):
-            raise ValueError("'target' must be a ConversableAgent or a dict")
-
-        # Ensure they have a condition
-        if isinstance(self.condition, str):
-            if not self.condition.strip():
-                raise ValueError("'condition' must be a non-empty string")
-
-            self._context_condition = ContextExpression("${" + self.condition + "}")
-        else:
-            if not isinstance(self.condition, ContextExpression):
-                raise ValueError("'condition' must be a string on ContextExpression")
-
-            self._context_condition = self.condition
-
-        if (self.available is not None) and (
-            not (isinstance(self.available, (str, ContextExpression)) or callable(self.available))
-        ):
-            raise ValueError("'available' must be a callable, a string, or a ContextExpression")
 
 
 def _establish_swarm_agent(agent: ConversableAgent) -> None:

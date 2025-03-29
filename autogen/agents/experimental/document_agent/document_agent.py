@@ -16,12 +16,12 @@ from ....agentchat.group.after_work import AfterWork
 from ....agentchat.group.context_variables import ContextVariables
 from ....agentchat.group.llm_condition import StringLLMCondition
 from ....agentchat.group.multi_agent_chat import (
-    OnCondition,
-    OnContextCondition,
     SwarmResult,
     initiate_group_chat,
     register_hand_off,
 )
+from ....agentchat.group.on_condition import OnCondition
+from ....agentchat.group.on_context_condition import OnContextCondition
 from ....agentchat.group.transition_target import AfterWorkOptionTarget, AgentTarget
 from ....agentchat.utils import ContextExpression
 from ....doc_utils import export_module
