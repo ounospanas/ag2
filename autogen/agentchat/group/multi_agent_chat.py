@@ -25,9 +25,12 @@ from .after_work import (
     AfterWork,
     AfterWorkSelectionMessage,
 )
+from .available_condition import AvailableCondition
+from .context_condition import ContextCondition
 from .context_str import ContextStr
 from .context_variables import __CONTEXT_VARIABLES_PARAM_NAME__, ContextVariables
-from .transition_target import AfterWorkOptionTarget, AgentTarget, TransitionOption
+from .llm_condition import LLMCondition
+from .transition_target import AfterWorkOptionTarget, AgentTarget, TransitionOption, TransitionTarget
 
 __all__ = [
     "OnCondition",
@@ -70,9 +73,9 @@ class OnCondition:  # noqa: N801
                 def my_available_func(agent: ConversableAgent, messages: list[Dict[str, Any]]) -> bool
     """
 
-    target: Optional[Union[ConversableAgent, dict[str, Any]]] = None
-    condition: Optional[Union[str, ContextStr, Callable[[ConversableAgent, list[dict[str, Any]]], str]]] = None
-    available: Optional[Union[Callable[[ConversableAgent, list[dict[str, Any]]], bool], str, ContextExpression]] = None
+    target: TransitionTarget
+    condition: LLMCondition
+    available: Optional[AvailableCondition] = None
 
     def __post_init__(self) -> None:
         # Ensure valid types
@@ -120,9 +123,9 @@ class OnContextCondition:  # noqa: N801
 
     """
 
-    target: Optional[Union[ConversableAgent, dict[str, Any]]] = None
-    condition: Optional[Union[str, ContextExpression]] = None
-    available: Optional[Union[Callable[[ConversableAgent, list[dict[str, Any]]], bool], str, ContextExpression]] = None
+    target: TransitionTarget
+    condition: ContextCondition
+    available: Optional[AvailableCondition] = None
 
     def __post_init__(self) -> None:
         # Ensure valid types
