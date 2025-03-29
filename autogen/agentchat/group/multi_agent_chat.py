@@ -38,7 +38,7 @@ from .transition_target import (
 
 __all__ = [
     "a_initiate_group_chat",
-    "create_swarm_transition",
+    "create_group_transition",
     "initiate_group_chat",
 ]
 
@@ -431,9 +431,7 @@ def _cleanup_temp_user_messages(chat_result: ChatResult) -> None:
 def _prepare_groupchat_auto_speaker(
     groupchat: GroupChat,
     last_swarm_agent: ConversableAgent,
-    after_work_next_agent_selection_msg: Optional[
-        Union[str, ContextStr, Callable[[ConversableAgent, list[dict[str, Any]]], str]]
-    ],
+    after_work_next_agent_selection_msg: Optional[AfterWorkSelectionMessage],
 ) -> None:
     """Prepare the group chat for auto speaker selection, includes updating or restore the groupchat speaker selection message.
 
@@ -442,11 +440,7 @@ def _prepare_groupchat_auto_speaker(
     Args:
         groupchat (GroupChat): GroupChat instance.
         last_swarm_agent (ConversableAgent): The last swarm agent for which the LLM config is used
-        after_work_next_agent_selection_msg (Union[str, ContextStr, Callable[..., Any]]): Optional message to use for the agent selection (in internal group chat).
-            if a string, it will be use the string a the prompt template, no context variable substitution however '{agentlist}' will be substituted for a list of agents.
-            if a ContextStr, it will substitute the agentlist first and then the context variables
-            if a Callable, it will not substitute the agentlist or context variables, signature:
-                def my_selection_message(agent: ConversableAgent, messages: list[dict[str, Any]]) -> str
+        after_work_next_agent_selection_msg (AfterWorkSelectionMessage): Optional message to use for the agent selection (in internal group chat).
     """
 
     def substitute_agentlist(template: str) -> str:
@@ -462,24 +456,12 @@ def _prepare_groupchat_auto_speaker(
         groupchat.select_speaker_prompt_template = template
         return groupchat.select_speaker_prompt(agent_list)
 
-    if after_work_next_agent_selection_msg is None:
-        # If there's no selection message, restore the default and filter out the tool executor and nested chat agents
-        groupchat.select_speaker_prompt_template = substitute_agentlist(SELECT_SPEAKER_PROMPT_TEMPLATE)
-    elif isinstance(after_work_next_agent_selection_msg, str):
-        # No context variable substitution for string, but agentlist will be substituted
-        groupchat.select_speaker_prompt_template = substitute_agentlist(after_work_next_agent_selection_msg)
-    elif isinstance(after_work_next_agent_selection_msg, ContextStr):
-        # Replace the agentlist in the string first, putting it into a new ContextStr
-        agent_list_replaced_string = ContextStr(substitute_agentlist(after_work_next_agent_selection_msg.template))
-
-        # Then replace the context variables
-        groupchat.select_speaker_prompt_template = agent_list_replaced_string.format(  # type: ignore[assignment]
-            last_swarm_agent.context_variables
-        )
-    elif callable(after_work_next_agent_selection_msg):
-        groupchat.select_speaker_prompt_template = substitute_agentlist(
-            after_work_next_agent_selection_msg(last_swarm_agent, groupchat.messages)
-        )
+    # Use the default speaker selection prompt if one is not specified, otherwise use the specified one
+    groupchat.select_speaker_prompt_template = substitute_agentlist(
+        SELECT_SPEAKER_PROMPT_TEMPLATE
+        if after_work_next_agent_selection_msg is None
+        else after_work_next_agent_selection_msg.get_message(last_swarm_agent, groupchat.messages)
+    )
 
 
 def _determine_next_agent(
@@ -490,7 +472,7 @@ def _determine_next_agent(
     tool_execution: ConversableAgent,
     swarm_agent_names: list[str],
     user_agent: Optional[UserProxyAgent],
-    swarm_after_work: Optional[Union[TransitionOption, Callable[..., Any]]],
+    group_after_work: Optional[TransitionOption],
 ) -> Optional[Union[Agent, Literal["auto"]]]:
     """Determine the next agent in the conversation.
 
@@ -502,16 +484,29 @@ def _determine_next_agent(
         tool_execution (ConversableAgent): The tool execution agent.
         swarm_agent_names (list[str]): List of agent names.
         user_agent (UserProxyAgent): Optional user proxy agent.
-        swarm_after_work (Union[AfterWorkOption, Callable[..., Any]]): Method to handle conversation continuation when an agent doesn't select the next agent.
+        group_after_work (TransitionOption): Group-level Transition option when an agent doesn't select the next agent.
     """
+
+    # Logic for determining the next target (anything based on Transition Target: an agent, nested chat, or AfterWork Option 'terminate'/'stay'/'revert_to_user'/'group_manager')
+    # 1. If it's the first response -> initial agent
+    # 2. If the last message is a tool call -> tool execution agent
+    # 3. If the Tool Executor has determined a next target (e.g. ReplyResult specified target) -> transition to tool reply target
+    # 4. If the user last spoke -> return to the previous agent
+    # NOW "AFTER WORK":
+    # 5. Get the After Work condition (if the agent doesn't have one, get the group-level one)
+    # 6. Evaluate the After Work condition -> agent / nested chat / AfterWork Option 'terminate'/'stay'/'revert_to_user'/'group_manager'
+
+    # 1. If it's the first response, return the initial agent
     if use_initial_agent:
         return initial_agent
 
+    # 2. If the last message is a tool call, return the tool execution agent
     if "tool_calls" in groupchat.messages[-1]:
         return tool_execution
 
     after_work_condition = None
 
+    # 3. If the Tool Executor has determined a next target, return that
     if tool_execution._swarm_next_target is not None:  # type: ignore[attr-defined]
         next_agent: TransitionTarget = tool_execution._swarm_next_target  # type: ignore[attr-defined]
         tool_execution._swarm_next_target = None  # type: ignore[attr-defined]
@@ -532,9 +527,9 @@ def _determine_next_agent(
                     )
             """
 
-            return next_agent  # CHECK WHAT THIS ENDS UP BEING
+            return next_agent  # CHECK THIS
         else:
-            after_work_condition = next_agent
+            after_work_condition = next_agent  # CHECK THIS
 
     # get the last swarm agent
     last_swarm_speaker = None
@@ -553,27 +548,25 @@ def _determine_next_agent(
     ):
         return last_swarm_speaker
 
+    # AFTER WORK:
+
     after_work_next_agent_selection_msg = None
 
+    # Get the After Work condition (from the agent, or the group level if the agent doesn't have one set)
     if after_work_condition is None:
-        # Resolve after_work condition if one hasn't been passed in (agent-level overrides global)
         after_work_condition = (
-            last_swarm_speaker.handoffs.after_work  # type: ignore[attr-defined]
-            if last_swarm_speaker.handoffs.after_work is not None  # type: ignore[attr-defined]
-            else swarm_after_work
+            last_swarm_speaker.handoffs.after_work
+            if last_swarm_speaker.handoffs.after_work is not None
+            else group_after_work
         )
 
     if isinstance(after_work_condition, (AgentTarget, AgentNameTarget)):
+        # Agent/Agent Name - transfer to agent
         return after_work_condition.resolve(last_speaker, groupchat.messages, groupchat)
 
     if isinstance(after_work_condition, AfterWork):
         after_work_next_agent_selection_msg = after_work_condition.selection_message
-        after_work_condition = after_work_condition.target  # SWARM REFACTOR .agent
-
-    # Evaluate callable after_work
-    # NO CALLABLES FOR SWARM REFACTOR
-    # if callable(after_work_condition):
-    # after_work_condition = after_work_condition(last_swarm_speaker, groupchat.messages, groupchat)
+        after_work_condition = after_work_condition.target
 
     if isinstance(
         after_work_condition, str
@@ -602,12 +595,12 @@ def _determine_next_agent(
         raise ValueError("Invalid next agent.")
 
 
-def create_swarm_transition(
+def create_group_transition(
     initial_agent: ConversableAgent,
     tool_execution: ConversableAgent,
     swarm_agent_names: list[str],
     user_agent: Optional[UserProxyAgent],
-    swarm_after_work: Optional[Union[TransitionOption, Callable[..., Any]]],
+    group_after_work: Optional[TransitionOption],
 ) -> Callable[[ConversableAgent, GroupChat], Optional[Union[Agent, Literal["auto"]]]]:
     """Creates a transition function for swarm chat with enclosed state for the use_initial_agent.
 
@@ -616,7 +609,7 @@ def create_swarm_transition(
         tool_execution (ConversableAgent): The tool execution agent
         swarm_agent_names (list[str]): List of all agent names
         user_agent (UserProxyAgent): Optional user proxy agent
-        swarm_after_work (Union[AfterWorkOption, Callable[..., Any]]): Swarm-level after work
+        group_after_work (TransitionOption): Group-level after work
 
     Returns:
         Callable transition function (for sync and async swarm chats)
@@ -636,7 +629,7 @@ def create_swarm_transition(
             tool_execution=tool_execution,
             swarm_agent_names=swarm_agent_names,
             user_agent=user_agent,
-            swarm_after_work=swarm_after_work,
+            group_after_work=group_after_work,
         )
         state["use_initial_agent"] = False
         return result
@@ -732,14 +725,7 @@ def initiate_group_chat(
     swarm_manager_args: Optional[dict[str, Any]] = None,
     max_rounds: int = 20,
     context_variables: Optional[ContextVariables] = None,
-    after_work: Optional[
-        Union[
-            TransitionOption,
-            Callable[
-                [ConversableAgent, list[dict[str, Any]], GroupChat], Union[TransitionOption, ConversableAgent, str]
-            ],
-        ]
-    ] = "terminate",
+    after_work: Optional[AfterWork] = None,
     exclude_transit_message: bool = True,
 ) -> tuple[ChatResult, ContextVariables, ConversableAgent]:
     """Initialize and run a group chat
@@ -777,6 +763,9 @@ def initiate_group_chat(
 
     context_variables = context_variables or ContextVariables()
 
+    # Default to terminate
+    group_after_work = after_work if after_work is not None else AfterWork(target=AfterWorkOptionTarget("terminate"))
+
     tool_execution, nested_chat_agents = _prepare_swarm_agents(
         initial_agent, agents, context_variables, exclude_transit_message
     )
@@ -786,12 +775,12 @@ def initiate_group_chat(
     )
 
     # Create transition function (has enclosed state for initial agent)
-    swarm_transition = create_swarm_transition(
+    swarm_transition = create_group_transition(
         initial_agent=initial_agent,
         tool_execution=tool_execution,
         swarm_agent_names=swarm_agent_names,
         user_agent=user_agent,
-        swarm_after_work=after_work,
+        group_after_work=group_after_work,
     )
 
     groupchat = GroupChat(

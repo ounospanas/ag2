@@ -49,12 +49,19 @@ class AfterWorkSelectionMessageContextStr(AfterWorkSelectionMessage):
     context_str_template: str
 
     def __init__(self, context_str_template: str, **data):
+        # We will replace {agentlist} with another term and return it later for use with the internal group chat auto speaker selection
+        # Otherwise our format will fail
+        if "{agentlist}" in context_str_template:
+            context_str_template = context_str_template.replace("{agentlist}", "<<agent_list>>")
+
         super().__init__(context_str_template=context_str_template, **data)
 
     def get_message(self, agent: "ConversableAgent", messages: list[dict[str, Any]]) -> str:
         """Get the formatted message with context variables substituted."""
         context_str = ContextStr(self.context_str_template)
-        return context_str.format(agent.context_variables)
+        return context_str.format(agent.context_variables).replace(
+            "<<agent_list>>", "{agentlist}"
+        )  # Restore agentlist so it can be substituted by the internal group chat auto speaker selection
 
 
 # AfterWork

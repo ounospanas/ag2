@@ -439,7 +439,7 @@ class DocAgent(ConversableAgent):
             agents=swarm_agents,
             messages=self._get_document_input_message(messages),
             context_variables=context_variables,
-            after_work="terminate",
+            after_work=AfterWork(AfterWorkOptionTarget("terminate")),
         )
         if last_speaker == self._error_agent:
             # If we finish with the error agent, we return their message which contains the error
