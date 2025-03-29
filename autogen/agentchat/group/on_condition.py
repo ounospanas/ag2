@@ -2,8 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from dataclasses import dataclass
 from typing import Optional
+
+from pydantic import BaseModel
 
 from ...doc_utils import export_module
 from .available_condition import AvailableCondition
@@ -15,9 +16,8 @@ __all__ = [
 ]
 
 
-@dataclass
 @export_module("autogen")
-class OnCondition:  # noqa: N801
+class OnCondition(BaseModel):  # noqa: N801
     """Defines a condition for transitioning to another agent or nested chats.
 
     This is for LLM-based condition evaluation where these conditions are translated into tools and attached to the agent.
@@ -65,3 +65,15 @@ class OnCondition:  # noqa: N801
         ):
             raise ValueError("'available' must be a callable, a string, or a ContextExpression")'
     """
+
+    def has_target_type(self, target_type: TransitionTarget) -> bool:
+        """
+        Check if the target type matches the specified type.
+
+        Args:
+            target_type (str): The target type to check against
+
+        Returns:
+            bool: True if the target type matches, False otherwise
+        """
+        return isinstance(self.target, target_type)

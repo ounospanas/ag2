@@ -211,6 +211,8 @@ class ConversableAgent(LLMAgent):
             update_agent_state_before_reply (List[Callable[..., Any]]): A list of functions, including UpdateSystemMessage's, called to update the agent before it replies.
             handoffs (Handoffs): Handoffs object containing all handoff transition conditions.
         """
+        self.handoffs = handoffs if handoffs is not None else Handoffs()
+
         # we change code_execution_config below and we have to make sure we don't change the input
         # in case of UserProxyAgent, without this we could even change the default value {}
         code_execution_config = (
@@ -355,8 +357,6 @@ class ConversableAgent(LLMAgent):
 
         # Associate agent update state hooks
         self._register_update_agent_state_before_reply(update_agent_state_before_reply)
-
-        self.handoffs = handoffs if handoffs is not None else Handoffs()
 
     def _validate_name(self, name: str) -> None:
         if not self.llm_config:

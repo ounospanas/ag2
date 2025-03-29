@@ -2,7 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any
+
+from pydantic import BaseModel
 
 from ..utils import ContextExpression
 
@@ -13,7 +15,7 @@ if TYPE_CHECKING:
 __all__ = ["AvailableCondition", "ContextExpressionAvailableCondition", "StringAvailableCondition"]
 
 
-class AvailableCondition(Protocol):
+class AvailableCondition(BaseModel):
     """Protocol for determining if a condition is available to be evaluated."""
 
     def is_available(self, agent: "ConversableAgent", messages: list[dict[str, Any]]) -> bool:

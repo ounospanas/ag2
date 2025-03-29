@@ -24,6 +24,10 @@ class TransitionTarget(BaseModel):
         """Resolve to a concrete agent, chat configuration, or control option."""
         raise NotImplementedError("Requires subclasses to implement.")
 
+    def display_name(self) -> str:
+        """Get the display name for the target."""
+        raise NotImplementedError("Requires subclasses to implement.")
+
 
 class AgentTarget(TransitionTarget):
     """Target that represents a direct agent reference."""
@@ -43,6 +47,10 @@ class AgentTarget(TransitionTarget):
                 return agent
         raise ValueError(f"Agent with name '{self.agent_name}' not found in groupchat")
 
+    def display_name(self) -> str:
+        """Get the display name for the target."""
+        return f"{self.agent_name}"
+
 
 class AgentNameTarget(TransitionTarget):
     """Target that represents an agent by name."""
@@ -52,9 +60,18 @@ class AgentNameTarget(TransitionTarget):
     def __init__(self, agent_name: str, **data):
         super().__init__(agent_name=agent_name, **data)
 
-    def resolve(self, last_speaker: "ConversableAgent", messages: list[dict[str, Any]], groupchat: "GroupChat") -> str:
+    def resolve(
+        self, last_speaker: "ConversableAgent", messages: list[dict[str, Any]], groupchat: "GroupChat"
+    ) -> "ConversableAgent":
         """Resolve to the agent name string."""
-        return self.agent_name
+        for agent in groupchat.agents:
+            if agent.name == self.agent_name:
+                return agent
+        raise ValueError(f"Agent with name '{self.agent_name}' not found in groupchat")
+
+    def display_name(self) -> str:
+        """Get the display name for the target."""
+        return f"{self.agent_name}"
 
 
 class NestedChatTarget(TransitionTarget):
@@ -71,6 +88,10 @@ class NestedChatTarget(TransitionTarget):
         """Resolve to the nested chat configuration."""
         return self.nested_chat_config
 
+    def display_name(self) -> str:
+        """Get the display name for the target."""
+        return "a nested chat"
+
 
 class AfterWorkOptionTarget(TransitionTarget):
     """Target that represents an AfterWorkOption."""
@@ -85,6 +106,10 @@ class AfterWorkOptionTarget(TransitionTarget):
     ) -> TransitionOption:
         """Resolve to the option value."""
         return self.after_work_option
+
+    def display_name(self) -> str:
+        """Get the display name for the target."""
+        return f"After Work option '{self.after_work_option}'"
 
 
 # TODO: Consider adding a SequentialChatTarget class

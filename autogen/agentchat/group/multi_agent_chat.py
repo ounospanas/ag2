@@ -27,7 +27,14 @@ from .context_variables import __CONTEXT_VARIABLES_PARAM_NAME__, ContextVariable
 from .on_condition import OnCondition
 from .on_context_condition import OnContextCondition
 from .reply_result import ReplyResult
-from .transition_target import AfterWorkOptionTarget, AgentTarget, TransitionOption
+from .transition_target import (
+    AfterWorkOptionTarget,
+    AgentNameTarget,
+    AgentTarget,
+    NestedChatTarget,
+    TransitionOption,
+    TransitionTarget,
+)
 
 __all__ = [
     "a_initiate_group_chat",
@@ -79,7 +86,7 @@ def _establish_swarm_agent(agent: ConversableAgent) -> None:
 def _link_agents_to_swarm_manager(agents: list[Agent], group_chat_manager: Agent) -> None:
     """Link all agents to the GroupChatManager so they can access the underlying GroupChat and other agents.
 
-    This is primarily used so that agents can set the tool executor's _swarm_next_agent attribute to control
+    This is primarily used so that agents can set the tool executor's _swarm_next_target attribute to control
     the next agent programmatically.
 
     Does not link the Tool Executor agent.
@@ -95,9 +102,14 @@ def _run_oncontextconditions(
     config: Optional[Any] = None,
 ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
     """Run OnContextConditions for an agent before any other reply function."""
-    for on_condition in agent._swarm_oncontextconditions:  # type: ignore[attr-defined]
-        is_available = True
+    for on_condition in agent.handoffs.context_conditions:  # type: ignore[attr-defined]
+        is_available = (
+            True
+            if on_condition.available is None
+            else on_condition.available.is_available(agent, next(iter(agent.chat_messages.values())))
+        )
 
+        """
         if on_condition.available is not None:
             if callable(on_condition.available):
                 is_available = on_condition.available(agent, next(iter(agent.chat_messages.values())))
@@ -105,20 +117,25 @@ def _run_oncontextconditions(
                 is_available = agent.context_variables.get(on_condition.available) or False
             elif isinstance(on_condition.available, ContextExpression):
                 is_available = on_condition.available.evaluate(agent.context_variables)
+        """
 
-        if is_available and on_condition._context_condition.evaluate(agent.context_variables):
-            # Condition has been met, we'll set the Tool Executor's _swarm_next_agent
+        if is_available and on_condition.condition.evaluate(agent.context_variables):
+            # Condition has been met, we'll set the Tool Executor's _swarm_next_target
             # attribute and that will be picked up on the next iteration when
             # _determine_next_agent is called
             for agent in agent._swarm_manager.groupchat.agents:  # type: ignore[attr-defined]
                 if agent.name == __TOOL_EXECUTOR_NAME__:
-                    agent._swarm_next_agent = on_condition.target  # type: ignore[attr-defined]
+                    agent._swarm_next_target = on_condition.target  # type: ignore[attr-defined]
                     break
 
+            transfer_name = on_condition.target.display_name()
+
+            """
             if isinstance(on_condition.target, ConversableAgent):
                 transfer_name = on_condition.target.name
             else:
                 transfer_name = "a nested chat"
+            """
 
             return True, "[Handing off to " + transfer_name + "]"
 
@@ -257,6 +274,20 @@ def _prepare_swarm_agents(
     return tool_execution, nested_chat_agents
 
 
+def _get_nested_chat_handoff_conditions(agent: ConversableAgent) -> list[Union[OnContextCondition, OnCondition]]:
+    """Get the nested chat handoffs for an agent.
+
+    Args:
+        agent (ConversableAgent): The agent to get the nested chat handoffs for.
+
+    Returns:
+        list[Union[OnContextCondition, OnCondition]]: List of nested chat handoff conditions.
+    """
+    on_context_conditions = agent.handoffs.get_context_conditions_by_target_type(NestedChatTarget)
+    on_llm_conditions = agent.handoffs.get_llm_conditions_by_target_type(NestedChatTarget)
+    return on_context_conditions + on_llm_conditions
+
+
 def _create_nested_chats(agent: ConversableAgent, nested_chat_agents: list[ConversableAgent]) -> None:
     """Create nested chat agents and register nested chats.
 
@@ -293,7 +324,7 @@ def _create_nested_chats(agent: ConversableAgent, nested_chat_agents: list[Conve
 
         return nested_chat_agent
 
-    for i, nested_chat_handoff in enumerate(agent._swarm_nested_chat_handoffs):  # type: ignore[attr-defined]
+    for i, nested_chat_handoff in enumerate(_get_nested_chat_handoff_conditions(agent)):  # type: ignore[attr-defined]
         llm_nested_chats: dict[str, Any] = nested_chat_handoff["nested_chats"]
 
         # Create nested chat agent
@@ -307,7 +338,7 @@ def _create_nested_chats(agent: ConversableAgent, nested_chat_agents: list[Conve
             OnCondition(target=nested_chat_agent, condition=condition, available=available)
         )
 
-    for i, nested_chat_context_handoff in enumerate(agent._swarm_oncontextconditions):  # type: ignore[attr-defined]
+    for i, nested_chat_context_handoff in enumerate(agent.handoffs.context_conditions):  # type: ignore[attr-defined]
         if isinstance(nested_chat_context_handoff.target, dict):
             context_nested_chats: dict[str, Any] = nested_chat_context_handoff.target
 
@@ -481,13 +512,17 @@ def _determine_next_agent(
 
     after_work_condition = None
 
-    if tool_execution._swarm_next_agent is not None:  # type: ignore[attr-defined]
-        next_agent: Optional[Agent] = tool_execution._swarm_next_agent  # type: ignore[attr-defined]
-        tool_execution._swarm_next_agent = None  # type: ignore[attr-defined]
+    if tool_execution._swarm_next_target is not None:  # type: ignore[attr-defined]
+        next_agent: TransitionTarget = tool_execution._swarm_next_target  # type: ignore[attr-defined]
+        tool_execution._swarm_next_target = None  # type: ignore[attr-defined]
 
-        if not isinstance(next_agent, TransitionOption):
+        if not isinstance(next_agent, AfterWorkOptionTarget):
             # Check for string, access agent from group chat.
 
+            if isinstance(next_agent, (AgentTarget, AgentNameTarget)):
+                return next_agent.resolve(last_speaker, groupchat.messages, groupchat)
+
+            """
             if isinstance(next_agent, str):
                 if next_agent in swarm_agent_names:
                     next_agent = groupchat.agent_by_name(name=next_agent)
@@ -495,8 +530,9 @@ def _determine_next_agent(
                     raise ValueError(
                         f"No agent found with the name '{next_agent}'. Ensure the agent exists in the swarm."
                     )
+            """
 
-            return next_agent
+            return next_agent  # CHECK WHAT THIS ENDS UP BEING
         else:
             after_work_condition = next_agent
 
@@ -527,33 +563,43 @@ def _determine_next_agent(
             else swarm_after_work
         )
 
+    if isinstance(after_work_condition, (AgentTarget, AgentNameTarget)):
+        return after_work_condition.resolve(last_speaker, groupchat.messages, groupchat)
+
     if isinstance(after_work_condition, AfterWork):
-        after_work_next_agent_selection_msg = after_work_condition.next_agent_selection_msg
-        after_work_condition = after_work_condition.agent
+        after_work_next_agent_selection_msg = after_work_condition.selection_message
+        after_work_condition = after_work_condition.target  # SWARM REFACTOR .agent
 
     # Evaluate callable after_work
-    if callable(after_work_condition):
-        after_work_condition = after_work_condition(last_swarm_speaker, groupchat.messages, groupchat)
+    # NO CALLABLES FOR SWARM REFACTOR
+    # if callable(after_work_condition):
+    # after_work_condition = after_work_condition(last_swarm_speaker, groupchat.messages, groupchat)
 
-    if isinstance(after_work_condition, str):  # Agent name in a string
+    if isinstance(
+        after_work_condition, str
+    ):  # Agent name in a string # MS REFACTOR CHECK - DON'T THINK IT WILL EVER BE A STRING, SHOULD BE A TransitionTarget-based CLASS
+        raise ValueError("MARK SZE CHECK - SHOULD NOT BE HERE.")
         if after_work_condition in swarm_agent_names:
             return groupchat.agent_by_name(name=after_work_condition)
         else:
             raise ValueError(f"Invalid agent name in after_work: {after_work_condition}")
-    elif isinstance(after_work_condition, ConversableAgent):
+    elif isinstance(
+        after_work_condition, ConversableAgent
+    ):  # MS REFACTOR CHECK - DON'T THINK IT WILL EVER BE AN AGENT, SHOULD BE A TransitionTarget-based CLASS
+        raise ValueError("MARK SZE CHECK - SHOULD NOT BE HERE.")
         return after_work_condition
-    elif isinstance(after_work_condition, TransitionOption):
-        if after_work_condition == "terminate":
+    elif isinstance(after_work_condition, AfterWorkOptionTarget):
+        if after_work_condition == AfterWorkOptionTarget("terminate"):
             return None
-        elif after_work_condition == "revert_to_user":
+        elif after_work_condition == AfterWorkOptionTarget("revert_to_user"):
             return None if user_agent is None else user_agent
-        elif after_work_condition == "stay":
+        elif after_work_condition == AfterWorkOptionTarget("stay"):
             return last_swarm_speaker
-        elif after_work_condition == "group_manager":
+        elif after_work_condition == AfterWorkOptionTarget("group_manager"):
             _prepare_groupchat_auto_speaker(groupchat, last_swarm_speaker, after_work_next_agent_selection_msg)
             return "auto"
     else:
-        raise ValueError("Invalid After Work condition or return value from callable")
+        raise ValueError("Invalid next agent.")
 
 
 def create_swarm_transition(
@@ -724,6 +770,11 @@ def initiate_group_chat(
         ContextVariables:   Updated Context variables.
         ConversableAgent:   Last speaker.
     """
+    if context_variables and not isinstance(context_variables, ContextVariables):
+        raise ValueError(
+            "context_variables must be a ContextVariables instance. Use `my_context = ContextVariables(data={'key': 'value'})` to create one."
+        )
+
     context_variables = context_variables or ContextVariables()
 
     tool_execution, nested_chat_agents = _prepare_swarm_agents(
@@ -756,7 +807,7 @@ def initiate_group_chat(
     _setup_context_variables(tool_execution, agents, manager, context_variables)
 
     # Link all agents with the GroupChatManager to allow access to the group chat
-    # and other agents, particularly the tool executor for setting _swarm_next_agent
+    # and other agents, particularly the tool executor for setting _swarm_next_target
     _link_agents_to_swarm_manager(groupchat.agents, manager)  # Commented out as the function is not defined
 
     if len(processed_messages) > 1:
@@ -836,7 +887,7 @@ def _set_to_tool_execution(agent: ConversableAgent) -> None:
 
     It will execute the tool calls and update the referenced context_variables and next_agent accordingly.
     """
-    agent._swarm_next_agent = None  # type: ignore[attr-defined]
+    agent._swarm_next_target = None  # type: ignore[attr-defined]
     agent._reply_func_list.clear()
     agent.register_reply([Agent, None], _generate_swarm_tool_reply)
 
@@ -901,11 +952,14 @@ def register_hand_off_replace_me(
             elif isinstance(transit.target, dict):
                 # Transition to a nested chat
                 # We will store them here and establish them in the initiate_swarm_chat
+                """ IGNORE WITH SWARM REFACTOR - CREATED ON AGENT
                 agent._swarm_nested_chat_handoffs.append({  # type: ignore[attr-defined]
                     "nested_chats": transit.target,
                     "condition": transit.condition,
                     "available": transit.available,
-                })
+                })'
+                """
+                pass
 
         elif isinstance(transit, OnContextCondition):
             agent._swarm_oncontextconditions.append(transit)  # type: ignore[attr-defined]
@@ -995,7 +1049,7 @@ def _generate_swarm_tool_reply(
                     if content.target is not None:
                         next_agent = content.target  # type: ignore[assignment]
                 elif isinstance(content, Agent):
-                    next_agent = content
+                    next_agent = content  # MS CHECK IF THIS IS BEING CALLED, SHOULD BE a TransitionTarget
 
                 # Serialize the content to a string
                 if content is not None:
@@ -1004,7 +1058,7 @@ def _generate_swarm_tool_reply(
                 tool_responses_inner.append(tool_response)
                 contents.append(str(tool_response["content"]))
 
-        agent._swarm_next_agent = next_agent  # type: ignore[attr-defined]
+        agent._swarm_next_target = next_agent  # type: ignore[attr-defined]
 
         # Put the tool responses and content strings back into the response message
         # Caters for multiple tool calls

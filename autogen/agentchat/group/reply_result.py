@@ -29,3 +29,7 @@ class ReplyResult(BaseModel):
         **data,
     ):
         super().__init__(message=message, target=target, context_variables=context_variables, **data)
+
+    def __str__(self) -> str:
+        """The string representation for ReplyResult will be just the message."""
+        return self.message

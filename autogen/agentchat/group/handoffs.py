@@ -28,9 +28,26 @@ class Handoffs(BaseModel):
                    .set_after_work(after_work)
     """
 
-    context_conditions: list[OnContextCondition]
-    llm_conditions: list[OnCondition]
+    context_conditions: Optional[list[OnContextCondition]] = None
+    llm_conditions: Optional[list[OnCondition]] = None
     after_work: Optional[AfterWork] = None
+
+    def __init__(
+        self,
+        context_conditions: Optional[list[OnContextCondition]] = None,
+        llm_conditions: Optional[list[OnCondition]] = None,
+        after_work: Optional[AfterWork] = None,
+        **data,
+    ):
+        final_context_conditions = context_conditions if context_conditions is not None else []
+        final_llm_conditions = llm_conditions if llm_conditions is not None else []
+
+        super().__init__(
+            context_conditions=final_context_conditions,
+            llm_conditions=final_llm_conditions,
+            after_work=after_work,
+            **data,
+        )
 
     def add_context_condition(self, condition: OnContextCondition) -> "Handoffs":
         """
@@ -151,7 +168,7 @@ class Handoffs(BaseModel):
         # adding handoffs without worrying about the specific type.
         context_conditions = []
         llm_conditions = []
-        after_work = None
+        after_work_to_set = None
 
         for condition in conditions:
             if isinstance(condition, OnContextCondition):
@@ -159,9 +176,9 @@ class Handoffs(BaseModel):
             elif isinstance(condition, OnCondition):
                 llm_conditions.append(condition)
             elif isinstance(condition, AfterWork):
-                if after_work is not None:
+                if self.after_work is not None or after_work_to_set is not None:
                     raise ValueError("Multiple AfterWork conditions provided. Only one is allowed.")
-                after_work = condition
+                after_work_to_set = condition
             else:
                 raise TypeError(f"Unsupported condition type: {type(condition).__name__}")
 
@@ -169,8 +186,8 @@ class Handoffs(BaseModel):
             self.add_context_conditions(context_conditions)
         if llm_conditions:
             self.add_llm_conditions(llm_conditions)
-        if after_work:
-            self.set_after_work(after_work)
+        if after_work_to_set:
+            self.set_after_work(after_work_to_set)
 
         return self
 
@@ -185,3 +202,31 @@ class Handoffs(BaseModel):
         self.llm_conditions.clear()
         self.after_work = None
         return self
+
+    def get_llm_conditions_by_target_type(self, target_type: type) -> list[Union[OnContextCondition, OnCondition]]:
+        """
+        Get OnConditions for a specific target type.
+
+        Args:
+            target_type: The type of condition to retrieve
+
+        Returns:
+            List of conditions of the specified type, or None if none exist
+        """
+        return [on_condition for on_condition in self.llm_conditions if on_condition.has_target_type(target_type)]
+
+    def get_context_conditions_by_target_type(self, target_type: type) -> list[Union[OnContextCondition, OnCondition]]:
+        """
+        Get OnContextConditions for a specific target type.
+
+        Args:
+            target_type: The type of condition to retrieve
+
+        Returns:
+            List of conditions of the specified type, or None if none exist
+        """
+        return [
+            on_context_condition
+            for on_context_condition in self.context_conditions
+            if on_context_condition.has_target_type(target_type)
+        ]
