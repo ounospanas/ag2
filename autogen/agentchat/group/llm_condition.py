@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 __all__ = ["ContextStrLLMCondition", "LLMCondition", "StringLLMCondition"]
 
 
-class LLMCondition(Protocol):
+class LLMCondition(BaseModel):
     """Protocol for conditions evaluated by an LLM."""
 
     def get_prompt(self, agent: "ConversableAgent", messages: list[dict[str, Any]]) -> str:
@@ -31,7 +31,7 @@ class LLMCondition(Protocol):
         raise NotImplementedError("Requires subclasses to implement.")
 
 
-class StringLLMCondition(BaseModel):
+class StringLLMCondition(LLMCondition):
     """Simple string-based LLM condition.
 
     This condition provides a static string prompt to be evaluated by an LLM.
@@ -55,7 +55,7 @@ class StringLLMCondition(BaseModel):
         return self.prompt
 
 
-class ContextStrLLMCondition(BaseModel):
+class ContextStrLLMCondition(LLMCondition):
     """Context variable-based LLM condition.
 
     This condition uses a ContextStr object with context variable placeholders that

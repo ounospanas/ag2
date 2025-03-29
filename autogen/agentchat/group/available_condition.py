@@ -4,8 +4,6 @@
 
 from typing import TYPE_CHECKING, Any, Protocol
 
-from pydantic import BaseModel
-
 from ..utils import ContextExpression
 
 if TYPE_CHECKING:
@@ -31,7 +29,7 @@ class AvailableCondition(Protocol):
         raise NotImplementedError("Requires subclasses to implement.")
 
 
-class StringAvailableCondition(BaseModel):
+class StringAvailableCondition(AvailableCondition):
     """String-based available condition.
 
     This condition checks if a named context variable exists and is truthy.
@@ -55,7 +53,7 @@ class StringAvailableCondition(BaseModel):
         return bool(agent.context_variables.get(self.context_variable, False))
 
 
-class ContextExpressionAvailableCondition(BaseModel):
+class ContextExpressionAvailableCondition(AvailableCondition):
     """Expression-based available condition.
 
     This condition evaluates a ContextExpression against the context variables.

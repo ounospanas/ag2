@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from .... import Agent, ConversableAgent, UpdateSystemMessage
 from ....agentchat.contrib.rag.query_engine import RAGQueryEngine
 from ....agentchat.group.after_work import AfterWork
+from ....agentchat.group.context_condition import ExpressionContextCondition
 from ....agentchat.group.context_variables import ContextVariables
 from ....agentchat.group.llm_condition import StringLLMCondition
 from ....agentchat.group.multi_agent_chat import initiate_group_chat
@@ -372,16 +373,18 @@ class DocAgent(ConversableAgent):
         self._task_manager_agent.register_handoffs([
             OnContextCondition(  # Go straight to data ingestion agent if we have documents to ingest
                 target=AgentTarget(self._data_ingestion_agent),
-                condition=ContextExpression("len(${DocumentsToIngest}) > 0"),
+                condition=ExpressionContextCondition(ContextExpression("len(${DocumentsToIngest}) > 0")),
             ),
             OnContextCondition(  # Go to Query agent if we have queries to run (ingestion above run first)
                 target=AgentTarget(self._query_agent),
-                condition=ContextExpression("len(${QueriesToRun}) > 0"),
+                condition=ExpressionContextCondition(ContextExpression("len(${QueriesToRun}) > 0")),
             ),
             OnContextCondition(  # Go to Summary agent if no documents or queries left to run and we have query results
                 target=AgentTarget(self._summary_agent),
-                condition=ContextExpression(
-                    "len(${DocumentsToIngest}) == 0 and len(${QueriesToRun}) == 0 and len(${QueryResults}) > 0"
+                condition=ExpressionContextCondition(
+                    ContextExpression(
+                        "len(${DocumentsToIngest}) == 0 and len(${QueriesToRun}) == 0 and len(${QueryResults}) > 0"
+                    )
                 ),
             ),
             OnCondition(
