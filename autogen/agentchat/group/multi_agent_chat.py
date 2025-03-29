@@ -8,8 +8,6 @@ from functools import partial
 from types import MethodType
 from typing import Annotated, Any, Callable, Literal, Optional, Union
 
-from pydantic import BaseModel, field_serializer
-
 from ...doc_utils import export_module
 from ...oai import OpenAIWrapper
 from ...tools import Depends, Tool
@@ -28,13 +26,13 @@ from .context_str import ContextStr
 from .context_variables import __CONTEXT_VARIABLES_PARAM_NAME__, ContextVariables
 from .on_condition import OnCondition
 from .on_context_condition import OnContextCondition
+from .reply_result import ReplyResult
 from .transition_target import AfterWorkOptionTarget, AgentTarget, TransitionOption
 
 __all__ = [
     "a_initiate_group_chat",
     "create_swarm_transition",
     "initiate_group_chat",
-    "register_hand_off",
 ]
 
 
@@ -58,7 +56,7 @@ def _establish_swarm_agent(agent: ConversableAgent) -> None:
 
     # Store nested chats hand offs as we'll establish these in the initiate_swarm_chat
     # List of Dictionaries containing the nested_chats and condition
-    agent._swarm_nested_chat_handoffs = []  # type: ignore[attr-defined]
+    # agent._swarm_nested_chat_handoffs = []  # type: ignore[attr-defined]
 
     # Store conditional functions (and their OnCondition instances) to add/remove later when transitioning to this agent
     agent._swarm_conditional_functions = {}  # type: ignore[attr-defined]
@@ -67,7 +65,7 @@ def _establish_swarm_agent(agent: ConversableAgent) -> None:
     agent.register_hook("update_agent_state", _update_conditional_functions)
 
     # Store the OnContextConditions for evaluation (list[OnContextCondition])
-    agent._swarm_oncontextconditions = []  # type: ignore[attr-defined]
+    # agent._swarm_oncontextconditions = []  # type: ignore[attr-defined]
 
     # Register a reply function to run Python function-based OnConditions before any other reply function
     agent.register_reply(trigger=([Agent, None]), reply_func=_run_oncontextconditions, position=0)
@@ -291,7 +289,7 @@ def _create_nested_chats(agent: ConversableAgent, nested_chat_agents: list[Conve
         )
 
         # After the nested chat is complete, transfer back to the parent agent
-        register_hand_off(nested_chat_agent, AfterWork(target=AgentTarget(agent)))
+        nested_chat_agent.handoffs.set_after_work(AfterWork(target=AgentTarget(agent)))
 
         return nested_chat_agent
 
@@ -305,7 +303,9 @@ def _create_nested_chats(agent: ConversableAgent, nested_chat_agents: list[Conve
         # Nested chat is triggered through an agent transfer to this nested chat agent
         condition = nested_chat_handoff["condition"]
         available = nested_chat_handoff["available"]
-        register_hand_off(agent, OnCondition(target=nested_chat_agent, condition=condition, available=available))
+        agent.handoffs.add_llm_condition(
+            OnCondition(target=nested_chat_agent, condition=condition, available=available)
+        )
 
     for i, nested_chat_context_handoff in enumerate(agent._swarm_oncontextconditions):  # type: ignore[attr-defined]
         if isinstance(nested_chat_context_handoff.target, dict):
@@ -522,8 +522,8 @@ def _determine_next_agent(
     if after_work_condition is None:
         # Resolve after_work condition if one hasn't been passed in (agent-level overrides global)
         after_work_condition = (
-            last_swarm_speaker._swarm_after_work  # type: ignore[attr-defined]
-            if last_swarm_speaker._swarm_after_work is not None  # type: ignore[attr-defined]
+            last_swarm_speaker.handoffs.after_work  # type: ignore[attr-defined]
+            if last_swarm_speaker.handoffs.after_work is not None  # type: ignore[attr-defined]
             else swarm_after_work
         )
 
@@ -830,26 +830,6 @@ async def a_initiate_group_chat(
     raise NotImplementedError("This function is not implemented yet")
 
 
-class SwarmResult(BaseModel):
-    """Encapsulates the possible return values for a swarm agent function."""
-
-    values: str = ""
-    agent: Optional[Union[ConversableAgent, TransitionOption, str]] = None
-    context_variables: ContextVariables
-
-    @field_serializer("agent", when_used="json")
-    def serialize_agent(self, agent: Union[ConversableAgent, str]) -> str:
-        if isinstance(agent, ConversableAgent):
-            return agent.name
-        return agent
-
-    class Config:  # Add this inner class
-        arbitrary_types_allowed = True
-
-    def __str__(self) -> str:
-        return self.values
-
-
 def _set_to_tool_execution(agent: ConversableAgent) -> None:
     """Set to a special instance of ConversableAgent that is responsible for executing tool calls from other swarm agents.
     This agent will be used internally and should not be visible to the user.
@@ -861,7 +841,7 @@ def _set_to_tool_execution(agent: ConversableAgent) -> None:
     agent.register_reply([Agent, None], _generate_swarm_tool_reply)
 
 
-def register_hand_off(
+def register_hand_off_replace_me(
     agent: ConversableAgent,
     hand_to: Union[list[Union[OnCondition, OnContextCondition, AfterWork]], OnCondition, OnContextCondition, AfterWork],
 ) -> None:
@@ -1009,11 +989,11 @@ def _generate_swarm_tool_reply(
             for tool_response in tool_message["tool_responses"]:
                 content = tool_response.get("content")
 
-                if isinstance(content, SwarmResult):
+                if isinstance(content, ReplyResult):
                     if content.context_variables != {}:
                         agent.context_variables.update(content.context_variables)
-                    if content.agent is not None:
-                        next_agent = content.agent  # type: ignore[assignment]
+                    if content.target is not None:
+                        next_agent = content.target  # type: ignore[assignment]
                 elif isinstance(content, Agent):
                     next_agent = content
 

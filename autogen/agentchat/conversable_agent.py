@@ -63,7 +63,11 @@ from ..runtime_logging import log_event, log_function_use, log_new_agent, loggin
 from ..tools import ChatContext, Tool, load_basemodels_if_needed, serialize_to_str
 from .agent import Agent, LLMAgent
 from .chat import ChatResult, _post_process_carryover_item, a_initiate_chats, initiate_chats
+from .group.after_work import AfterWork
 from .group.context_variables import ContextVariables
+from .group.handoffs import Handoffs
+from .group.on_condition import OnCondition
+from .group.on_context_condition import OnContextCondition
 from .utils import consolidate_chat_info, gather_usage_summary
 
 __all__ = ("ConversableAgent",)
@@ -146,6 +150,7 @@ class ConversableAgent(LLMAgent):
         update_agent_state_before_reply: Optional[
             Union[list[Union[Callable, UpdateSystemMessage]], Callable, UpdateSystemMessage]
         ] = None,
+        handoffs: Optional[Handoffs] = None,
     ):
         """
         Args:
@@ -204,6 +209,7 @@ class ConversableAgent(LLMAgent):
                 If the agent is in a swarm, the swarm's tool executor will execute the function.
                 When not in a swarm, you can have another agent execute the tools by adding them to that agent's function_map.
             update_agent_state_before_reply (List[Callable[..., Any]]): A list of functions, including UpdateSystemMessage's, called to update the agent before it replies.
+            handoffs (Handoffs): Handoffs object containing all handoff transition conditions.
         """
         # we change code_execution_config below and we have to make sure we don't change the input
         # in case of UserProxyAgent, without this we could even change the default value {}
@@ -349,6 +355,8 @@ class ConversableAgent(LLMAgent):
 
         # Associate agent update state hooks
         self._register_update_agent_state_before_reply(update_agent_state_before_reply)
+
+        self.handoffs = handoffs if handoffs is not None else Handoffs()
 
     def _validate_name(self, name: str) -> None:
         if not self.llm_config:
@@ -3528,6 +3536,24 @@ class ConversableAgent(LLMAgent):
                     max_turns=max_turns,
                     summary_method=summary_method,
                 )
+
+    def register_handoff(self, condition: Union[OnContextCondition, OnCondition, AfterWork]) -> None:
+        """
+        Register a single handoff condition.
+
+        Args:
+            condition: The condition to add (OnContextCondition, OnCondition, or AfterWork)
+        """
+        self.handoffs.add(condition)
+
+    def register_handoffs(self, conditions: list[Union[OnContextCondition, OnCondition, AfterWork]]) -> None:
+        """
+        Register multiple handoff conditions.
+
+        Args:
+            conditions: List of conditions to add
+        """
+        self.handoffs.add_many(conditions)
 
 
 @export_module("autogen")

@@ -15,14 +15,11 @@ from ....agentchat.contrib.rag.query_engine import RAGQueryEngine
 from ....agentchat.group.after_work import AfterWork
 from ....agentchat.group.context_variables import ContextVariables
 from ....agentchat.group.llm_condition import StringLLMCondition
-from ....agentchat.group.multi_agent_chat import (
-    SwarmResult,
-    initiate_group_chat,
-    register_hand_off,
-)
+from ....agentchat.group.multi_agent_chat import initiate_group_chat
 from ....agentchat.group.on_condition import OnCondition
 from ....agentchat.group.on_context_condition import OnContextCondition
-from ....agentchat.group.transition_target import AfterWorkOptionTarget, AgentTarget
+from ....agentchat.group.reply_result import ReplyResult
+from ....agentchat.group.transition_target import AfterWorkOptionTarget, AgentNameTarget, AgentTarget
 from ....agentchat.utils import ContextExpression
 from ....doc_utils import export_module
 from ....llm_config import LLMConfig
@@ -252,22 +249,22 @@ class DocAgent(ConversableAgent):
 
         def initiate_tasks(
             task_init_info: Annotated[TaskInitInfo, "Documents, Files, URLs to ingest and the queries to run"],
-            context_variables: Annotated[dict[str, Any], "Context variables"],
-        ) -> SwarmResult:
+            context_variables: Annotated[ContextVariables, "Context variables"],
+        ) -> ReplyResult:
             """Add documents to ingest and queries to answer when received."""
             ingestions = task_init_info.ingestions
             queries = task_init_info.queries
 
             logger.info("initiate_tasks context_variables", context_variables)
             if "TaskInitiated" in context_variables:
-                return SwarmResult(values="Task already initiated", context_variables=context_variables)
+                return ReplyResult(message="Task already initiated", context_variables=context_variables)
             context_variables["DocumentsToIngest"] = ingestions
             context_variables["QueriesToRun"] = [query for query in queries]
             context_variables["TaskInitiated"] = True
-            return SwarmResult(
-                values="Updated context variables with task decisions",
+            return ReplyResult(
+                message="Updated context variables with task decisions",
                 context_variables=context_variables,
-                agent=TASK_MANAGER_NAME,
+                target=AgentNameTarget(TASK_MANAGER_NAME),
             )
 
         self._task_manager_agent = ConversableAgent(
@@ -277,12 +274,7 @@ class DocAgent(ConversableAgent):
             functions=[initiate_tasks],
         )
 
-        register_hand_off(
-            agent=self._triage_agent,
-            hand_to=[
-                AfterWork(AgentTarget(self._task_manager_agent)),
-            ],
-        )
+        self._triage_agent.handoffs.set_after_work(AfterWork(AgentTarget(self._task_manager_agent)))
 
         self._data_ingestion_agent = DoclingDocIngestAgent(
             llm_config=llm_config,
@@ -292,12 +284,12 @@ class DocAgent(ConversableAgent):
             return_agent_error=ERROR_MANAGER_NAME,
         )
 
-        def execute_rag_query(context_variables: dict) -> SwarmResult:  # type: ignore[type-arg]
+        def execute_rag_query(context_variables: ContextVariables) -> ReplyResult:  # type: ignore[type-arg]
             """Execute outstanding RAG queries, call the tool once for each outstanding query. Call this tool with no arguments."""
             if len(context_variables["QueriesToRun"]) == 0:
-                return SwarmResult(
-                    agent=TASK_MANAGER_NAME,
-                    values="No queries to run",
+                return ReplyResult(
+                    target=AgentNameTarget(TASK_MANAGER_NAME),
+                    message="No queries to run",
                     context_variables=context_variables,
                 )
 
@@ -325,11 +317,11 @@ class DocAgent(ConversableAgent):
                 context_variables["QueriesToRun"].pop(0)
                 context_variables["CompletedTaskCount"] += 1
                 context_variables["QueryResults"].append({"query": query, "answer": answer, "citations": txt_citations})
-                return SwarmResult(values=answer, context_variables=context_variables)
+                return ReplyResult(message=answer, context_variables=context_variables)
             except Exception as e:
-                return SwarmResult(
-                    agent=ERROR_MANAGER_NAME,
-                    values=f"Query failed for '{query}': {e}",
+                return ReplyResult(
+                    target=AgentNameTarget(ERROR_MANAGER_NAME),
+                    message=f"Query failed for '{query}': {e}",
                     context_variables=context_variables,
                 )
 
@@ -377,60 +369,38 @@ class DocAgent(ConversableAgent):
             update_agent_state_before_reply=[UpdateSystemMessage(create_summary_agent_prompt)],
         )
 
-        register_hand_off(
-            agent=self._task_manager_agent,
-            hand_to=[
-                OnContextCondition(  # Go straight to data ingestion agent if we have documents to ingest
-                    target=AgentTarget(self._data_ingestion_agent),
-                    condition=ContextExpression("len(${DocumentsToIngest}) > 0"),
+        self._task_manager_agent.register_handoffs([
+            OnContextCondition(  # Go straight to data ingestion agent if we have documents to ingest
+                target=AgentTarget(self._data_ingestion_agent),
+                condition=ContextExpression("len(${DocumentsToIngest}) > 0"),
+            ),
+            OnContextCondition(  # Go to Query agent if we have queries to run (ingestion above run first)
+                target=AgentTarget(self._query_agent),
+                condition=ContextExpression("len(${QueriesToRun}) > 0"),
+            ),
+            OnContextCondition(  # Go to Summary agent if no documents or queries left to run and we have query results
+                target=AgentTarget(self._summary_agent),
+                condition=ContextExpression(
+                    "len(${DocumentsToIngest}) == 0 and len(${QueriesToRun}) == 0 and len(${QueryResults}) > 0"
                 ),
-                OnContextCondition(  # Go to Query agent if we have queries to run (ingestion above run first)
-                    target=AgentTarget(self._query_agent),
-                    condition=ContextExpression("len(${QueriesToRun}) > 0"),
-                ),
-                OnContextCondition(  # Go to Summary agent if no documents or queries left to run and we have query results
-                    target=AgentTarget(self._summary_agent),
-                    condition=ContextExpression(
-                        "len(${DocumentsToIngest}) == 0 and len(${QueriesToRun}) == 0 and len(${QueryResults}) > 0"
-                    ),
-                ),
-                OnCondition(
-                    AgentTarget(self._summary_agent),
-                    StringLLMCondition("Call this function if all work is done and a summary will be created"),
-                    available=SummaryTaskAvailableCondition(),
-                ),
-                AfterWork(target=AfterWorkOptionTarget("stay")),
-            ],
-        )
+            ),
+            OnCondition(
+                AgentTarget(self._summary_agent),
+                StringLLMCondition("Call this function if all work is done and a summary will be created"),
+                available=SummaryTaskAvailableCondition(),
+            ),
+            AfterWork(target=AfterWorkOptionTarget("stay")),
+        ])
 
-        register_hand_off(
-            agent=self._data_ingestion_agent,
-            hand_to=[
-                AfterWork(AgentTarget(self._task_manager_agent)),
-            ],
-        )
+        self._data_ingestion_agent.handoffs.set_after_work(AfterWork(AgentTarget(self._task_manager_agent)))
 
-        register_hand_off(
-            agent=self._query_agent,
-            hand_to=[
-                AfterWork(AgentTarget(self._task_manager_agent)),
-            ],
-        )
+        self._query_agent.handoffs.set_after_work(AfterWork(AgentTarget(self._task_manager_agent)))
 
-        register_hand_off(
-            agent=self._summary_agent,
-            hand_to=[
-                AfterWork(AfterWorkOptionTarget("terminate")),
-            ],
-        )
+        # Summary agent terminates the DocumentAgent
+        self._summary_agent.handoffs.set_after_work(AfterWork(AfterWorkOptionTarget("terminate")))
 
         # The Error Agent always terminates the swarm
-        register_hand_off(
-            agent=self._error_agent,
-            hand_to=[
-                AfterWork(AfterWorkOptionTarget("terminate")),
-            ],
-        )
+        self._error_agent.handoffs.set_after_work(AfterWork(AfterWorkOptionTarget("terminate")))
 
         self.register_reply([Agent, None], DocAgent.generate_inner_swarm_reply)
 
