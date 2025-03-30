@@ -203,7 +203,7 @@ class Handoffs(BaseModel):
         self.after_work = None
         return self
 
-    def get_llm_conditions_by_target_type(self, target_type: type) -> list[Union[OnContextCondition, OnCondition]]:
+    def get_llm_conditions_by_target_type(self, target_type: type) -> list[OnCondition]:
         """
         Get OnConditions for a specific target type.
 
@@ -215,7 +215,7 @@ class Handoffs(BaseModel):
         """
         return [on_condition for on_condition in self.llm_conditions if on_condition.has_target_type(target_type)]
 
-    def get_context_conditions_by_target_type(self, target_type: type) -> list[Union[OnContextCondition, OnCondition]]:
+    def get_context_conditions_by_target_type(self, target_type: type) -> list[OnContextCondition]:
         """
         Get OnContextConditions for a specific target type.
 
@@ -230,3 +230,11 @@ class Handoffs(BaseModel):
             for on_context_condition in self.context_conditions
             if on_context_condition.has_target_type(target_type)
         ]
+
+    def set_llm_function_names(self) -> None:
+        """
+        Set the LLM function names for all LLM conditions, creating unique names for each function.
+        """
+        for i, condition in enumerate(self.llm_conditions):
+            # Function names are made unique and allow multiple OnCondition's to the same agent
+            condition.llm_function_name = f"transfer_to_{condition.target.normalized_name()}_{i+1}"

@@ -28,6 +28,9 @@ class TransitionTarget(BaseModel):
         """Get the display name for the target."""
         raise NotImplementedError("Requires subclasses to implement.")
 
+    def normalized_name(self) -> str:
+        """Get a normalized name for the target that has no spaces, used for function calling"""
+        raise NotImplementedError("Requires subclasses to implement.")
 
 class AgentTarget(TransitionTarget):
     """Target that represents a direct agent reference."""
@@ -51,6 +54,14 @@ class AgentTarget(TransitionTarget):
         """Get the display name for the target."""
         return f"{self.agent_name}"
 
+    def normalized_name(self) -> str:
+        """Get a normalized name for the target that has no spaces, used for function calling"""
+        return self.display_name()
+    
+    def __str__(self) -> str:
+        """String representation for AgentTarget, can be shown as a function call message."""
+        return f"Transfer to {self.agent_name}"
+
 
 class AgentNameTarget(TransitionTarget):
     """Target that represents an agent by name."""
@@ -73,6 +84,14 @@ class AgentNameTarget(TransitionTarget):
         """Get the display name for the target."""
         return f"{self.agent_name}"
 
+    def normalized_name(self) -> str:
+        """Get a normalized name for the target that has no spaces, used for function calling"""
+        return self.display_name()
+
+    def __str__(self) -> str:
+        """String representation for AgentTarget, can be shown as a function call message."""
+        return f"Transfer to {self.agent_name}"
+
 
 class NestedChatTarget(TransitionTarget):
     """Target that represents a nested chat configuration."""
@@ -86,11 +105,19 @@ class NestedChatTarget(TransitionTarget):
         self, last_speaker: "ConversableAgent", messages: list[dict[str, Any]], groupchat: "GroupChat"
     ) -> dict[str, Any]:
         """Resolve to the nested chat configuration."""
-        return self.nested_chat_config
+        raise NotImplementedError("NestedChatTarget does not support the resolve method. An agent should be used to encapsulate this nested chat and then the target changed to an AgentTarget.")
 
     def display_name(self) -> str:
         """Get the display name for the target."""
         return "a nested chat"
+
+    def normalized_name(self) -> str:
+        """Get a normalized name for the target that has no spaces, used for function calling"""
+        return "nested_chat"
+
+    def __str__(self) -> str:
+        """String representation for AgentTarget, can be shown as a function call message."""
+        return "Transfer to nested chat"
 
 
 class AfterWorkOptionTarget(TransitionTarget):
@@ -110,6 +137,14 @@ class AfterWorkOptionTarget(TransitionTarget):
     def display_name(self) -> str:
         """Get the display name for the target."""
         return f"After Work option '{self.after_work_option}'"
+
+    def normalized_name(self) -> str:
+        """Get a normalized name for the target that has no spaces, used for function calling"""
+        return f"after_work_option_{self.after_work_option.replace(' ', '_')}"
+
+    def __str__(self) -> str:
+        """String representation for AgentTarget, can be shown as a function call message."""
+        return f"Transfer option {self.after_work_option}"
 
 
 # TODO: Consider adding a SequentialChatTarget class

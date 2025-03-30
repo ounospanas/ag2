@@ -38,7 +38,6 @@ from .transition_target import (
 
 __all__ = [
     "a_initiate_group_chat",
-    "create_group_transition",
     "initiate_group_chat",
 ]
 
@@ -61,20 +60,13 @@ def _establish_swarm_agent(agent: ConversableAgent) -> None:
     agent._swarm_after_work: AfterWork = None
     agent._swarm_after_work_selection_msg: AfterWorkSelectionMessage = None
 
-    # Store nested chats hand offs as we'll establish these in the initiate_swarm_chat
-    # List of Dictionaries containing the nested_chats and condition
-    # agent._swarm_nested_chat_handoffs = []  # type: ignore[attr-defined]
-
     # Store conditional functions (and their OnCondition instances) to add/remove later when transitioning to this agent
     agent._swarm_conditional_functions = {}  # type: ignore[attr-defined]
 
     # Register the hook to update agent state (except tool executor)
     agent.register_hook("update_agent_state", _update_conditional_functions)
 
-    # Store the OnContextConditions for evaluation (list[OnContextCondition])
-    # agent._swarm_oncontextconditions = []  # type: ignore[attr-defined]
-
-    # Register a reply function to run Python function-based OnConditions before any other reply function
+    # Register a reply function to run Python function-based OnContextConditions before any other reply function
     agent.register_reply(trigger=([Agent, None]), reply_func=_run_oncontextconditions, position=0)
 
     agent._get_display_name = MethodType(_swarm_agent_str, agent)  # type: ignore[method-assign]
@@ -104,38 +96,21 @@ def _run_oncontextconditions(
     """Run OnContextConditions for an agent before any other reply function."""
     for on_condition in agent.handoffs.context_conditions:  # type: ignore[attr-defined]
         is_available = (
-            True
-            if on_condition.available is None
-            else on_condition.available.is_available(agent, next(iter(agent.chat_messages.values())))
+            on_condition.available.is_available(agent, next(iter(agent.chat_messages.values()))
+            if on_condition.available
+            else True)
         )
-
-        """
-        if on_condition.available is not None:
-            if callable(on_condition.available):
-                is_available = on_condition.available(agent, next(iter(agent.chat_messages.values())))
-            elif isinstance(on_condition.available, str):
-                is_available = agent.context_variables.get(on_condition.available) or False
-            elif isinstance(on_condition.available, ContextExpression):
-                is_available = on_condition.available.evaluate(agent.context_variables)
-        """
 
         if is_available and on_condition.condition.evaluate(agent.context_variables):
             # Condition has been met, we'll set the Tool Executor's _swarm_next_target
             # attribute and that will be picked up on the next iteration when
             # _determine_next_agent is called
-            for agent in agent._swarm_manager.groupchat.agents:  # type: ignore[attr-defined]
+            for agent in agent._swarm_manager.groupchat.agents:
                 if agent.name == __TOOL_EXECUTOR_NAME__:
-                    agent._swarm_next_target = on_condition.target  # type: ignore[attr-defined]
+                    agent._swarm_next_target = on_condition.target
                     break
 
             transfer_name = on_condition.target.display_name()
-
-            """
-            if isinstance(on_condition.target, ConversableAgent):
-                transfer_name = on_condition.target.name
-            else:
-                transfer_name = "a nested chat"
-            """
 
             return True, "[Handing off to " + transfer_name + "]"
 
@@ -195,6 +170,34 @@ def _change_tool_context_variables_to_depends(
         # Re-register with the agent
         agent.register_for_llm()(new_tool)
 
+def _create_on_condition_handoff_function(target: TransitionTarget) -> Callable:
+    """Creates a function that will be used by the tool call reply function when the condition is met.
+
+    Args:
+        target (TransitionTarget): The target to transfer to.
+
+    Returns:
+        Callable: The transfer function.
+    """
+    def transfer_to_target() -> TransitionTarget:
+        return target
+
+    return transfer_to_target
+
+def _create_on_condition_handoff_functions(agent: ConversableAgent) -> None:
+    """Creates the functions for the OnConditions so that the current tool handling works.
+
+    Args:
+        agent (ConversableAgent): The agent to create the functions for.
+    """
+    # Populate the function names for the handoffs
+    agent.handoffs.set_llm_function_names()
+
+    # Create a function for each OnCondition
+    for on_condition in agent.handoffs.llm_conditions:
+        # Create a function that will be called when the condition is met
+        agent._add_single_function(_create_on_condition_handoff_function(on_condition.target), on_condition.llm_function_name, on_condition.condition.get_prompt(agent, []))
+
 
 def _prepare_swarm_agents(
     initial_agent: ConversableAgent,
@@ -237,20 +240,22 @@ def _prepare_swarm_agents(
     )
     _set_to_tool_execution(tool_execution)
 
+
     nested_chat_agents: list[ConversableAgent] = []
     for agent in agents:
         _create_nested_chats(agent, nested_chat_agents)
 
+    # Create the functions for the OnConditions so that the current tool handling works
+    for agent in agents:
+        _create_on_condition_handoff_functions(agent)
+
     # Update any agent's tools that have context_variables as a parameter
-    # To use Dependency Injection
+    # to use Dependency Injection
 
     # Update tool execution agent with all the functions from all the agents
     for agent in agents + nested_chat_agents:
-        tool_execution._function_map.update(agent._function_map)
-
-        # Add conditional functions to the tool_execution agent
-        for func_name, (func, _) in agent._swarm_conditional_functions.items():  # type: ignore[attr-defined]
-            tool_execution._function_map[func_name] = func
+        # As we're moving towards tools and away from function maps, this may not be used
+        tool_execution._function_map.update(agent._function_map) 
 
         # Update any agent tools that have context_variables parameters to use Dependency Injection
         for tool in agent.tools:
@@ -324,30 +329,36 @@ def _create_nested_chats(agent: ConversableAgent, nested_chat_agents: list[Conve
 
         return nested_chat_agent
 
-    for i, nested_chat_handoff in enumerate(_get_nested_chat_handoff_conditions(agent)):  # type: ignore[attr-defined]
-        llm_nested_chats: dict[str, Any] = nested_chat_handoff["nested_chats"]
+    for i, nested_chat_handoff in enumerate(agent.handoffs.get_llm_conditions_by_target_type(NestedChatTarget)):
+        # llm_nested_chats: dict[str, Any] = nested_chat_handoff["nested_chats"]
+        nested_chat_target: NestedChatTarget = nested_chat_handoff.target
+        llm_nested_chats = nested_chat_target.nested_chat_config
 
         # Create nested chat agent
         nested_chat_agent = create_nested_chat_agent(agent, llm_nested_chats)
         nested_chat_agents.append(nested_chat_agent)
 
-        # Nested chat is triggered through an agent transfer to this nested chat agent
-        condition = nested_chat_handoff["condition"]
-        available = nested_chat_handoff["available"]
+        # Change this Nested Chat handoff to point to the newly created agent,
+        # changing it from a NestedChatTarget to an AgentTarget
+        nested_chat_handoff.target = AgentTarget(nested_chat_agent)
+        # condition = nested_chat_handoff.condition
+        # available = nested_chat_handoff.available
+        '''
         agent.handoffs.add_llm_condition(
-            OnCondition(target=nested_chat_agent, condition=condition, available=available)
+            OnCondition(target=AgentTarget(nested_chat_agent), condition=nested_chat_handoff.condition, available=nested_chat_handoff.available)
         )
+        '''
 
-    for i, nested_chat_context_handoff in enumerate(agent.handoffs.context_conditions):  # type: ignore[attr-defined]
-        if isinstance(nested_chat_context_handoff.target, dict):
-            context_nested_chats: dict[str, Any] = nested_chat_context_handoff.target
+    for i, nested_chat_context_handoff in enumerate(agent.handoffs.get_context_conditions_by_target_type(NestedChatTarget)):  # type: ignore[attr-defined]
+        context_nested_chats_target: NestedChatTarget = nested_chat_context_handoff.target
+        llm_nested_chats = nested_chat_target.nested_chat_config
 
-            # Create nested chat agent
-            nested_chat_agent = create_nested_chat_agent(agent, context_nested_chats)
-            nested_chat_agents.append(nested_chat_agent)
+        # Create nested chat agent
+        nested_chat_agent = create_nested_chat_agent(agent, llm_nested_chats)
+        nested_chat_agents.append(nested_chat_agent)
 
-            # Update the OnContextCondition, replacing the nested chat dictionary with the nested chat agent
-            nested_chat_context_handoff.target = nested_chat_agent
+        # Update the OnContextCondition, replacing the nested chat dictionary with the nested chat agent
+        nested_chat_context_handoff.target = AgentTarget(nested_chat_agent)
 
 
 def _process_initial_messages(
@@ -507,29 +518,14 @@ def _determine_next_agent(
     after_work_condition = None
 
     # 3. If the Tool Executor has determined a next target, return that
-    if tool_execution._swarm_next_target is not None:  # type: ignore[attr-defined]
-        next_agent: TransitionTarget = tool_execution._swarm_next_target  # type: ignore[attr-defined]
-        tool_execution._swarm_next_target = None  # type: ignore[attr-defined]
+    if tool_execution._swarm_next_target is not None:
+        next_agent: TransitionTarget = tool_execution._swarm_next_target
+        tool_execution._swarm_next_target = None
 
         if not isinstance(next_agent, AfterWorkOptionTarget):
-            # Check for string, access agent from group chat.
-
-            if isinstance(next_agent, (AgentTarget, AgentNameTarget)):
-                return next_agent.resolve(last_speaker, groupchat.messages, groupchat)
-
-            """
-            if isinstance(next_agent, str):
-                if next_agent in swarm_agent_names:
-                    next_agent = groupchat.agent_by_name(name=next_agent)
-                else:
-                    raise ValueError(
-                        f"No agent found with the name '{next_agent}'. Ensure the agent exists in the swarm."
-                    )
-            """
-
-            return next_agent  # CHECK THIS
+            return next_agent.resolve(last_speaker, groupchat.messages, groupchat)
         else:
-            after_work_condition = next_agent  # CHECK THIS
+            after_work_condition = next_agent
 
     # get the last swarm agent
     last_swarm_speaker = None
@@ -560,13 +556,13 @@ def _determine_next_agent(
             else group_after_work
         )
 
-    if isinstance(after_work_condition, (AgentTarget, AgentNameTarget)):
-        # Agent/Agent Name - transfer to agent
-        return after_work_condition.resolve(last_speaker, groupchat.messages, groupchat)
-
     if isinstance(after_work_condition, AfterWork):
         after_work_next_agent_selection_msg = after_work_condition.selection_message
         after_work_condition = after_work_condition.target
+
+    if isinstance(after_work_condition, (AgentTarget, AgentNameTarget)):
+        # Agent/Agent Name - transfer to agent
+        return after_work_condition.resolve(last_speaker, groupchat.messages, groupchat)
 
     if isinstance(
         after_work_condition, str
@@ -958,33 +954,22 @@ def register_hand_off_replace_me(
 
 
 def _update_conditional_functions(agent: ConversableAgent, messages: Optional[list[dict[str, Any]]] = None) -> None:
-    """Updates the agent's functions based on the OnCondition's available condition."""
-    for func_name, (func, on_condition) in agent._swarm_conditional_functions.items():  # type: ignore[attr-defined]
-        is_available = True
+    """Updates the agent's functions based on the OnCondition's available condition.
+    
+    All functions are removed and then added back if they are available
+    """
+    for on_condition in agent.handoffs.llm_conditions:
+        is_available = on_condition.available.is_available(agent, messages) if on_condition.available else True
 
-        if on_condition.available is not None:
-            if callable(on_condition.available):
-                is_available = on_condition.available(agent, next(iter(agent.chat_messages.values())))
-            elif isinstance(on_condition.available, str):
-                is_available = agent.context_variables.get(on_condition.available) or False
-            elif isinstance(on_condition.available, ContextExpression):
-                is_available = on_condition.available.evaluate(agent.context_variables)
-
-        # first remove the function if it exists
-        if func_name in agent._function_map:
-            agent.update_tool_signature(func_name, is_remove=True)
-            del agent._function_map[func_name]
+        # Remove it from their tools
+        for tool in agent.tools:
+            if tool.name == on_condition.llm_function_name:
+                agent.remove_tool_for_llm(tool)
+                break
 
         # then add the function if it is available, so that the function signature is updated
         if is_available:
-            condition = on_condition.condition
-            if isinstance(condition, ContextStr):
-                condition = condition.format(context_variables=agent.context_variables)
-            elif callable(condition):
-                condition = condition(agent, messages)
-
-            # TODO: Don't add it if it's already there
-            agent._add_single_function(func, func_name, condition)
+            agent._add_single_function(_create_on_condition_handoff_function(on_condition.target), on_condition.llm_function_name, on_condition.condition.get_prompt(agent, messages))
 
 
 def _generate_swarm_tool_reply(
@@ -1032,13 +1017,14 @@ def _generate_swarm_tool_reply(
             for tool_response in tool_message["tool_responses"]:
                 content = tool_response.get("content")
 
+                # Tool Call returns that are a target are either a ReplyResult or a TransitionTarget are the next agent
                 if isinstance(content, ReplyResult):
                     if content.context_variables != {}:
                         agent.context_variables.update(content.context_variables)
                     if content.target is not None:
                         next_agent = content.target  # type: ignore[assignment]
-                elif isinstance(content, Agent):
-                    next_agent = content  # MS CHECK IF THIS IS BEING CALLED, SHOULD BE a TransitionTarget
+                elif isinstance(content, TransitionTarget):
+                    next_agent = content
 
                 # Serialize the content to a string
                 if content is not None:

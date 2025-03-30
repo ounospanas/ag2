@@ -40,11 +40,13 @@ class OnCondition(BaseModel):  # noqa: N801
                 Example with comparison: ContextExpression("${attempts} >= 3 or ${is_premium} == True or ${tier} == 'gold'")
             The Callable signature is:
                 def my_available_func(agent: ConversableAgent, messages: list[Dict[str, Any]]) -> bool
+        llm_function_name (Optional[str]): The name of the LLM function to use for this condition.
     """
 
     target: TransitionTarget
     condition: LLMCondition
     available: Optional[AvailableCondition] = None
+    llm_function_name: Optional[str] = None
 
     """
     def __post_init__(self) -> None:
