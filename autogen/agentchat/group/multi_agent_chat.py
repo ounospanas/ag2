@@ -192,8 +192,8 @@ def _prepare_swarm_agents(
         # get all transit functions names
         to_be_removed = []
         for agent in agents + nested_chat_agents:
-            if hasattr(agent, "_swarm_conditional_functions"):
-                to_be_removed += list(agent._swarm_conditional_functions.keys())
+            for on_condition in agent.handoffs.llm_conditions:
+                to_be_removed.append(on_condition.llm_function_name)
 
         # register hook to remove transit messages for swarm agents
         for agent in agents + nested_chat_agents:
