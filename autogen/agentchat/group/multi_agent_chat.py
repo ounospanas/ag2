@@ -398,15 +398,32 @@ def _prepare_groupchat_auto_speaker(
     )
 
 
+def _get_last_swarm_agent(
+    groupchat: GroupChat, swarm_agent_names: list[str], tool_executor: GroupToolExecutor
+) -> ConversableAgent:
+    """Get the last swarm agent from the group chat messages. Not including the tool executor."""
+    last_swarm_speaker = None
+    for message in reversed(groupchat.messages):
+        if "name" in message and message["name"] in swarm_agent_names and message["name"] != tool_executor.name:
+            agent = groupchat.agent_by_name(name=message["name"])
+            if isinstance(agent, ConversableAgent):
+                last_swarm_speaker = agent
+                break
+    if last_swarm_speaker is None:
+        raise ValueError("No swarm agent found in the message history")
+
+    return last_swarm_speaker
+
+
 def _determine_next_agent(
     last_speaker: ConversableAgent,
     groupchat: GroupChat,
     initial_agent: ConversableAgent,
     use_initial_agent: bool,
-    tool_execution: GroupToolExecutor,
+    tool_executor: GroupToolExecutor,
     swarm_agent_names: list[str],
     user_agent: Optional[UserProxyAgent],
-    group_after_work: Optional[TransitionOption],
+    group_after_work: Optional[AfterWork],
 ) -> Optional[Union[Agent, Literal["auto"]]]:
     """Determine the next agent in the conversation.
 
@@ -415,10 +432,10 @@ def _determine_next_agent(
         groupchat (GroupChat): GroupChat instance.
         initial_agent (ConversableAgent): The initial agent in the conversation.
         use_initial_agent (bool): Whether to use the initial agent straight away.
-        tool_execution (ConversableAgent): The tool execution agent.
+        tool_executor (ConversableAgent): The tool execution agent.
         swarm_agent_names (list[str]): List of agent names.
         user_agent (UserProxyAgent): Optional user proxy agent.
-        group_after_work (TransitionOption): Group-level Transition option when an agent doesn't select the next agent.
+        group_after_work (AfterWork): Group-level Transition option when an agent doesn't select the next agent.
     """
 
     # Logic for determining the next target (anything based on Transition Target: an agent, nested chat, or AfterWork Option 'terminate'/'stay'/'revert_to_user'/'group_manager')
@@ -428,7 +445,7 @@ def _determine_next_agent(
     # 4. If the user last spoke -> return to the previous agent
     # NOW "AFTER WORK":
     # 5. Get the After Work condition (if the agent doesn't have one, get the group-level one)
-    # 6. Evaluate the After Work condition -> agent / nested chat / AfterWork Option 'terminate'/'stay'/'revert_to_user'/'group_manager'
+    # 6. Resolve and return the After Work condition -> agent / nested chat / AfterWork Option 'terminate'/'stay'/'revert_to_user'/'group_manager'
 
     # 1. If it's the first response, return the initial agent
     if use_initial_agent:
@@ -436,73 +453,50 @@ def _determine_next_agent(
 
     # 2. If the last message is a tool call, return the tool execution agent
     if "tool_calls" in groupchat.messages[-1]:
-        return tool_execution
-
-    after_work_condition = None
+        return tool_executor
 
     # 3. If the Tool Executor has determined a next target, return that
-    if tool_execution.has_next_target():
-        next_agent = tool_execution.get_next_target()
-        tool_execution.clear_next_target()
+    if tool_executor.has_next_target():
+        next_agent = tool_executor.get_next_target()
+        tool_executor.clear_next_target()
 
-        if not isinstance(next_agent, AfterWorkOptionTarget):
-            return next_agent.resolve(last_speaker, groupchat.messages, groupchat)
+        if next_agent.can_resolve_for_speaker_selection():
+            return next_agent.resolve(
+                last_speaker, groupchat.messages, groupchat, last_speaker, user_agent
+            ).get_speaker_selection_result(groupchat)
         else:
-            after_work_condition = next_agent
+            raise ValueError(
+                "Tool Executor next target must be a valid TransitionTarget that can resolve for speaker selection."
+            )
 
     # get the last swarm agent
-    last_swarm_speaker = None
-    for message in reversed(groupchat.messages):
-        if "name" in message and message["name"] in swarm_agent_names and message["name"] != tool_execution.name:
-            agent = groupchat.agent_by_name(name=message["name"])
-            if isinstance(agent, ConversableAgent):
-                last_swarm_speaker = agent
-                break
-    if last_swarm_speaker is None:
-        raise ValueError("No swarm agent found in the message history")
+    last_swarm_speaker = _get_last_swarm_agent(groupchat, swarm_agent_names, tool_executor)
 
-    # If the user last spoke, return to the agent prior
-    if after_work_condition is None and (
-        (user_agent and last_speaker == user_agent) or groupchat.messages[-1]["role"] == "tool"
-    ):
+    # If the user last spoke, return to the agent prior to them
+    if (user_agent and last_speaker == user_agent) or groupchat.messages[-1][
+        "role"
+    ] == "tool":  # MS Not sure the "tool" role check is needed here
         return last_swarm_speaker
 
     # AFTER WORK:
 
-    after_work_next_agent_selection_msg = None
+    # Get the appropriate After Work condition (from the agent if they have one, otherwise the group level one)
+    after_work_condition = (
+        last_swarm_speaker.handoffs.after_work
+        if last_swarm_speaker.handoffs.after_work is not None
+        else group_after_work
+    )
 
-    # Get the After Work condition (from the agent, or the group level if the agent doesn't have one set)
-    if after_work_condition is None:
-        after_work_condition = (
-            last_swarm_speaker.handoffs.after_work
-            if last_swarm_speaker.handoffs.after_work is not None
-            else group_after_work
-        )
+    # Resolve the next agent, termination, or speaker selection method
+    resolved_speaker_selection_result = after_work_condition.target.resolve(
+        last_speaker, groupchat.messages, groupchat, last_swarm_speaker, user_agent
+    ).get_speaker_selection_result(groupchat)
 
-    if isinstance(after_work_condition, AfterWork):
-        after_work_next_agent_selection_msg = after_work_condition.selection_message
-        after_work_condition = after_work_condition.target
+    # If the resolved speaker selection result is "auto", meaning it's a speaker selection method of "auto", we need to prepare the group chat for auto speaker selection
+    if resolved_speaker_selection_result == "auto":
+        _prepare_groupchat_auto_speaker(groupchat, last_swarm_speaker, after_work_condition.selection_message)
 
-    if isinstance(after_work_condition, (AgentTarget, AgentNameTarget)):
-        # Agent/Agent Name - transfer to agent
-        return after_work_condition.resolve(last_speaker, groupchat.messages, groupchat)
-
-    if isinstance(
-        after_work_condition, (str, ConversableAgent)
-    ):  # Agent name in a string # MS REFACTOR CHECK - DON'T THINK IT WILL EVER BE A STRING, SHOULD BE A TransitionTarget-based CLASS
-        raise ValueError("MARK SZE CHECK - SHOULD NOT BE HERE.")
-    elif isinstance(after_work_condition, AfterWorkOptionTarget):
-        if after_work_condition == AfterWorkOptionTarget("terminate"):
-            return None
-        elif after_work_condition == AfterWorkOptionTarget("revert_to_user"):
-            return None if user_agent is None else user_agent
-        elif after_work_condition == AfterWorkOptionTarget("stay"):
-            return last_swarm_speaker
-        elif after_work_condition == AfterWorkOptionTarget("group_manager"):
-            _prepare_groupchat_auto_speaker(groupchat, last_swarm_speaker, after_work_next_agent_selection_msg)
-            return "auto"
-    else:
-        raise ValueError("Invalid next agent.")
+    return resolved_speaker_selection_result
 
 
 def create_group_transition(
@@ -536,7 +530,7 @@ def create_group_transition(
             groupchat=groupchat,
             initial_agent=initial_agent,
             use_initial_agent=state["use_initial_agent"],
-            tool_execution=tool_execution,
+            tool_executor=tool_execution,
             swarm_agent_names=swarm_agent_names,
             user_agent=user_agent,
             group_after_work=group_after_work,

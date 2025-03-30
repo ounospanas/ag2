@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel
 
+from .speaker_selection_result import SpeakerSelectionResult
+
 if TYPE_CHECKING:
     # Avoid circular import
     from ..conversable_agent import ConversableAgent
@@ -20,8 +22,15 @@ TransitionOption = Literal["terminate", "revert_to_user", "stay", "group_manager
 class TransitionTarget(BaseModel):
     """Base class for all transition targets across OnCondition, OnContextCondition, and AfterWork."""
 
-    def resolve(self, last_speaker: "ConversableAgent", messages: list[dict[str, Any]], groupchat: "GroupChat") -> Any:
-        """Resolve to a concrete agent, chat configuration, or control option."""
+    def resolve(
+        self,
+        last_speaker: "ConversableAgent",
+        messages: list[dict[str, Any]],
+        groupchat: "GroupChat",
+        current_agent: "ConversableAgent",
+        user_agent: "ConversableAgent",
+    ) -> SpeakerSelectionResult:
+        """Resolve to a speaker selection result (Agent, None for termination, or str for speaker selection method)."""
         raise NotImplementedError("Requires subclasses to implement.")
 
     def display_name(self) -> str:
@@ -31,6 +40,10 @@ class TransitionTarget(BaseModel):
     def normalized_name(self) -> str:
         """Get a normalized name for the target that has no spaces, used for function calling"""
         raise NotImplementedError("Requires subclasses to implement.")
+
+    def can_resolve_for_speaker_selection(self) -> bool:
+        """Check if the target can resolve to an option for speaker selection (Agent, 'None' to end, Str for speaker selection method). In the case of a nested chat, this will return False as it should be encapsulated in an agent."""
+        return False
 
 
 class AgentTarget(TransitionTarget):
@@ -42,14 +55,20 @@ class AgentTarget(TransitionTarget):
         # Store the name from the agent for serialization
         super().__init__(agent_name=agent.name, **data)
 
+    def can_resolve_for_speaker_selection(self) -> bool:
+        """Check if the target can resolve for speaker selection."""
+        return True
+
     def resolve(
-        self, last_speaker: "ConversableAgent", messages: list[dict[str, Any]], groupchat: "GroupChat"
-    ) -> "ConversableAgent":
+        self,
+        last_speaker: "ConversableAgent",
+        messages: list[dict[str, Any]],
+        groupchat: "GroupChat",
+        current_agent: "ConversableAgent",
+        user_agent: "ConversableAgent",
+    ) -> SpeakerSelectionResult:
         """Resolve to the actual agent object from the groupchat."""
-        for agent in groupchat.agents:
-            if agent.name == self.agent_name:
-                return agent
-        raise ValueError(f"Agent with name '{self.agent_name}' not found in groupchat")
+        return SpeakerSelectionResult(agent_name=self.agent_name)
 
     def display_name(self) -> str:
         """Get the display name for the target."""
@@ -72,14 +91,20 @@ class AgentNameTarget(TransitionTarget):
     def __init__(self, agent_name: str, **data):
         super().__init__(agent_name=agent_name, **data)
 
+    def can_resolve_for_speaker_selection(self) -> bool:
+        """Check if the target can resolve for speaker selection."""
+        return True
+
     def resolve(
-        self, last_speaker: "ConversableAgent", messages: list[dict[str, Any]], groupchat: "GroupChat"
-    ) -> "ConversableAgent":
+        self,
+        last_speaker: "ConversableAgent",
+        messages: list[dict[str, Any]],
+        groupchat: "GroupChat",
+        current_agent: "ConversableAgent",
+        user_agent: "ConversableAgent",
+    ) -> SpeakerSelectionResult:
         """Resolve to the agent name string."""
-        for agent in groupchat.agents:
-            if agent.name == self.agent_name:
-                return agent
-        raise ValueError(f"Agent with name '{self.agent_name}' not found in groupchat")
+        return SpeakerSelectionResult(agent_name=self.agent_name)
 
     def display_name(self) -> str:
         """Get the display name for the target."""
@@ -102,9 +127,18 @@ class NestedChatTarget(TransitionTarget):
     def __init__(self, nested_chat_config: dict[str, Any], **data):
         super().__init__(nested_chat_config=nested_chat_config, **data)
 
+    def can_resolve_for_speaker_selection(self) -> bool:
+        """Check if the target can resolve for speaker selection. For NestedChatTarget the nested chat must be encapsulated into an agent."""
+        return False
+
     def resolve(
-        self, last_speaker: "ConversableAgent", messages: list[dict[str, Any]], groupchat: "GroupChat"
-    ) -> dict[str, Any]:
+        self,
+        last_speaker: "ConversableAgent",
+        messages: list[dict[str, Any]],
+        groupchat: "GroupChat",
+        current_agent: "ConversableAgent",
+        user_agent: "ConversableAgent",
+    ) -> SpeakerSelectionResult:
         """Resolve to the nested chat configuration."""
         raise NotImplementedError(
             "NestedChatTarget does not support the resolve method. An agent should be used to encapsulate this nested chat and then the target changed to an AgentTarget."
@@ -131,11 +165,29 @@ class AfterWorkOptionTarget(TransitionTarget):
     def __init__(self, after_work_option: TransitionOption, **data):
         super().__init__(after_work_option=after_work_option, **data)
 
+    def can_resolve_for_speaker_selection(self) -> bool:
+        """Check if the target can resolve for speaker selection. AfterWorkOptionTarget does not resolve to an agent."""
+        return True
+
     def resolve(
-        self, last_speaker: "ConversableAgent", messages: list[dict[str, Any]], groupchat: "GroupChat"
-    ) -> TransitionOption:
+        self,
+        last_speaker: "ConversableAgent",
+        messages: list[dict[str, Any]],
+        groupchat: "GroupChat",
+        current_agent: "ConversableAgent",
+        user_agent: "ConversableAgent",
+    ) -> SpeakerSelectionResult:
         """Resolve to the option value."""
-        return self.after_work_option
+        if self.after_work_option == "terminate":
+            return SpeakerSelectionResult(terminate=True)
+        elif self.after_work_option == "stay":
+            return SpeakerSelectionResult(agent_name=current_agent.name)
+        elif self.after_work_option == "revert_to_user":
+            return SpeakerSelectionResult(agent_name=user_agent.name)
+        elif self.after_work_option == "group_manager":
+            return SpeakerSelectionResult(speaker_selection_method="auto")
+        else:
+            raise ValueError(f"Unknown after work option: {self.after_work_option}")
 
     def display_name(self) -> str:
         """Get the display name for the target."""
