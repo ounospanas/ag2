@@ -32,6 +32,7 @@ class TransitionTarget(BaseModel):
         """Get a normalized name for the target that has no spaces, used for function calling"""
         raise NotImplementedError("Requires subclasses to implement.")
 
+
 class AgentTarget(TransitionTarget):
     """Target that represents a direct agent reference."""
 
@@ -57,7 +58,7 @@ class AgentTarget(TransitionTarget):
     def normalized_name(self) -> str:
         """Get a normalized name for the target that has no spaces, used for function calling"""
         return self.display_name()
-    
+
     def __str__(self) -> str:
         """String representation for AgentTarget, can be shown as a function call message."""
         return f"Transfer to {self.agent_name}"
@@ -105,7 +106,9 @@ class NestedChatTarget(TransitionTarget):
         self, last_speaker: "ConversableAgent", messages: list[dict[str, Any]], groupchat: "GroupChat"
     ) -> dict[str, Any]:
         """Resolve to the nested chat configuration."""
-        raise NotImplementedError("NestedChatTarget does not support the resolve method. An agent should be used to encapsulate this nested chat and then the target changed to an AgentTarget.")
+        raise NotImplementedError(
+            "NestedChatTarget does not support the resolve method. An agent should be used to encapsulate this nested chat and then the target changed to an AgentTarget."
+        )
 
     def display_name(self) -> str:
         """Get the display name for the target."""

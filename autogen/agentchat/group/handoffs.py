@@ -237,4 +237,4 @@ class Handoffs(BaseModel):
         """
         for i, condition in enumerate(self.llm_conditions):
             # Function names are made unique and allow multiple OnCondition's to the same agent
-            condition.llm_function_name = f"transfer_to_{condition.target.normalized_name()}_{i+1}"
+            condition.llm_function_name = f"transfer_to_{condition.target.normalized_name()}_{i + 1}"

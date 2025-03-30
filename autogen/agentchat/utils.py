@@ -417,8 +417,11 @@ class ContextExpression:
 
         try:
             return eval(eval_expr)  # type: ignore[no-any-return]
-        except Exception as e:
-            raise ValueError("Error evaluating expression '{self.expression}' (are you sure you're using ${my_context_variable_key}):" + " {str(e)}")
+        except Exception:
+            raise ValueError(
+                "Error evaluating expression '{self.expression}' (are you sure you're using ${my_context_variable_key}):"
+                + " {str(e)}"
+            )
 
     def __str__(self) -> str:
         return f"ContextExpression('{self.expression}')"
