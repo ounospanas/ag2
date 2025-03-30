@@ -26,7 +26,7 @@ class GroupToolExecutor(ConversableAgent):
             name=__TOOL_EXECUTOR_NAME__,
             system_message="Tool Execution, do not use this agent directly.",
             human_input_mode="NEVER",
-            code_execution_config=None,
+            code_execution_config=False,
         )
 
         # Store the next target from a tool call

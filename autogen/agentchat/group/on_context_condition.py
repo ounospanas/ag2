@@ -81,3 +81,12 @@ class OnContextCondition(BaseModel):  # noqa: N801
             bool: True if the target type matches, False otherwise
         """
         return isinstance(self.target, target_type)
+
+    def target_requires_wrapping(self) -> bool:
+        """
+        Check if the target requires wrapping in an agent.
+
+        Returns:
+            bool: True if the target requires wrapping, False otherwise
+        """
+        return self.target.needs_agent_wrapper()

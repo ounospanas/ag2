@@ -20,10 +20,10 @@ from .after_work import (
 from .context_variables import ContextVariables
 from .group_tool_executor import GroupToolExecutor
 from .transition_target import (
+    __AGENT_WRAPPER_PREFIX__,
     AfterWorkOptionTarget,
     AgentNameTarget,
     AgentTarget,
-    NestedChatTarget,
     TransitionOption,
     TransitionTarget,
 )
@@ -175,7 +175,7 @@ def _prepare_swarm_agents(
     context_variables: ContextVariables,
     exclude_transit_message: bool = True,
 ) -> tuple[ConversableAgent, list[ConversableAgent]]:
-    """Validates agents, create the tool executor, configure nested chats.
+    """Validates agents, create the tool executor, wrap necessary targets in agents.
 
     Args:
         initial_agent (ConversableAgent): The first agent in the conversation.
@@ -185,7 +185,7 @@ def _prepare_swarm_agents(
 
     Returns:
         ConversableAgent: The tool executor agent.
-        list[ConversableAgent]: List of nested chat agents.
+        list[ConversableAgent]: List of wrapped agents.
     """
     if not isinstance(initial_agent, ConversableAgent):
         raise ValueError("initial_agent must be a ConversableAgent")
@@ -203,10 +203,10 @@ def _prepare_swarm_agents(
     # Create Tool Executor for the group
     tool_execution = GroupToolExecutor()
 
-    # Create NestedChat Agents
-    nested_chat_agents: list[ConversableAgent] = []
+    # Wrap handoff targets in agents that need to be wrapped
+    wrapped_chat_agents: list[ConversableAgent] = []
     for agent in agents:
-        _create_nested_chats(agent, nested_chat_agents)
+        _wrap_agent_handoff_targets(agent, wrapped_chat_agents)
 
     # Create the functions for the OnConditions so that the current tool handling works
     for agent in agents:
@@ -215,80 +215,46 @@ def _prepare_swarm_agents(
     # Register all the agents' functions with the tool executor and
     # use dependency injection for the context variables parameter
     # Update tool execution agent with all the functions from all the agents
-    tool_execution.register_agents_functions(agents + nested_chat_agents, context_variables)
+    tool_execution.register_agents_functions(agents + wrapped_chat_agents, context_variables)
 
     if exclude_transit_message:
         _prepare_exclude_transit_messages(agents)
 
-    return tool_execution, nested_chat_agents
+    return tool_execution, wrapped_chat_agents
 
 
-def _create_nested_chats(agent: ConversableAgent, nested_chat_agents: list[ConversableAgent]) -> None:
-    """Create nested chat agents and register nested chats.
+def _wrap_agent_handoff_targets(agent: ConversableAgent, wrapped_agent_list: list[ConversableAgent]) -> None:
+    """Wrap handoff targets in agents that need to be wrapped to be part of the group chat.
+
+    Example is NestedChatTarget.
 
     Args:
-        agent (ConversableAgent): The agent to create nested chat agents for, including registering the hand offs.
-        nested_chat_agents (list[ConversableAgent]): List for all nested chat agents, appends to this.
+        agent (ConversableAgent): The agent to wrap the handoff targets for.
+        wrapped_agent_list (list[ConversableAgent]): List of wrapped chat agents that will be appended to.
     """
+    # Wrap OnCondition targets
+    for i, handoff_target_requiring_wrapping in enumerate(agent.handoffs.get_llm_conditions_requiring_wrapping()):
+        # Create wrapper agent
+        wrapper_agent = handoff_target_requiring_wrapping.target.create_wrapper_agent(parent_agent=agent, index=i)
+        wrapped_agent_list.append(wrapper_agent)
 
-    def create_nested_chat_agent(agent: ConversableAgent, nested_chats: dict[str, Any]) -> ConversableAgent:
-        """Create a nested chat agent for a nested chat configuration.
+        # Change this handoff target to point to the newly created agent
+        handoff_target_requiring_wrapping.target = AgentTarget(wrapper_agent)
 
-        Args:
-            agent (ConversableAgent): The agent to create the nested chat agent for.
-            nested_chats (dict[str, Any]): The nested chat configuration.
+    for i, handoff_target_requiring_wrapping in enumerate(agent.handoffs.get_context_conditions_requiring_wrapping()):
+        # Create wrapper agent
+        wrapper_agent = handoff_target_requiring_wrapping.target.create_wrapper_agent(parent_agent=agent, index=i)
+        wrapped_agent_list.append(wrapper_agent)
 
-        Returns:
-            The created nested chat agent.
-        """
-        # Create a nested chat agent specifically for this nested chat
-        nested_chat_agent = ConversableAgent(name=f"nested_chat_{agent.name}_{i + 1}")
-
-        nested_chat_agent.register_nested_chats(
-            nested_chats["chat_queue"],
-            reply_func_from_nested_chats=nested_chats.get("reply_func_from_nested_chats")
-            or "summary_from_nested_chats",
-            config=nested_chats.get("config"),
-            trigger=lambda sender: True,
-            position=0,
-            use_async=nested_chats.get("use_async", False),
-        )
-
-        # After the nested chat is complete, transfer back to the parent agent
-        nested_chat_agent.handoffs.set_after_work(AfterWork(target=AgentTarget(agent)))
-
-        return nested_chat_agent
-
-    for i, nested_chat_handoff in enumerate(agent.handoffs.get_llm_conditions_by_target_type(NestedChatTarget)):
-        nested_chat_target: NestedChatTarget = nested_chat_handoff.target
-        llm_nested_chats = nested_chat_target.nested_chat_config
-
-        # Create nested chat agent
-        nested_chat_agent = create_nested_chat_agent(agent, llm_nested_chats)
-        nested_chat_agents.append(nested_chat_agent)
-
-        # Change this Nested Chat handoff to point to the newly created agent,
-        # changing it from a NestedChatTarget to an AgentTarget
-        nested_chat_handoff.target = AgentTarget(nested_chat_agent)
-
-    for i, nested_chat_context_handoff in enumerate(
-        agent.handoffs.get_context_conditions_by_target_type(NestedChatTarget)
-    ):  # type: ignore[attr-defined]
-        llm_nested_chats = nested_chat_target.nested_chat_config
-
-        # Create nested chat agent
-        nested_chat_agent = create_nested_chat_agent(agent, llm_nested_chats)
-        nested_chat_agents.append(nested_chat_agent)
-
-        # Update the OnContextCondition, replacing the nested chat dictionary with the nested chat agent
-        nested_chat_context_handoff.target = AgentTarget(nested_chat_agent)
+        # Change this handoff target to point to the newly created agent
+        handoff_target_requiring_wrapping.target = AgentTarget(wrapper_agent)
 
 
 def _process_initial_messages(
     messages: Union[list[dict[str, Any]], str],
     user_agent: Optional[UserProxyAgent],
     agents: list[ConversableAgent],
-    nested_chat_agents: list[ConversableAgent],
+    wrapped_agents: list[ConversableAgent],
 ) -> tuple[list[dict[str, Any]], Optional[Agent], list[str], list[Agent]]:
     """Process initial messages, validating agent names against messages, and determining the last agent to speak.
 
@@ -296,7 +262,7 @@ def _process_initial_messages(
         messages: Initial messages to process.
         user_agent: Optional user proxy agent passed in to a_/initiate_swarm_chat.
         agents: Agents in swarm.
-        nested_chat_agents: List of nested chat agents.
+        wrapped_agents: List of wrapped agents.
 
     Returns:
         list[dict[str, Any]]: Processed message(s).
@@ -307,7 +273,7 @@ def _process_initial_messages(
     if isinstance(messages, str):
         messages = [{"role": "user", "content": messages}]
 
-    swarm_agent_names = [agent.name for agent in agents + nested_chat_agents]
+    swarm_agent_names = [agent.name for agent in agents + wrapped_agents]
 
     # If there's only one message and there's no identified swarm agent
     # Start with a user proxy agent, creating one if they haven't passed one in
@@ -322,7 +288,7 @@ def _process_initial_messages(
         last_message = messages[0]
         if "name" in last_message:
             if last_message["name"] in swarm_agent_names:
-                last_agent = next(agent for agent in agents + nested_chat_agents if agent.name == last_message["name"])  # type: ignore[assignment]
+                last_agent = next(agent for agent in agents + wrapped_agents if agent.name == last_message["name"])  # type: ignore[assignment]
             elif user_agent and last_message["name"] == user_agent.name:
                 last_agent = user_agent
             else:
@@ -369,7 +335,7 @@ def _prepare_groupchat_auto_speaker(
 ) -> None:
     """Prepare the group chat for auto speaker selection, includes updating or restore the groupchat speaker selection message.
 
-    Tool Executor and Nested Chat agents will be removed from the available agents list.
+    Tool Executor and wrapped agents will be removed from the available agents list.
 
     Args:
         groupchat (GroupChat): GroupChat instance.
@@ -380,11 +346,11 @@ def _prepare_groupchat_auto_speaker(
     def substitute_agentlist(template: str) -> str:
         # Run through group chat's string substitution first for {agentlist}
         # We need to do this so that the next substitution doesn't fail with agentlist
-        # and we can remove the tool executor and nested chats from the available agents list
+        # and we can remove the tool executor and wrapped chats from the available agents list
         agent_list = [
             agent
             for agent in groupchat.agents
-            if not isinstance(agent, GroupToolExecutor) and not agent.name.startswith("nested_chat_")
+            if not isinstance(agent, GroupToolExecutor) and not agent.name.startswith(__AGENT_WRAPPER_PREFIX__)
         ]
 
         groupchat.select_speaker_prompt_template = template
@@ -438,14 +404,14 @@ def _determine_next_agent(
         group_after_work (AfterWork): Group-level Transition option when an agent doesn't select the next agent.
     """
 
-    # Logic for determining the next target (anything based on Transition Target: an agent, nested chat, or AfterWork Option 'terminate'/'stay'/'revert_to_user'/'group_manager')
+    # Logic for determining the next target (anything based on Transition Target: an agent, wrapped agent, or AfterWork Option 'terminate'/'stay'/'revert_to_user'/'group_manager')
     # 1. If it's the first response -> initial agent
     # 2. If the last message is a tool call -> tool execution agent
     # 3. If the Tool Executor has determined a next target (e.g. ReplyResult specified target) -> transition to tool reply target
     # 4. If the user last spoke -> return to the previous agent
     # NOW "AFTER WORK":
     # 5. Get the After Work condition (if the agent doesn't have one, get the group-level one)
-    # 6. Resolve and return the After Work condition -> agent / nested chat / AfterWork Option 'terminate'/'stay'/'revert_to_user'/'group_manager'
+    # 6. Resolve and return the After Work condition -> agent / wrapped agent / AfterWork Option 'terminate'/'stay'/'revert_to_user'/'group_manager'
 
     # 1. If it's the first response, return the initial agent
     if use_initial_agent:
@@ -672,12 +638,12 @@ def initiate_group_chat(
     # Default to terminate
     group_after_work = after_work if after_work is not None else AfterWork(target=AfterWorkOptionTarget("terminate"))
 
-    tool_execution, nested_chat_agents = _prepare_swarm_agents(
+    tool_execution, wrapped_agents = _prepare_swarm_agents(
         initial_agent, agents, context_variables, exclude_transit_message
     )
 
     processed_messages, last_agent, swarm_agent_names, temp_user_list = _process_initial_messages(
-        messages, user_agent, agents, nested_chat_agents
+        messages, user_agent, agents, wrapped_agents
     )
 
     # Create transition function (has enclosed state for initial agent)
@@ -690,7 +656,7 @@ def initiate_group_chat(
     )
 
     groupchat = GroupChat(
-        agents=[tool_execution] + agents + nested_chat_agents + ([user_agent] if user_agent else temp_user_list),
+        agents=[tool_execution] + agents + wrapped_agents + ([user_agent] if user_agent else temp_user_list),
         messages=[],
         max_round=max_rounds,
         speaker_selection_method=swarm_transition,

@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import copy
+from typing import Any
 
 import pytest
 
@@ -200,3 +201,129 @@ class TestContextVariables:
 
         # Original should be unchanged
         assert self.context.get("nested")["level1"]["level2"] == "modified_in_copy"
+
+    def test_sequential_operations(self) -> None:
+        """Test sequential method calls (not chaining as methods don't return self)."""
+        # Create fresh context
+        context = ContextVariables()
+
+        # Sequential operations
+        context.set("key1", "value1")
+        context.set("key2", "value2")
+        context.remove("key1")
+
+        # Verify results
+        assert "key1" not in context
+        assert context.get("key2") == "value2"
+
+        # More operations
+        context.clear()
+        context.set("a", 1)
+        context.set("b", 2)
+        context.set("c", 3)
+        context.remove("b")
+
+        # Verify the operations were applied
+        assert "a" in context and "c" in context
+        assert "b" not in context
+
+    def test_empty_and_none_keys_values(self) -> None:
+        """Test behavior with empty and None keys and values."""
+        # Test with empty string key
+        self.context.set("", "empty_key")
+        assert self.context.get("") == "empty_key"
+
+        # Test with None value
+        self.context.set("none_value", None)
+        assert self.context.get("none_value") is None
+
+        # Test with empty collection values
+        self.context.set("empty_list", [])
+        self.context.set("empty_dict", {})
+
+        assert self.context.get("empty_list") == []
+        assert self.context.get("empty_dict") == {}
+
+        # Test special key types if supported
+        # Typically dictionaries only support strings as keys
+        # but this can test the behavior or highlight limitations
+        try:
+            self.context.set(None, "none_key")
+            assert self.context.get(None) == "none_key"
+        except (TypeError, ValueError):
+            # This is an acceptable outcome if None keys are not supported
+            pass
+
+    def test_special_type_handling(self) -> None:
+        """Test handling of special types."""
+        # Test with complex types
+        complex_number = complex(1, 2)
+        self.context.set("complex", complex_number)
+        assert self.context.get("complex") == complex_number
+
+        # Test with custom class
+        class CustomClass:
+            def __init__(self, value: Any):
+                self.value = value
+
+            def __eq__(self, other):
+                if not isinstance(other, CustomClass):
+                    return False
+                return self.value == other.value
+
+        custom_obj = CustomClass("test")
+        self.context.set("custom", custom_obj)
+
+        # Test retrieval of custom object
+        retrieved = self.context.get("custom")
+        assert isinstance(retrieved, CustomClass)
+        assert retrieved.value == "test"
+        assert retrieved == custom_obj
+
+    def test_large_dataset(self) -> None:
+        """Test with a large number of items."""
+        # Create a context with a large number of items
+        large_context = ContextVariables()
+        large_data = {f"key{i}": f"value{i}" for i in range(1000)}
+        large_context.update(large_data)
+
+        # Test size
+        assert len(large_context) == 1000
+
+        # Test retrieval
+        assert large_context.get("key500") == "value500"
+
+        # Test iteration
+        count = 0
+        for _ in large_context:
+            count += 1
+        assert count == 1000
+
+    def test_multiple_updates(self) -> None:
+        """Test multiple consecutive updates."""
+        context = ContextVariables()
+
+        # Sequential updates
+        context.update({"a": 1})
+        context.update({"b": 2})
+        context.update({"c": 3})
+
+        # Verify
+        assert context.to_dict() == {"a": 1, "b": 2, "c": 3}
+
+        # Update with overlapping keys
+        context.update({"b": "updated", "d": 4})
+
+        # Verify updates and preserved values
+        assert context.to_dict() == {"a": 1, "b": "updated", "c": 3, "d": 4}
+
+    def test_empty_update(self) -> None:
+        """Test update with empty dictionary."""
+        # Get state before
+        data_before = self.context.to_dict()
+
+        # Update with empty dict
+        self.context.update({})
+
+        # Verify nothing changed
+        assert self.context.to_dict() == data_before

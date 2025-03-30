@@ -231,6 +231,24 @@ class Handoffs(BaseModel):
             if on_context_condition.has_target_type(target_type)
         ]
 
+    def get_llm_conditions_requiring_wrapping(self) -> list[OnCondition]:
+        """
+        Get LLM conditions that have targets that require wrapping.
+
+        Returns:
+            List of LLM conditions that require wrapping
+        """
+        return [condition for condition in self.llm_conditions if condition.target_requires_wrapping()]
+
+    def get_context_conditions_requiring_wrapping(self) -> list[OnContextCondition]:
+        """
+        Get context conditions that have targets that require wrapping.
+
+        Returns:
+            List of context conditions that require wrapping
+        """
+        return [condition for condition in self.context_conditions if condition.target_requires_wrapping()]
+
     def set_llm_function_names(self) -> None:
         """
         Set the LLM function names for all LLM conditions, creating unique names for each function.

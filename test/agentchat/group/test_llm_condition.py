@@ -5,11 +5,13 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+from pydantic import ValidationError
 
 from autogen.agentchat.group.context_str import ContextStr
 from autogen.agentchat.group.context_variables import ContextVariables
 from autogen.agentchat.group.llm_condition import (
     ContextStrLLMCondition,
+    LLMCondition,
     StringLLMCondition,
 )
 
@@ -19,7 +21,7 @@ class TestLLMCondition:
         """Test that the LLMCondition protocol raises NotImplementedError when implemented without override."""
 
         # Create a class that implements the protocol but doesn't override get_prompt
-        class TestImpl:
+        class TestImpl(LLMCondition):
             def get_prompt(self, agent, messages):
                 raise NotImplementedError("Requires subclasses to implement.")
 
@@ -27,6 +29,13 @@ class TestLLMCondition:
         with pytest.raises(NotImplementedError) as excinfo:
             impl.get_prompt(None, [])
         assert "Requires subclasses to implement" in str(excinfo.value)
+
+    def test_initialisation_with_no_parameters(self) -> None:
+        """Test initialisation of LLMCondition base class with no parameters."""
+        condition = LLMCondition()
+        assert isinstance(condition, LLMCondition)
+        with pytest.raises(NotImplementedError):
+            condition.get_prompt(None, [])
 
 
 class TestStringLLMCondition:
@@ -63,6 +72,23 @@ class TestStringLLMCondition:
         result2 = condition.get_prompt(mock_agent2, messages2)
 
         assert result1 == result2 == prompt
+
+    def test_init_with_empty_prompt(self) -> None:
+        """Test initialisation with an empty prompt string."""
+        condition = StringLLMCondition(prompt="")
+        assert condition.prompt == ""
+        result = condition.get_prompt(None, [])
+        assert result == ""
+
+    def test_init_with_multiline_prompt(self) -> None:
+        """Test initialisation with a multi-line prompt string."""
+        prompt = """This is a test.
+        It has multiple lines.
+        Line three."""
+        condition = StringLLMCondition(prompt=prompt)
+        assert condition.prompt == prompt
+        result = condition.get_prompt(None, [])
+        assert result == prompt
 
 
 class TestContextStrLLMCondition:
@@ -154,3 +180,57 @@ class TestContextStrLLMCondition:
             condition.get_prompt(mock_agent, messages)
 
         assert "access_level" in str(excinfo.value)
+
+    def test_init_with_template_string(self) -> None:
+        """Test initialising with a template string instead of ContextStr object."""
+        # Test that we need to pass a ContextStr, not a string
+        with pytest.raises(ValidationError):
+            ContextStrLLMCondition(context_str="This is a {variable}")
+
+    def test_get_prompt_with_empty_context_variables(self) -> None:
+        """Test get_prompt with empty context variables."""
+        # Create a template with no variables
+        template = "This is a static message with no variables."
+        context_str = ContextStr(template)
+
+        condition = ContextStrLLMCondition(context_str=context_str)
+
+        # Set up mock agent with empty context variables
+        mock_agent = MagicMock()
+        mock_agent.context_variables = ContextVariables()
+
+        # Messages are not used
+        messages = [{"role": "user", "content": "Hello"}]
+
+        result = condition.get_prompt(mock_agent, messages)
+        # Should return the template unchanged
+        assert result == template
+
+    def test_integration_with_nested_context_variables(self) -> None:
+        """Test integration with nested context variables."""
+        # Create a template using nested variables
+        template = "User info: {user_info}"
+        context_str = ContextStr(template)
+
+        condition = ContextStrLLMCondition(context_str=context_str)
+
+        # Set up mock agent with nested context variables
+        mock_agent = MagicMock()
+        mock_agent.context_variables = ContextVariables(
+            data={
+                "user_info": {
+                    "name": "Alice",
+                    "details": {"level": "Admin", "permissions": ["read", "write", "delete"]},
+                }
+            }
+        )
+
+        # Messages are not used
+        messages = [{"role": "user", "content": "Hello"}]
+
+        result = condition.get_prompt(mock_agent, messages)
+        # Should format the nested dictionary as a string
+        expected = (
+            "User info: {'name': 'Alice', 'details': {'level': 'Admin', 'permissions': ['read', 'write', 'delete']}}"
+        )
+        assert result == expected

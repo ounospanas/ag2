@@ -6,9 +6,15 @@ from unittest.mock import MagicMock, patch
 
 from autogen.agentchat.group.available_condition import StringAvailableCondition
 from autogen.agentchat.group.context_str import ContextStr
+from autogen.agentchat.group.context_variables import ContextVariables
 from autogen.agentchat.group.llm_condition import ContextStrLLMCondition, StringLLMCondition
 from autogen.agentchat.group.on_condition import OnCondition
-from autogen.agentchat.group.transition_target import AgentTarget, TransitionTarget
+from autogen.agentchat.group.transition_target import (
+    AgentNameTarget,
+    AgentTarget,
+    NestedChatTarget,
+    TransitionTarget,
+)
 
 
 class TestOnCondition:
@@ -85,8 +91,7 @@ class TestOnCondition:
         """Test initialisation with ContextExpression available."""
         target = MagicMock(spec=TransitionTarget)
         condition = StringLLMCondition(prompt="Is this a valid condition?")
-        available = MagicMock()
-        available.evaluate = MagicMock()
+        available = StringAvailableCondition("is_logged_in")
 
         on_condition = OnCondition(target=target, condition=condition, available=available)
 
@@ -96,8 +101,7 @@ class TestOnCondition:
     def test_condition_get_prompt(self, mock_subclasshook) -> None:
         """Test that condition.get_prompt is called correctly."""
         target = MagicMock(spec=TransitionTarget)
-        condition = MagicMock()
-        condition.get_prompt = MagicMock(return_value="Prompt text")
+        condition = StringLLMCondition(prompt="Prompt text")
 
         on_condition = OnCondition(target=target, condition=condition)
 
@@ -108,16 +112,15 @@ class TestOnCondition:
         result = on_condition.condition.get_prompt(mock_agent, messages)
 
         # Verify the mock was called correctly
-        condition.get_prompt.assert_called_once_with(mock_agent, messages)
         assert result == "Prompt text"
 
     @patch("autogen.agentchat.group.on_condition.AvailableCondition.__subclasshook__")
     def test_available_is_available(self, mock_subclasshook) -> None:
         """Test that available.is_available is called correctly."""
         target = MagicMock(spec=TransitionTarget)
-        condition = MagicMock()
-        available = MagicMock()
-        available.is_available = MagicMock(return_value=True)
+        condition = StringLLMCondition(prompt="Test Prompt")
+        available = StringAvailableCondition(context_variable="is_available")
+        # available.is_available = MagicMock(return_value=True)
 
         on_condition = OnCondition(target=target, condition=condition, available=available)
 
@@ -128,5 +131,98 @@ class TestOnCondition:
         result = on_condition.available.is_available(mock_agent, messages)
 
         # Verify the mock was called correctly
-        available.is_available.assert_called_once_with(mock_agent, messages)
         assert result is True
+
+    def test_has_target_type(self):
+        """Test the has_target_type method with various target types."""
+        # Test with AgentTarget
+        mock_agent = MagicMock()
+        mock_agent.name = "test_agent"
+        target = AgentTarget(agent=mock_agent)
+        condition = StringLLMCondition(prompt="Should we transfer to test_agent?")
+
+        on_condition = OnCondition(target=target, condition=condition)
+
+        # Should match the correct type
+        assert on_condition.has_target_type(AgentTarget) is True
+
+        # Should not match other types
+        assert on_condition.has_target_type(AgentNameTarget) is False
+        assert on_condition.has_target_type(NestedChatTarget) is False
+
+        # Test with AgentNameTarget
+        target = AgentNameTarget(agent_name="test_agent")
+        on_condition = OnCondition(target=target, condition=condition)
+
+        assert on_condition.has_target_type(AgentNameTarget) is True
+        assert on_condition.has_target_type(AgentTarget) is False
+
+        # Test with NestedChatTarget
+        target = NestedChatTarget(nested_chat_config={"chat_queue": []})
+        on_condition = OnCondition(target=target, condition=condition)
+
+        assert on_condition.has_target_type(NestedChatTarget) is True
+        assert on_condition.has_target_type(AgentTarget) is False
+
+    def test_target_requires_wrapping(self):
+        """Test the target_requires_wrapping method with different target types."""
+        condition = StringLLMCondition(prompt="Just a test condition")
+
+        # Test with AgentTarget (should not require wrapping)
+        mock_agent = MagicMock()
+        mock_agent.name = "test_agent"
+        target = AgentTarget(agent=mock_agent)
+
+        on_condition = OnCondition(target=target, condition=condition)
+        assert on_condition.target_requires_wrapping() is False
+
+        # Test with NestedChatTarget (should require wrapping)
+        target = NestedChatTarget(nested_chat_config={"chat_queue": []})
+
+        on_condition = OnCondition(target=target, condition=condition)
+        assert on_condition.target_requires_wrapping() is True
+
+    def test_llm_function_name_handling(self):
+        """Test setting and getting the llm_function_name."""
+        target = MagicMock(spec=TransitionTarget)
+        condition = StringLLMCondition(prompt="Test prompt")
+
+        # Initialize with no function name
+        on_condition = OnCondition(target=target, condition=condition)
+        assert on_condition.llm_function_name is None
+
+        # Set the function name
+        function_name = "transfer_to_agent1"
+        on_condition.llm_function_name = function_name
+        assert on_condition.llm_function_name == function_name
+
+    def test_integration_with_real_components(self):
+        """Test integration of OnCondition with real components."""
+        # Create a real agent target
+        mock_agent = MagicMock()
+        mock_agent.name = "test_agent"
+        target = AgentTarget(agent=mock_agent)
+
+        # Create a real LLM condition
+        condition = StringLLMCondition(prompt="Should we transfer to {agent_name}?")
+
+        # Create a real available condition
+        available = StringAvailableCondition(context_variable="is_transfer_allowed")
+
+        # Create the OnCondition
+        on_condition = OnCondition(
+            target=target, condition=condition, available=available, llm_function_name="transfer_to_test_agent"
+        )
+
+        # Set up context variables
+        mock_agent_for_eval = MagicMock()
+        mock_agent_for_eval.context_variables = ContextVariables(
+            data={"is_transfer_allowed": True, "agent_name": "test_agent"}
+        )
+
+        # Test available condition
+        assert on_condition.available.is_available(mock_agent_for_eval, []) is True
+
+        # Test getting the prompt
+        prompt = on_condition.condition.get_prompt(None, [])
+        assert prompt == "Should we transfer to {agent_name}?"

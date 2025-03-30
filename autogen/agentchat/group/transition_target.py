@@ -15,12 +15,19 @@ if TYPE_CHECKING:
 
 __all__ = ["AfterWorkOptionTarget", "AgentNameTarget", "AgentTarget", "NestedChatTarget", "TransitionTarget"]
 
+# Prefix for all wrapped agent names
+__AGENT_WRAPPER_PREFIX__ = "wrapped_"
+
 # Common options for transitions
 TransitionOption = Literal["terminate", "revert_to_user", "stay", "group_manager"]
 
 
 class TransitionTarget(BaseModel):
     """Base class for all transition targets across OnCondition, OnContextCondition, and AfterWork."""
+
+    def can_resolve_for_speaker_selection(self) -> bool:
+        """Check if the target can resolve to an option for speaker selection (Agent, 'None' to end, Str for speaker selection method). In the case of a nested chat, this will return False as it should be encapsulated in an agent."""
+        return False
 
     def resolve(
         self,
@@ -41,9 +48,13 @@ class TransitionTarget(BaseModel):
         """Get a normalized name for the target that has no spaces, used for function calling"""
         raise NotImplementedError("Requires subclasses to implement.")
 
-    def can_resolve_for_speaker_selection(self) -> bool:
-        """Check if the target can resolve to an option for speaker selection (Agent, 'None' to end, Str for speaker selection method). In the case of a nested chat, this will return False as it should be encapsulated in an agent."""
-        return False
+    def needs_agent_wrapper(self) -> bool:
+        """Check if the target needs to be wrapped in an agent."""
+        raise NotImplementedError("Requires subclasses to implement.")
+
+    def create_wrapper_agent(self, parent_agent: "ConversableAgent", index: int) -> "ConversableAgent":
+        """Create a wrapper agent for the target if needed."""
+        raise NotImplementedError("Requires subclasses to implement.")
 
 
 class AgentTarget(TransitionTarget):
@@ -82,6 +93,14 @@ class AgentTarget(TransitionTarget):
         """String representation for AgentTarget, can be shown as a function call message."""
         return f"Transfer to {self.agent_name}"
 
+    def needs_agent_wrapper(self) -> bool:
+        """Check if the target needs to be wrapped in an agent."""
+        return False
+
+    def create_wrapper_agent(self, parent_agent: "ConversableAgent", index: int) -> "ConversableAgent":
+        """Create a wrapper agent for the target if needed."""
+        raise NotImplementedError("AgentTarget does not require wrapping in an agent.")
+
 
 class AgentNameTarget(TransitionTarget):
     """Target that represents an agent by name."""
@@ -117,6 +136,14 @@ class AgentNameTarget(TransitionTarget):
     def __str__(self) -> str:
         """String representation for AgentTarget, can be shown as a function call message."""
         return f"Transfer to {self.agent_name}"
+
+    def needs_agent_wrapper(self) -> bool:
+        """Check if the target needs to be wrapped in an agent."""
+        return False
+
+    def create_wrapper_agent(self, parent_agent: "ConversableAgent", index: int) -> "ConversableAgent":
+        """Create a wrapper agent for the target if needed."""
+        raise NotImplementedError("AgentNameTarget does not require wrapping in an agent.")
 
 
 class NestedChatTarget(TransitionTarget):
@@ -155,6 +182,32 @@ class NestedChatTarget(TransitionTarget):
     def __str__(self) -> str:
         """String representation for AgentTarget, can be shown as a function call message."""
         return "Transfer to nested chat"
+
+    def needs_agent_wrapper(self) -> bool:
+        """Check if the target needs to be wrapped in an agent. NestedChatTarget must be wrapped in an agent."""
+        return True
+
+    def create_wrapper_agent(self, parent_agent: "ConversableAgent", index: int) -> "ConversableAgent":
+        """Create a wrapper agent for the nested chat."""
+        from ..conversable_agent import ConversableAgent  # to avoid circular import - NEED SOLUTION
+        from .after_work import AfterWork
+
+        nested_chat_agent = ConversableAgent(name=f"{__AGENT_WRAPPER_PREFIX__}_nested_{parent_agent.name}_{index + 1}")
+
+        nested_chat_agent.register_nested_chats(
+            self.nested_chat_config["chat_queue"],
+            reply_func_from_nested_chats=self.nested_chat_config.get("reply_func_from_nested_chats")
+            or "summary_from_nested_chats",
+            config=self.nested_chat_config.get("config"),
+            trigger=lambda sender: True,
+            position=0,
+            use_async=self.nested_chat_config.get("use_async", False),
+        )
+
+        # After the nested chat is complete, transfer back to the parent agent
+        nested_chat_agent.handoffs.set_after_work(AfterWork(target=AgentTarget(parent_agent)))
+
+        return nested_chat_agent
 
 
 class AfterWorkOptionTarget(TransitionTarget):
@@ -200,6 +253,14 @@ class AfterWorkOptionTarget(TransitionTarget):
     def __str__(self) -> str:
         """String representation for AgentTarget, can be shown as a function call message."""
         return f"Transfer option {self.after_work_option}"
+
+    def needs_agent_wrapper(self) -> bool:
+        """Check if the target needs to be wrapped in an agent."""
+        return False
+
+    def create_wrapper_agent(self, parent_agent: "ConversableAgent", index: int) -> "ConversableAgent":
+        """Create a wrapper agent for the target if needed."""
+        raise NotImplementedError("AfterWorkOptionTarget does not require wrapping in an agent.")
 
 
 # TODO: Consider adding a SequentialChatTarget class

@@ -368,6 +368,9 @@ class ContextExpression:
 
         Returns:
             bool: The result of evaluating the expression
+
+        Raises:
+            KeyError: If a variable referenced in the expression is not found in the context
         """
         # Create a modified expression that we can safely evaluate
         eval_expr = self._python_expr  # Use the Python-syntax version
@@ -379,7 +382,11 @@ class ContextExpression:
         # Process all len() operations first
         for match in len_matches:
             var_name = match.group(1)
-            var_value = context_variables.get(var_name, [])
+            # Check if variable exists in context, raise KeyError if not
+            if not context_variables.contains(var_name):
+                raise KeyError(f"Missing context variable: '{var_name}'")
+
+            var_value = context_variables.get(var_name)
 
             # Calculate the length - works for lists, strings, dictionaries, etc.
             try:
@@ -398,8 +405,12 @@ class ContextExpression:
             if any(m.group(1) == var_name for m in len_matches):
                 continue
 
-            # Get the value from context, defaulting to False if not found
-            var_value = context_variables.get(var_name, False)
+            # Check if variable exists in context, raise KeyError if not
+            if not context_variables.contains(var_name):
+                raise KeyError(f"Missing context variable: '{var_name}'")
+
+            # Get the value from context
+            var_value = context_variables.get(var_name)
 
             # Format the value appropriately based on its type
             if isinstance(var_value, (bool, int, float)):
@@ -417,10 +428,9 @@ class ContextExpression:
 
         try:
             return eval(eval_expr)  # type: ignore[no-any-return]
-        except Exception:
+        except Exception as e:
             raise ValueError(
-                "Error evaluating expression '{self.expression}' (are you sure you're using ${my_context_variable_key}):"
-                + " {str(e)}"
+                f"Error evaluating expression '{self.expression}' (are you sure you're using ${{my_context_variable_key}}): {str(e)}"
             )
 
     def __str__(self) -> str:

@@ -77,3 +77,70 @@ class TestContextStr:
         # Raise a KeyError
         with pytest.raises(KeyError):
             missing_var_context_str.format(self.simple_context)
+
+    def test_format_empty_context(self) -> None:
+        """Test formatting with empty context variables."""
+        # Create a template
+        template = "Hello, {name}!"
+        context_str = ContextStr(template)
+
+        # Create empty context variables
+        empty_context = ContextVariables()
+
+        # Call format method
+        result = context_str.format(empty_context)
+
+        # Should return the template as is when context is empty
+        assert result == template
+
+    def test_format_no_placeholders(self) -> None:
+        """Test formatting a string with no placeholders."""
+        # Create a template with no placeholders
+        template = "Hello, World!"
+        context_str = ContextStr(template)
+
+        # Format with any context
+        result = context_str.format(self.simple_context)
+
+        # Should return the template as is
+        assert result == template
+
+    def test_format_repeated_placeholders(self) -> None:
+        """Test formatting with repeated placeholders."""
+        # Create a template with repeated placeholders
+        template = "Hello, {name}! Your name is {name}."
+        context_str = ContextStr(template)
+
+        # Format with context
+        result = context_str.format(self.simple_context)
+
+        # Both instances should be replaced
+        assert result == "Hello, World! Your name is World."
+
+    def test_format_various_data_types(self) -> None:
+        """Test formatting with various data types in context variables."""
+        # Create a template with various data types
+        template = (
+            "String: {string}, Integer: {integer}, Float: {float}, Boolean: {boolean}, List: {list}, Dict: {dict}"
+        )
+        context_str = ContextStr(template)
+
+        # Create context with various data types
+        context = ContextVariables(
+            data={
+                "string": "text",
+                "integer": 42,
+                "float": 3.14,
+                "boolean": True,
+                "list": [1, 2, 3],
+                "dict": {"key": "value"},
+            }
+        )
+
+        # Format with context
+        result = context_str.format(context)
+
+        # All types should be formatted correctly
+        assert (
+            result == "String: text, Integer: 42, Float: 3.14, Boolean: True, List: [1, 2, 3], Dict: {'key': 'value'}"
+        )
