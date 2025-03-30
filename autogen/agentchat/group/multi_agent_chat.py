@@ -45,12 +45,6 @@ def _establish_swarm_agent(agent: ConversableAgent) -> None:
         """Customise the __str__ method to show the agent name for transition messages."""
         return f"Swarm agent --> {self.name}"
 
-    agent._swarm_after_work: AfterWork = None
-    agent._swarm_after_work_selection_msg: AfterWorkSelectionMessage = None
-
-    # Store conditional functions (and their OnCondition instances) to add/remove later when transitioning to this agent
-    agent._swarm_conditional_functions = {}  # type: ignore[attr-defined]
-
     # Register the hook to update agent state (except tool executor)
     agent.register_hook("update_agent_state", _update_conditional_functions)
 
@@ -60,10 +54,10 @@ def _establish_swarm_agent(agent: ConversableAgent) -> None:
     agent._get_display_name = MethodType(_swarm_agent_str, agent)  # type: ignore[method-assign]
 
     # Mark this agent as established as a swarm agent
-    agent._swarm_is_established = True  # type: ignore[attr-defined]
+    agent._group_is_established = True  # type: ignore[attr-defined]
 
 
-def _link_agents_to_swarm_manager(agents: list[Agent], group_chat_manager: Agent) -> None:
+def _link_agents_to_group_manager(agents: list[Agent], group_chat_manager: Agent) -> None:
     """Link all agents to the GroupChatManager so they can access the underlying GroupChat and other agents.
 
     This is primarily used so that agents can set the tool executor's _swarm_next_target attribute to control
@@ -72,7 +66,7 @@ def _link_agents_to_swarm_manager(agents: list[Agent], group_chat_manager: Agent
     Does not link the Tool Executor agent.
     """
     for agent in agents:
-        agent._swarm_manager = group_chat_manager  # type: ignore[attr-defined]
+        agent._group_manager = group_chat_manager  # type: ignore[attr-defined]
 
 
 def _run_oncontextconditions(
@@ -91,7 +85,7 @@ def _run_oncontextconditions(
             # Condition has been met, we'll set the Tool Executor's _swarm_next_target
             # attribute and that will be picked up on the next iteration when
             # _determine_next_agent is called
-            for agent in agent._swarm_manager.groupchat.agents:
+            for agent in agent._group_manager.groupchat.agents:
                 if isinstance(agent, GroupToolExecutor):
                     agent.set_next_target(on_condition.target)
                     break
@@ -138,6 +132,43 @@ def _create_on_condition_handoff_functions(agent: ConversableAgent) -> None:
         )
 
 
+def _ensure_handoff_agents_in_group(agents: list[ConversableAgent]) -> None:
+    """Ensure the agents in handoffs are in the group chat."""
+    agent_names = [agent.name for agent in agents]
+    for agent in agents:
+        for llm_conditions in agent.handoffs.llm_conditions:
+            if (
+                isinstance(llm_conditions.target, (AgentTarget, AgentNameTarget))
+                and llm_conditions.target.agent_name not in agent_names
+            ):
+                raise ValueError("Agent in OnCondition Hand-offs must be in the agents list")
+        for context_conditions in agent.handoffs.context_conditions:
+            if (
+                isinstance(context_conditions.target, (AgentTarget, AgentNameTarget))
+                and context_conditions.target.agent_name not in agent_names
+            ):
+                raise ValueError("Agent in OnContextCondition Hand-offs must be in the agents list")
+        if (
+            agent.handoffs.after_work is not None
+            and isinstance(agent.handoffs.after_work.target, (AgentTarget, AgentNameTarget))
+            and agent.handoffs.after_work.target.agent_name not in agent_names
+        ):
+            raise ValueError("Agent in AfterWork Hand-offs must be in the agents list")
+
+
+def _prepare_exclude_transit_messages(agents: list[ConversableAgent]) -> None:
+    """Preparation for excluding transit messages by getting all tool names and registering a hook on agents to remove those messages."""
+    # get all transit functions names
+    to_be_removed = []
+    for agent in agents:
+        for on_condition in agent.handoffs.llm_conditions:
+            to_be_removed.append(on_condition.llm_function_name)
+
+    # register hook to remove transit messages for swarm agents
+    for agent in agents:
+        agent.register_hook("process_all_messages_before_reply", make_remove_function(to_be_removed))
+
+
 def _prepare_swarm_agents(
     initial_agent: ConversableAgent,
     agents: list[ConversableAgent],
@@ -163,18 +194,16 @@ def _prepare_swarm_agents(
 
     # Initialize all agents as swarm agents
     for agent in agents:
-        if not hasattr(agent, "_swarm_is_established"):
+        if not hasattr(agent, "_group_is_established"):
             _establish_swarm_agent(agent)
 
     # Ensure all agents in hand-off after-works are in the passed in agents list
-    for agent in agents:
-        if (agent._swarm_after_work is not None and isinstance(agent._swarm_after_work.agent, ConversableAgent)) and (  # type: ignore[attr-defined]
-            agent._swarm_after_work.agent not in agents  # type: ignore[attr-defined]
-        ):
-            raise ValueError("Agent in hand-off must be in the agents list")
+    _ensure_handoff_agents_in_group(agents)
 
+    # Create Tool Executor for the group
     tool_execution = GroupToolExecutor()
 
+    # Create NestedChat Agents
     nested_chat_agents: list[ConversableAgent] = []
     for agent in agents:
         _create_nested_chats(agent, nested_chat_agents)
@@ -189,15 +218,7 @@ def _prepare_swarm_agents(
     tool_execution.register_agents_functions(agents + nested_chat_agents, context_variables)
 
     if exclude_transit_message:
-        # get all transit functions names
-        to_be_removed = []
-        for agent in agents + nested_chat_agents:
-            for on_condition in agent.handoffs.llm_conditions:
-                to_be_removed.append(on_condition.llm_function_name)
-
-        # register hook to remove transit messages for swarm agents
-        for agent in agents + nested_chat_agents:
-            agent.register_hook("process_all_messages_before_reply", make_remove_function(to_be_removed))
+        _prepare_exclude_transit_messages(agents)
 
     return tool_execution, nested_chat_agents
 
@@ -526,7 +547,7 @@ def create_group_transition(
     return swarm_transition
 
 
-def _create_swarm_manager(
+def _create_group_manager(
     groupchat: GroupChat, swarm_manager_args: Optional[dict[str, Any]], agents: list[ConversableAgent]
 ) -> GroupChatManager:
     """Create a GroupChatManager for the swarm chat utilising any arguments passed in and ensure an LLM Config exists if needed
@@ -681,14 +702,14 @@ def initiate_group_chat(
         speaker_selection_method=swarm_transition,
     )
 
-    manager = _create_swarm_manager(groupchat, swarm_manager_args, agents)
+    manager = _create_group_manager(groupchat, swarm_manager_args, agents)
 
     # Point all ConversableAgent's context variables to this function's context_variables
     _setup_context_variables(tool_execution, agents, manager, context_variables)
 
     # Link all agents with the GroupChatManager to allow access to the group chat
     # and other agents, particularly the tool executor for setting _swarm_next_target
-    _link_agents_to_swarm_manager(groupchat.agents, manager)  # Commented out as the function is not defined
+    _link_agents_to_group_manager(groupchat.agents, manager)  # Commented out as the function is not defined
 
     if len(processed_messages) > 1:
         last_agent, last_message = manager.resume(messages=processed_messages)
