@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     # Avoid circular import
     from ..conversable_agent import ConversableAgent
 
-__all__ = ["AvailableCondition", "ContextExpressionAvailableCondition", "StringAvailableCondition"]
+__all__ = ["AvailableCondition", "ExpressionAvailableCondition", "StringAvailableCondition"]
 
 
 class AvailableCondition(BaseModel):
@@ -55,7 +55,7 @@ class StringAvailableCondition(AvailableCondition):
         return bool(agent.context_variables.get(self.context_variable, False))
 
 
-class ContextExpressionAvailableCondition(AvailableCondition):
+class ExpressionAvailableCondition(AvailableCondition):
     """Expression-based available condition.
 
     This condition evaluates a ContextExpression against the context variables.

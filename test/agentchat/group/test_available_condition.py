@@ -8,7 +8,7 @@ import pytest
 
 from autogen.agentchat.group.available_condition import (
     AvailableCondition,
-    ContextExpressionAvailableCondition,
+    ExpressionAvailableCondition,
     StringAvailableCondition,
 )
 from autogen.agentchat.group.context_expression import ContextExpression
@@ -167,14 +167,14 @@ class TestContextExpressionAvailableCondition:
     def test_init(self) -> None:
         """Test initialisation with a ContextExpression."""
         expression = ContextExpression("${var1} and ${var2}")
-        condition = ContextExpressionAvailableCondition(expression=expression)
+        condition = ExpressionAvailableCondition(expression=expression)
         assert condition.expression == expression
 
     def test_init_with_extra_data(self) -> None:
         """Test initialisation with extra data."""
         expression = ContextExpression("${var1} and ${var2}")
         extra_data = {"extra_key": "extra_value"}
-        condition = ContextExpressionAvailableCondition(expression=expression, **extra_data)
+        condition = ExpressionAvailableCondition(expression=expression, **extra_data)
         assert condition.expression == expression
 
         # Pydantic v2 doesn't store extra attributes directly on the model
@@ -184,7 +184,7 @@ class TestContextExpressionAvailableCondition:
     def test_is_available_calls_expression_evaluate(self, mock_evaluate) -> None:
         """Test is_available calls the expression's evaluate method with the agent's context variables."""
         expression = ContextExpression("${var1} and ${var2}")
-        condition = ContextExpressionAvailableCondition(expression=expression)
+        condition = ExpressionAvailableCondition(expression=expression)
 
         mock_agent = MagicMock()
         mock_context_vars = ContextVariables(data={"var1": True, "var2": False})
@@ -200,7 +200,7 @@ class TestContextExpressionAvailableCondition:
     def test_is_available_with_true_expression(self) -> None:
         """Test is_available returns True when the expression evaluates to True."""
         expression = ContextExpression("${var1} and ${var2}")
-        condition = ContextExpressionAvailableCondition(expression=expression)
+        condition = ExpressionAvailableCondition(expression=expression)
 
         mock_agent = MagicMock()
         mock_agent.context_variables = ContextVariables(data={"var1": True, "var2": True})
@@ -211,7 +211,7 @@ class TestContextExpressionAvailableCondition:
     def test_is_available_with_false_expression(self) -> None:
         """Test is_available returns False when the expression evaluates to False."""
         expression = ContextExpression("${var1} and ${var2}")
-        condition = ContextExpressionAvailableCondition(expression=expression)
+        condition = ExpressionAvailableCondition(expression=expression)
 
         mock_agent = MagicMock()
         mock_agent.context_variables = ContextVariables(data={"var1": True, "var2": False})
@@ -222,7 +222,7 @@ class TestContextExpressionAvailableCondition:
     def test_is_available_with_complex_expression(self) -> None:
         """Test is_available with a more complex expression."""
         expression = ContextExpression("(${var1} or ${var2}) and not ${var3}")
-        condition = ContextExpressionAvailableCondition(expression=expression)
+        condition = ExpressionAvailableCondition(expression=expression)
 
         mock_agent = MagicMock()
 
@@ -244,7 +244,7 @@ class TestContextExpressionAvailableCondition:
     def test_is_available_with_missing_variables(self) -> None:
         """Test is_available when variables are missing from context."""
         expression = ContextExpression("${var1} and ${var2}")
-        condition = ContextExpressionAvailableCondition(expression=expression)
+        condition = ExpressionAvailableCondition(expression=expression)
 
         mock_agent = MagicMock()
         # var2 is missing
@@ -264,7 +264,7 @@ class TestContextExpressionAvailableCondition:
     def test_messages_parameter_ignored(self) -> None:
         """Test that the messages parameter is ignored."""
         expression = ContextExpression("${var1} and ${var2}")
-        condition = ContextExpressionAvailableCondition(expression=expression)
+        condition = ExpressionAvailableCondition(expression=expression)
 
         mock_agent = MagicMock()
         mock_agent.context_variables = ContextVariables(data={"var1": True, "var2": True})
@@ -285,7 +285,7 @@ class TestContextExpressionAvailableCondition:
 
         # Test greater than
         expression = ContextExpression("${count} > 10")
-        condition = ContextExpressionAvailableCondition(expression=expression)
+        condition = ExpressionAvailableCondition(expression=expression)
 
         mock_agent.context_variables = ContextVariables(data={"count": 15})
         result = condition.is_available(mock_agent, [])
@@ -297,7 +297,7 @@ class TestContextExpressionAvailableCondition:
 
         # Test less than
         expression = ContextExpression("${count} < 10")
-        condition = ContextExpressionAvailableCondition(expression=expression)
+        condition = ExpressionAvailableCondition(expression=expression)
 
         mock_agent.context_variables = ContextVariables(data={"count": 5})
         result = condition.is_available(mock_agent, [])
@@ -309,7 +309,7 @@ class TestContextExpressionAvailableCondition:
 
         # Test equality
         expression = ContextExpression("${status} == 'active'")
-        condition = ContextExpressionAvailableCondition(expression=expression)
+        condition = ExpressionAvailableCondition(expression=expression)
 
         mock_agent.context_variables = ContextVariables(data={"status": "active"})
         result = condition.is_available(mock_agent, [])
@@ -321,7 +321,7 @@ class TestContextExpressionAvailableCondition:
 
         # Test inequality
         expression = ContextExpression("${status} != 'active'")
-        condition = ContextExpressionAvailableCondition(expression=expression)
+        condition = ExpressionAvailableCondition(expression=expression)
 
         mock_agent.context_variables = ContextVariables(data={"status": "inactive"})
         result = condition.is_available(mock_agent, [])
@@ -364,7 +364,7 @@ class TestAvailableConditionIntegration:
 
         # Initialise condition
         expression = ContextExpression("${is_premium} and ${login_count} > 5")
-        condition = ContextExpressionAvailableCondition(expression=expression)
+        condition = ExpressionAvailableCondition(expression=expression)
 
         # Set initial context (not enough for condition to be true)
         mock_agent.context_variables.set("is_premium", True)

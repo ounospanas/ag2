@@ -5,6 +5,7 @@
 from typing import TYPE_CHECKING, Any, List, cast
 
 from pydantic import BaseModel
+from ....agentchat.group.available_condition import AvailableCondition
 
 if TYPE_CHECKING:
     # Avoid circular import
@@ -14,7 +15,7 @@ if TYPE_CHECKING:
 __all__ = ["SummaryTaskAvailableCondition"]
 
 
-class SummaryTaskAvailableCondition(BaseModel):
+class SummaryTaskAvailableCondition(AvailableCondition):
     """Available condition for determining if a summary task should be performed.
 
     This condition checks if:
@@ -23,28 +24,17 @@ class SummaryTaskAvailableCondition(BaseModel):
     3. The completed task count is truthy
 
     If all conditions are met, the agent is ready for a summary task.
-    """
+
+    Args:
+        documents_var: Context variable name for documents to ingest list
+        queries_var: Context variable name for queries to run list
+        completed_var: Context variable name for completed task count
+
+        """
 
     documents_var: str = "DocumentsToIngest"
     queries_var: str = "QueriesToRun"
     completed_var: str = "CompletedTaskCount"
-
-    def __init__(
-        self,
-        documents_var: str = "DocumentsToIngest",
-        queries_var: str = "QueriesToRun",
-        completed_var: str = "CompletedTaskCount",
-        **data: Any,
-    ):
-        """Initialize with optional custom variable names.
-
-        Args:
-            documents_var: Context variable name for documents to ingest list
-            queries_var: Context variable name for queries to run list
-            completed_var: Context variable name for completed task count
-            **data: Additional data for BaseModel initialization
-        """
-        super().__init__(documents_var=documents_var, queries_var=queries_var, completed_var=completed_var, **data)
 
     def is_available(self, agent: "ConversableAgent", messages: list[dict[str, Any]]) -> bool:
         """Check if all task conditions are met.

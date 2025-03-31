@@ -390,7 +390,7 @@ class DocAgent(ConversableAgent):
             OnCondition(
                 target=AgentTarget(self._summary_agent),
                 condition=StringLLMCondition("Call this function if all work is done and a summary will be created"),
-                available=SummaryTaskAvailableCondition(),
+                available=SummaryTaskAvailableCondition(), # Custom AvailableCondition class
             ),
             AfterWork(target=AfterWorkOptionTarget("stay")),
         ])
