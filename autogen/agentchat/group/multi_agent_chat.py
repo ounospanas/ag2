@@ -5,12 +5,11 @@
 import copy
 from functools import partial
 from types import MethodType
-from typing import Any, Callable, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Union
 
 from ...doc_utils import export_module
 from ..agent import Agent
 from ..chat import ChatResult
-from ..conversable_agent import ConversableAgent
 from ..groupchat import SELECT_SPEAKER_PROMPT_TEMPLATE, GroupChat, GroupChatManager
 from ..user_proxy_agent import UserProxyAgent
 from .after_work import (
@@ -28,13 +27,16 @@ from .transition_target import (
     TransitionTarget,
 )
 
+if TYPE_CHECKING:
+    from ..conversable_agent import ConversableAgent
+
 __all__ = [
     "a_initiate_group_chat",
     "initiate_group_chat",
 ]
 
 
-def _update_conditional_functions(agent: ConversableAgent, messages: Optional[list[dict[str, Any]]] = None) -> None:
+def _update_conditional_functions(agent: "ConversableAgent", messages: Optional[list[dict[str, Any]]] = None) -> None:
     """Updates the agent's functions based on the OnCondition's available condition.
 
     All functions are removed and then added back if they are available
@@ -57,14 +59,14 @@ def _update_conditional_functions(agent: ConversableAgent, messages: Optional[li
             )
 
 
-def _establish_group_agent(agent: ConversableAgent) -> None:
+def _establish_group_agent(agent: "ConversableAgent") -> None:
     """Establish the group agent with the group-related attributes and hooks. Not for the tool executor.
 
     Args:
-        agent (ConversableAgent): The agent to establish as a group agent.
+        agent ("ConversableAgent"): The agent to establish as a group agent.
     """
 
-    def _group_agent_str(self: ConversableAgent) -> str:
+    def _group_agent_str(self: "ConversableAgent") -> str:
         """Customise the __str__ method to show the agent name for transition messages."""
         return f"Group agent --> {self.name}"
 
@@ -92,7 +94,7 @@ def _link_agents_to_group_manager(agents: list[Agent], group_chat_manager: Agent
 
 
 def _run_oncontextconditions(
-    agent: ConversableAgent,
+    agent: "ConversableAgent",
     messages: Optional[list[dict[str, Any]]] = None,
     sender: Optional[Agent] = None,
     config: Optional[Any] = None,
@@ -139,11 +141,11 @@ def _create_on_condition_handoff_function(target: TransitionTarget) -> Callable:
     return transfer_to_target
 
 
-def _create_on_condition_handoff_functions(agent: ConversableAgent) -> None:
+def _create_on_condition_handoff_functions(agent: "ConversableAgent") -> None:
     """Creates the functions for the OnConditions so that the current tool handling works.
 
     Args:
-        agent (ConversableAgent): The agent to create the functions for.
+        agent ("ConversableAgent"): The agent to create the functions for.
     """
     # Populate the function names for the handoffs
     agent.handoffs.set_llm_function_names()
@@ -158,7 +160,7 @@ def _create_on_condition_handoff_functions(agent: ConversableAgent) -> None:
         )
 
 
-def _ensure_handoff_agents_in_group(agents: list[ConversableAgent]) -> None:
+def _ensure_handoff_agents_in_group(agents: list["ConversableAgent"]) -> None:
     """Ensure the agents in handoffs are in the group chat."""
     agent_names = [agent.name for agent in agents]
     for agent in agents:
@@ -182,7 +184,7 @@ def _ensure_handoff_agents_in_group(agents: list[ConversableAgent]) -> None:
             raise ValueError("Agent in AfterWork Hand-offs must be in the agents list")
 
 
-def _prepare_exclude_transit_messages(agents: list[ConversableAgent]) -> None:
+def _prepare_exclude_transit_messages(agents: list["ConversableAgent"]) -> None:
     """Preparation for excluding transit messages by getting all tool names and registering a hook on agents to remove those messages."""
     # get all transit functions names
     to_be_removed = []
@@ -198,27 +200,27 @@ def _prepare_exclude_transit_messages(agents: list[ConversableAgent]) -> None:
 
 
 def _prepare_group_agents(
-    initial_agent: ConversableAgent,
-    agents: list[ConversableAgent],
+    initial_agent: "ConversableAgent",
+    agents: list["ConversableAgent"],
     context_variables: ContextVariables,
     exclude_transit_message: bool = True,
-) -> tuple[ConversableAgent, list[ConversableAgent]]:
+) -> tuple["ConversableAgent", list["ConversableAgent"]]:
     """Validates agents, create the tool executor, wrap necessary targets in agents.
 
     Args:
-        initial_agent (ConversableAgent): The first agent in the conversation.
-        agents (list[ConversableAgent]): List of all agents in the conversation.
+        initial_agent ("ConversableAgent"): The first agent in the conversation.
+        agents (list["ConversableAgent"]): List of all agents in the conversation.
         context_variables (ContextVariables): Context variables to assign to all agents.
         exclude_transit_message (bool): Whether to exclude transit messages from the agents.
 
     Returns:
-        ConversableAgent: The tool executor agent.
-        list[ConversableAgent]: List of wrapped agents.
+        "ConversableAgent": The tool executor agent.
+        list["ConversableAgent"]: List of wrapped agents.
     """
-    if not isinstance(initial_agent, ConversableAgent):
-        raise ValueError("initial_agent must be a ConversableAgent")
-    if not all(isinstance(agent, ConversableAgent) for agent in agents):
-        raise ValueError("Agents must be a list of ConversableAgents")
+    # if not isinstance(initial_agent, "ConversableAgent"):
+    #     raise ValueError("initial_agent must be a ConversableAgent")
+    # if not all(isinstance(agent, "ConversableAgent") for agent in agents):
+    #     raise ValueError("Agents must be a list of "ConversableAgent"s")
 
     # Initialise all agents as group agents
     for agent in agents:
@@ -232,7 +234,7 @@ def _prepare_group_agents(
     tool_execution = GroupToolExecutor()
 
     # Wrap handoff targets in agents that need to be wrapped
-    wrapped_chat_agents: list[ConversableAgent] = []
+    wrapped_chat_agents: list["ConversableAgent"] = []
     for agent in agents:
         _wrap_agent_handoff_targets(agent, wrapped_chat_agents)
 
@@ -251,14 +253,14 @@ def _prepare_group_agents(
     return tool_execution, wrapped_chat_agents
 
 
-def _wrap_agent_handoff_targets(agent: ConversableAgent, wrapped_agent_list: list[ConversableAgent]) -> None:
+def _wrap_agent_handoff_targets(agent: "ConversableAgent", wrapped_agent_list: list["ConversableAgent"]) -> None:
     """Wrap handoff targets in agents that need to be wrapped to be part of the group chat.
 
     Example is NestedChatTarget.
 
     Args:
-        agent (ConversableAgent): The agent to wrap the handoff targets for.
-        wrapped_agent_list (list[ConversableAgent]): List of wrapped chat agents that will be appended to.
+        agent ("ConversableAgent"): The agent to wrap the handoff targets for.
+        wrapped_agent_list (list["ConversableAgent"]): List of wrapped chat agents that will be appended to.
     """
     # Wrap OnCondition targets
     for i, handoff_target_requiring_wrapping in enumerate(agent.handoffs.get_llm_conditions_requiring_wrapping()):
@@ -281,8 +283,8 @@ def _wrap_agent_handoff_targets(agent: ConversableAgent, wrapped_agent_list: lis
 def _process_initial_messages(
     messages: Union[list[dict[str, Any]], str],
     user_agent: Optional[UserProxyAgent],
-    agents: list[ConversableAgent],
-    wrapped_agents: list[ConversableAgent],
+    agents: list["ConversableAgent"],
+    wrapped_agents: list["ConversableAgent"],
 ) -> tuple[list[dict[str, Any]], Optional[Agent], list[str], list[Agent]]:
     """Process initial messages, validating agent names against messages, and determining the last agent to speak.
 
@@ -328,8 +330,8 @@ def _process_initial_messages(
 
 
 def _setup_context_variables(
-    tool_execution: ConversableAgent,
-    agents: list[ConversableAgent],
+    tool_execution: "ConversableAgent",
+    agents: list["ConversableAgent"],
     manager: GroupChatManager,
     context_variables: ContextVariables,
 ) -> None:
@@ -358,7 +360,7 @@ def _cleanup_temp_user_messages(chat_result: ChatResult) -> None:
 
 def _prepare_groupchat_auto_speaker(
     groupchat: GroupChat,
-    last_group_agent: ConversableAgent,
+    last_group_agent: "ConversableAgent",
     after_work_next_agent_selection_msg: Optional[AfterWorkSelectionMessage],
 ) -> None:
     """Prepare the group chat for auto speaker selection, includes updating or restore the groupchat speaker selection message.
@@ -367,7 +369,7 @@ def _prepare_groupchat_auto_speaker(
 
     Args:
         groupchat (GroupChat): GroupChat instance.
-        last_group_agent (ConversableAgent): The last group agent for which the LLM config is used
+        last_group_agent ("ConversableAgent"): The last group agent for which the LLM config is used
         after_work_next_agent_selection_msg (AfterWorkSelectionMessage): Optional message to use for the agent selection (in internal group chat).
     """
 
@@ -394,13 +396,13 @@ def _prepare_groupchat_auto_speaker(
 
 def _get_last_agent_speaker(
     groupchat: GroupChat, group_agent_names: list[str], tool_executor: GroupToolExecutor
-) -> ConversableAgent:
+) -> "ConversableAgent":
     """Get the last group agent from the group chat messages. Not including the tool executor."""
     last_group_speaker = None
     for message in reversed(groupchat.messages):
         if "name" in message and message["name"] in group_agent_names and message["name"] != tool_executor.name:
             agent = groupchat.agent_by_name(name=message["name"])
-            if isinstance(agent, ConversableAgent):
+            if isinstance(agent, "ConversableAgent"):
                 last_group_speaker = agent
                 break
     if last_group_speaker is None:
@@ -410,9 +412,9 @@ def _get_last_agent_speaker(
 
 
 def _determine_next_agent(
-    last_speaker: ConversableAgent,
+    last_speaker: "ConversableAgent",
     groupchat: GroupChat,
-    initial_agent: ConversableAgent,
+    initial_agent: "ConversableAgent",
     use_initial_agent: bool,
     tool_executor: GroupToolExecutor,
     group_agent_names: list[str],
@@ -422,11 +424,11 @@ def _determine_next_agent(
     """Determine the next agent in the conversation.
 
     Args:
-        last_speaker (ConversableAgent): The last agent to speak.
+        last_speaker ("ConversableAgent"): The last agent to speak.
         groupchat (GroupChat): GroupChat instance.
-        initial_agent (ConversableAgent): The initial agent in the conversation.
+        initial_agent ("ConversableAgent"): The initial agent in the conversation.
         use_initial_agent (bool): Whether to use the initial agent straight away.
-        tool_executor (ConversableAgent): The tool execution agent.
+        tool_executor ("ConversableAgent"): The tool execution agent.
         group_agent_names (list[str]): List of agent names.
         user_agent (UserProxyAgent): Optional user proxy agent.
         group_after_work (AfterWork): Group-level Transition option when an agent doesn't select the next agent.
@@ -492,16 +494,16 @@ def _determine_next_agent(
 
 
 def create_group_transition(
-    initial_agent: ConversableAgent,
+    initial_agent: "ConversableAgent",
     tool_execution: GroupToolExecutor,
     group_agent_names: list[str],
     user_agent: Optional[UserProxyAgent],
     group_after_work: Optional[TransitionOption],
-) -> Callable[[ConversableAgent, GroupChat], Optional[Union[Agent, Literal["auto"]]]]:
+) -> Callable[["ConversableAgent", GroupChat], Optional[Union[Agent, Literal["auto"]]]]:
     """Creates a transition function for group chat with enclosed state for the use_initial_agent.
 
     Args:
-        initial_agent (ConversableAgent): The first agent to speak
+        initial_agent ("ConversableAgent"): The first agent to speak
         tool_execution (GroupToolExecutor): The tool execution agent
         group_agent_names (list[str]): List of all agent names
         user_agent (UserProxyAgent): Optional user proxy agent
@@ -515,7 +517,7 @@ def create_group_transition(
     state = {"use_initial_agent": True}
 
     def group_transition(
-        last_speaker: ConversableAgent, groupchat: GroupChat
+        last_speaker: "ConversableAgent", groupchat: GroupChat
     ) -> Optional[Union[Agent, Literal["auto"]]]:
         result = _determine_next_agent(
             last_speaker=last_speaker,
@@ -534,14 +536,14 @@ def create_group_transition(
 
 
 def _create_group_manager(
-    groupchat: GroupChat, group_manager_args: Optional[dict[str, Any]], agents: list[ConversableAgent]
+    groupchat: GroupChat, group_manager_args: Optional[dict[str, Any]], agents: list["ConversableAgent"]
 ) -> GroupChatManager:
     """Create a GroupChatManager for the group chat utilising any arguments passed in and ensure an LLM Config exists if needed
 
     Args:
         groupchat (GroupChat): The groupchat.
         group_manager_args (dict[str, Any]): Group manager arguments to create the GroupChatManager.
-        agents (list[ConversableAgent]): List of agents in the group.
+        agents (list["ConversableAgent"]): List of agents in the group.
 
     Returns:
         GroupChatManager: GroupChatManager instance.
@@ -616,16 +618,16 @@ def make_remove_function(tool_msgs_to_remove: list[str]) -> Callable[[list[dict[
 
 @export_module("autogen")
 def initiate_group_chat(
-    initial_agent: ConversableAgent,
+    initial_agent: "ConversableAgent",
     messages: Union[list[dict[str, Any]], str],
-    agents: list[ConversableAgent],
+    agents: list["ConversableAgent"],
     user_agent: Optional[UserProxyAgent] = None,
     group_manager_args: Optional[dict[str, Any]] = None,
     max_rounds: int = 20,
     context_variables: Optional[ContextVariables] = None,
     after_work: Optional[AfterWork] = None,
     exclude_transit_message: bool = True,
-) -> tuple[ChatResult, ContextVariables, ConversableAgent]:
+) -> tuple[ChatResult, ContextVariables, "ConversableAgent"]:
     """Initialize and run a group chat
 
     Args:
@@ -643,7 +645,7 @@ def initiate_group_chat(
     Returns:
         ChatResult:         Conversations chat history.
         ContextVariables:   Updated Context variables.
-        ConversableAgent:   Last speaker.
+        "ConversableAgent":   Last speaker.
     """
     if context_variables and not isinstance(context_variables, ContextVariables):
         raise ValueError(
@@ -681,7 +683,7 @@ def initiate_group_chat(
 
     manager = _create_group_manager(groupchat, group_manager_args, agents)
 
-    # Point all ConversableAgent's context variables to this function's context_variables
+    # Point all "ConversableAgent"'s context variables to this function's context_variables
     _setup_context_variables(tool_execution, agents, manager, context_variables)
 
     # Link all agents with the GroupChatManager to allow access to the group chat
@@ -708,18 +710,18 @@ def initiate_group_chat(
     return chat_result, context_variables, manager.last_speaker  # type: ignore[return-value]
 
 
-@export_module("autogen")
+@export_module("autogen.agentchat")
 async def a_initiate_group_chat(
-    initial_agent: ConversableAgent,
+    initial_agent: "ConversableAgent",
     messages: Union[list[dict[str, Any]], str],
-    agents: list[ConversableAgent],
+    agents: list["ConversableAgent"],
     user_agent: Optional[UserProxyAgent] = None,
     group_manager_args: Optional[dict[str, Any]] = None,
     max_rounds: int = 20,
     context_variables: Optional[ContextVariables] = None,
     after_work: Optional[AfterWork] = None,
     exclude_transit_message: bool = True,
-) -> tuple[ChatResult, ContextVariables, ConversableAgent]:
+) -> tuple[ChatResult, ContextVariables, "ConversableAgent"]:
     """Initialize and run a group chat
 
     Args:
@@ -737,6 +739,6 @@ async def a_initiate_group_chat(
     Returns:
         ChatResult:         Conversations chat history.
         ContextVariables:   Updated Context variables.
-        ConversableAgent:   Last speaker.
+        "ConversableAgent":   Last speaker.
     """
     raise NotImplementedError("This function is not implemented yet")

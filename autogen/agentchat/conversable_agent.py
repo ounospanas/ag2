@@ -17,6 +17,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from inspect import signature
 from typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
     Generator,
@@ -63,12 +64,14 @@ from ..runtime_logging import log_event, log_function_use, log_new_agent, loggin
 from ..tools import ChatContext, Tool, load_basemodels_if_needed, serialize_to_str
 from .agent import Agent, LLMAgent
 from .chat import ChatResult, _post_process_carryover_item, a_initiate_chats, initiate_chats
-from .group.after_work import AfterWork
 from .group.context_variables import ContextVariables
 from .group.handoffs import Handoffs
-from .group.on_condition import OnCondition
-from .group.on_context_condition import OnContextCondition
 from .utils import consolidate_chat_info, gather_usage_summary
+
+if TYPE_CHECKING:
+    from .group.after_work import AfterWork
+    from .group.on_condition import OnCondition
+    from .group.on_context_condition import OnContextCondition
 
 __all__ = ("ConversableAgent",)
 
@@ -145,7 +148,7 @@ class ConversableAgent(LLMAgent):
         description: Optional[str] = None,
         chat_messages: Optional[dict[Agent, list[dict[str, Any]]]] = None,
         silent: Optional[bool] = None,
-        context_variables: Optional[ContextVariables] = None,
+        context_variables: Optional["ContextVariables"] = None,
         functions: Union[list[Callable[..., Any]], Callable[..., Any]] = None,
         update_agent_state_before_reply: Optional[
             Union[list[Union[Callable, UpdateSystemMessage]], Callable, UpdateSystemMessage]
@@ -3534,7 +3537,7 @@ class ConversableAgent(LLMAgent):
                     summary_method=summary_method,
                 )
 
-    def register_handoff(self, condition: Union[OnContextCondition, OnCondition, AfterWork]) -> None:
+    def register_handoff(self, condition: Union["OnContextCondition", "OnCondition", "AfterWork"]) -> None:
         """
         Register a single handoff condition.
 
@@ -3543,7 +3546,7 @@ class ConversableAgent(LLMAgent):
         """
         self.handoffs.add(condition)
 
-    def register_handoffs(self, conditions: list[Union[OnContextCondition, OnCondition, AfterWork]]) -> None:
+    def register_handoffs(self, conditions: list[Union["OnContextCondition", "OnCondition", "AfterWork"]]) -> None:
         """
         Register multiple handoff conditions.
 
