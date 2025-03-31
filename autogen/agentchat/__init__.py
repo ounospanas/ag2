@@ -24,7 +24,8 @@ from .contrib.swarm_agent import (
 from .conversable_agent import ConversableAgent, UpdateSystemMessage, register_function
 from .groupchat import GroupChat, GroupChatManager
 from .user_proxy_agent import UserProxyAgent
-from .utils import ContextExpression, gather_usage_summary
+from .utils import gather_usage_summary
+from .group.context_expression import ContextExpression
 
 __all__ = [
     "AfterWork",

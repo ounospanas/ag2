@@ -9,6 +9,7 @@ from .after_work import (
     AfterWorkSelectionMessageString,
 )
 from .context_str import ContextStr
+from .context_expression import ContextExpression
 from .context_variables import ContextVariables
 from .transition_target import (
     AfterWorkOptionTarget,
@@ -26,6 +27,7 @@ __all__ = [
     "AfterWorkSelectionMessageString",
     "AgentNameTarget",
     "AgentTarget",
+    "ContextExpression",
     "ContextStr",
     "ContextVariables",
     "NestedChatTarget",

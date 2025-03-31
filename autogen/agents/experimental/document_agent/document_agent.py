@@ -21,7 +21,7 @@ from ....agentchat.group.on_condition import OnCondition
 from ....agentchat.group.on_context_condition import OnContextCondition
 from ....agentchat.group.reply_result import ReplyResult
 from ....agentchat.group.transition_target import AfterWorkOptionTarget, AgentNameTarget, AgentTarget
-from ....agentchat.utils import ContextExpression
+from ....agentchat.group import ContextExpression
 from ....doc_utils import export_module
 from ....llm_config import LLMConfig
 from ....oai.client import OpenAIWrapper

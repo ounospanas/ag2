@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
-from ..utils import ContextExpression
+from .context_expression import ContextExpression
 
 if TYPE_CHECKING:
     # Avoid circular import

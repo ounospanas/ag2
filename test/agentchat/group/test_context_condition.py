@@ -12,7 +12,7 @@ from autogen.agentchat.group.context_condition import (
     StringContextCondition,
 )
 from autogen.agentchat.group.context_variables import ContextVariables
-from autogen.agentchat.utils import ContextExpression
+from autogen.agentchat.group.context_expression import ContextExpression
 
 
 class TestContextCondition:
@@ -147,10 +147,7 @@ class TestExpressionContextCondition:
         condition = ExpressionContextCondition(expression=expression, **extra_data)
         assert condition.expression == expression
 
-        # Pydantic v2 doesn't store extra attributes directly on the model
-        # This would have to be checked if using a custom method to store extra attributes
-
-    @patch("autogen.agentchat.utils.ContextExpression.evaluate")
+    @patch("autogen.agentchat.group.context_expression.ContextExpression.evaluate")
     def test_evaluate_calls_expression_evaluate(self, mock_evaluate) -> None:
         """Test evaluate calls the expression's evaluate method with the context variables."""
         expression = ContextExpression("${var1} and ${var2}")

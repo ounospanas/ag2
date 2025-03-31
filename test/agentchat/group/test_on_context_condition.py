@@ -8,7 +8,7 @@ from autogen.agentchat.group.available_condition import StringAvailableCondition
 from autogen.agentchat.group.context_condition import ExpressionContextCondition, StringContextCondition
 from autogen.agentchat.group.on_context_condition import OnContextCondition
 from autogen.agentchat.group.transition_target import AgentTarget, TransitionTarget
-from autogen.agentchat.utils import ContextExpression
+from autogen.agentchat.group.context_expression import ContextExpression
 
 
 class TestOnContextCondition:

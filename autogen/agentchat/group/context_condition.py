@@ -5,7 +5,7 @@
 
 from pydantic import BaseModel
 
-from ..utils import ContextExpression
+from .context_expression import ContextExpression
 from .context_variables import ContextVariables
 
 __all__ = ["ContextCondition", "ExpressionContextCondition", "StringContextCondition"]

@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from autogen.agentchat.utils import ContextExpression
+from autogen.agentchat.group.context_expression import ContextExpression
 
 
 class TestContextExpressionNewSyntax:

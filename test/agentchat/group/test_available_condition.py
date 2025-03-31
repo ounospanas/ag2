@@ -12,7 +12,7 @@ from autogen.agentchat.group.available_condition import (
     StringAvailableCondition,
 )
 from autogen.agentchat.group.context_variables import ContextVariables
-from autogen.agentchat.utils import ContextExpression
+from autogen.agentchat.group.context_expression import ContextExpression
 
 
 class TestAvailableCondition:
@@ -180,7 +180,7 @@ class TestContextExpressionAvailableCondition:
         # Pydantic v2 doesn't store extra attributes directly on the model
         # This would have to be checked if using a custom method to store extra attributes
 
-    @patch("autogen.agentchat.utils.ContextExpression.evaluate")
+    @patch("autogen.agentchat.group.context_expression.ContextExpression.evaluate")
     def test_is_available_calls_expression_evaluate(self, mock_evaluate) -> None:
         """Test is_available calls the expression's evaluate method with the agent's context variables."""
         expression = ContextExpression("${var1} and ${var2}")
