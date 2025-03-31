@@ -183,19 +183,19 @@ class TestAgentNameTarget:
 class TestNestedChatTarget:
     def test_init(self) -> None:
         """Test initialisation with a nested chat config."""
-        nested_chat_config = {"chat_queue": ["agent1", "agent2"], "use_async": True}
+        nested_chat_config = {"chat_queue": [{}], "use_async": True}
         target = NestedChatTarget(nested_chat_config=nested_chat_config)
         assert target.nested_chat_config == nested_chat_config
 
     def test_can_resolve_for_speaker_selection(self) -> None:
         """Test that can_resolve_for_speaker_selection returns False."""
-        nested_chat_config = {"chat_queue": ["agent1", "agent2"], "use_async": True}
+        nested_chat_config = {"chat_queue": [{}], "use_async": True}
         target = NestedChatTarget(nested_chat_config=nested_chat_config)
         assert target.can_resolve_for_speaker_selection() is False
 
     def test_resolve_raises_error(self) -> None:
         """Test that resolve raises NotImplementedError."""
-        nested_chat_config = {"chat_queue": ["agent1", "agent2"], "use_async": True}
+        nested_chat_config = {"chat_queue": [{}], "use_async": True}
         target = NestedChatTarget(nested_chat_config=nested_chat_config)
 
         with pytest.raises(NotImplementedError) as excinfo:
@@ -204,25 +204,25 @@ class TestNestedChatTarget:
 
     def test_display_name(self) -> None:
         """Test that display_name returns 'a nested chat'."""
-        nested_chat_config = {"chat_queue": ["agent1", "agent2"], "use_async": True}
+        nested_chat_config = {"chat_queue": [{}], "use_async": True}
         target = NestedChatTarget(nested_chat_config=nested_chat_config)
         assert target.display_name() == "a nested chat"
 
     def test_normalized_name(self) -> None:
         """Test that normalized_name returns 'nested_chat'."""
-        nested_chat_config = {"chat_queue": ["agent1", "agent2"], "use_async": True}
+        nested_chat_config = {"chat_queue": [{}], "use_async": True}
         target = NestedChatTarget(nested_chat_config=nested_chat_config)
         assert target.normalized_name() == "nested_chat"
 
     def test_str_representation(self) -> None:
         """Test the string representation of NestedChatTarget."""
-        nested_chat_config = {"chat_queue": ["agent1", "agent2"], "use_async": True}
+        nested_chat_config = {"chat_queue": [{}], "use_async": True}
         target = NestedChatTarget(nested_chat_config=nested_chat_config)
         assert str(target) == "Transfer to nested chat"
 
     def test_needs_agent_wrapper(self) -> None:
         """Test that needs_agent_wrapper returns True."""
-        nested_chat_config = {"chat_queue": ["agent1", "agent2"], "use_async": True}
+        nested_chat_config = {"chat_queue": [{}], "use_async": True}
         target = NestedChatTarget(nested_chat_config=nested_chat_config)
         assert target.needs_agent_wrapper() is True
 

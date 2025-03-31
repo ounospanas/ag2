@@ -186,9 +186,11 @@ def _prepare_exclude_transit_messages(agents: list[ConversableAgent]) -> None:
         for on_condition in agent.handoffs.llm_conditions:
             to_be_removed.append(on_condition.llm_function_name)
 
+    remove_function = make_remove_function(to_be_removed)
+
     # register hook to remove transit messages for group agents
     for agent in agents:
-        agent.register_hook("process_all_messages_before_reply", make_remove_function(to_be_removed))
+        agent.register_hook("process_all_messages_before_reply", remove_function)
 
 
 def _prepare_group_agents(
