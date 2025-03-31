@@ -4,7 +4,6 @@
 
 from typing import TYPE_CHECKING, Any, List, cast
 
-from pydantic import BaseModel
 from ....agentchat.group.available_condition import AvailableCondition
 
 if TYPE_CHECKING:
@@ -30,7 +29,7 @@ class SummaryTaskAvailableCondition(AvailableCondition):
         queries_var: Context variable name for queries to run list
         completed_var: Context variable name for completed task count
 
-        """
+    """
 
     documents_var: str = "DocumentsToIngest"
     queries_var: str = "QueriesToRun"

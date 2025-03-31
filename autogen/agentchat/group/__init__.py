@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 __all__: list[str] = []
-'''
+"""
 from .after_work import (
     AfterWork,
     AfterWorkSelectionMessage,
@@ -55,4 +55,4 @@ __all__ = [
     "a_initiate_group_chat",
     "initiate_group_chat",
 ]
-'''
+"""

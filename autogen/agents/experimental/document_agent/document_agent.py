@@ -12,9 +12,9 @@ from pydantic import BaseModel, Field
 
 from .... import Agent, ConversableAgent, UpdateSystemMessage
 from ....agentchat.contrib.rag.query_engine import RAGQueryEngine
-from ....agentchat.group import ContextExpression
 from ....agentchat.group.after_work import AfterWork
 from ....agentchat.group.context_condition import ExpressionContextCondition
+from ....agentchat.group.context_expression import ContextExpression
 from ....agentchat.group.context_variables import ContextVariables
 from ....agentchat.group.llm_condition import StringLLMCondition
 from ....agentchat.group.multi_agent_chat import initiate_group_chat
@@ -390,7 +390,7 @@ class DocAgent(ConversableAgent):
             OnCondition(
                 target=AgentTarget(self._summary_agent),
                 condition=StringLLMCondition("Call this function if all work is done and a summary will be created"),
-                available=SummaryTaskAvailableCondition(), # Custom AvailableCondition class
+                available=SummaryTaskAvailableCondition(),  # Custom AvailableCondition class
             ),
             AfterWork(target=AfterWorkOptionTarget("stay")),
         ])

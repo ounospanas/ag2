@@ -99,9 +99,13 @@ def _run_oncontextconditions(
 ) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
     """Run OnContextConditions for an agent before any other reply function."""
     for on_condition in agent.handoffs.context_conditions:  # type: ignore[attr-defined]
-        is_available = on_condition.available.is_available(
-            agent, next(iter(agent.chat_messages.values())) if on_condition.available else True
-        ) if on_condition.available else True
+        is_available = (
+            on_condition.available.is_available(
+                agent, next(iter(agent.chat_messages.values())) if on_condition.available else True
+            )
+            if on_condition.available
+            else True
+        )
 
         if is_available and on_condition.condition.evaluate(agent.context_variables):
             # Condition has been met, we'll set the Tool Executor's next target
