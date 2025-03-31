@@ -555,7 +555,7 @@ def _create_group_manager(
     if manager.llm_config is False:
         for agent in agents:
             if agent.handoffs.after_work is not None and agent.handoffs.after_work.target == AfterWorkOptionTarget(
-                "group_manager"
+                after_work_option="group_manager"
             ):
                 raise ValueError(
                     "The group manager doesn't have an LLM Config and it is required for AfterWorkOptionTarget('group_manager'). Use the group_manager_args to specify the LLM Config for the group manager."

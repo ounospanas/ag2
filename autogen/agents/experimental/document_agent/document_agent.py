@@ -4,7 +4,6 @@
 
 import logging
 from copy import deepcopy
-from enum import Enum
 from pathlib import Path
 from typing import Annotated, Any, Optional, Union, cast
 
@@ -28,6 +27,7 @@ from ....oai.client import OpenAIWrapper
 from .chroma_query_engine import VectorChromaQueryEngine
 from .docling_doc_ingest_agent import DoclingDocIngestAgent
 from .document_conditions import SummaryTaskAvailableCondition
+from .document_utils import Ingest, Query
 
 __all__ = ["DocAgent"]
 
@@ -86,20 +86,6 @@ The following error(s) have occurred:
 - Error 1
 - Error 2
 """
-
-
-class QueryType(Enum):
-    RAG_QUERY = "RAG_QUERY"
-    # COMMON_QUESTION = "COMMON_QUESTION"
-
-
-class Ingest(BaseModel):
-    path_or_url: str = Field(description="The path or URL of the documents to ingest.")
-
-
-class Query(BaseModel):
-    query_type: QueryType = Field(description="The type of query to perform for the Document Agent.")
-    query: str = Field(description="The query to perform for the Document Agent.")
 
 
 class DocumentTask(BaseModel):
@@ -256,7 +242,6 @@ class DocAgent(ConversableAgent):
             ingestions = task_init_info.ingestions
             queries = task_init_info.queries
 
-            logger.info("initiate_tasks context_variables", context_variables)
             if "TaskInitiated" in context_variables:
                 return ReplyResult(message="Task already initiated", context_variables=context_variables)
             context_variables["DocumentsToIngest"] = ingestions
@@ -275,7 +260,7 @@ class DocAgent(ConversableAgent):
             functions=[initiate_tasks],
         )
 
-        self._triage_agent.handoffs.set_after_work(AfterWork(AgentTarget(self._task_manager_agent)))
+        self._triage_agent.handoffs.set_after_work(AfterWork(AgentTarget(agent=self._task_manager_agent)))
 
         self._data_ingestion_agent = DoclingDocIngestAgent(
             llm_config=llm_config,
@@ -396,7 +381,7 @@ class DocAgent(ConversableAgent):
                 condition=StringLLMCondition(
                     prompt="Call this function if all work is done and a summary will be created"
                 ),
-                available=SummaryTaskAvailableCondition(),  # Custom AvailableCondition class (CHECK THIS - PARAMETERS NEED TO BE PASSED IN)
+                available=SummaryTaskAvailableCondition(),  # Custom AvailableCondition class
             ),
             AfterWork(target=AfterWorkOptionTarget(after_work_option="stay")),
         ])

@@ -5,11 +5,11 @@
 from typing import TYPE_CHECKING, Any, List, cast
 
 from ....agentchat.group.available_condition import AvailableCondition
+from .document_utils import Ingest, Query
 
 if TYPE_CHECKING:
     # Avoid circular import
     from ....agentchat.conversable_agent import ConversableAgent
-    from .document_agent import Ingest, Query  # Adjust import path as needed for your actual models
 
 __all__ = ["SummaryTaskAvailableCondition"]
 
