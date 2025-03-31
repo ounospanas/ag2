@@ -59,6 +59,10 @@ class Handoffs(BaseModel):
         Returns:
             Self for method chaining
         """
+        # Validate that it is an OnContextCondition
+        if not isinstance(condition, OnContextCondition):
+            raise TypeError(f"Expected an OnContextCondition instance, got {type(condition).__name__}")
+
         self.context_conditions.append(condition)
         return self
 
@@ -72,6 +76,10 @@ class Handoffs(BaseModel):
         Returns:
             Self for method chaining
         """
+        # Validate that it is a list of OnContextConditions
+        if not all(isinstance(condition, OnContextCondition) for condition in conditions):
+            raise TypeError("All conditions must be of type OnContextCondition")
+
         self.context_conditions.extend(conditions)
         return self
 
@@ -85,6 +93,10 @@ class Handoffs(BaseModel):
         Returns:
             Self for method chaining
         """
+        # Validate that it is an OnCondition
+        if not isinstance(condition, OnCondition):
+            raise TypeError(f"Expected an OnCondition instance, got {type(condition).__name__}")
+
         self.llm_conditions.append(condition)
         return self
 
@@ -98,6 +110,10 @@ class Handoffs(BaseModel):
         Returns:
             Self for method chaining
         """
+        # Validate that it is a list of OnConditions
+        if not all(isinstance(condition, OnCondition) for condition in conditions):
+            raise TypeError("All conditions must be of type OnCondition")
+
         self.llm_conditions.extend(conditions)
         return self
 
@@ -111,6 +127,9 @@ class Handoffs(BaseModel):
         Returns:
             Self for method chaining
         """
+        if not isinstance(after_work, AfterWork):
+            raise TypeError(f"Expected an AfterWork instance, got {type(after_work).__name__}")
+        
         self.after_work = after_work
         return self
 
