@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
+
 from autogen.agentchat.group.context_expression import ContextExpression
 from autogen.agentchat.group.context_variables import ContextVariables
 
@@ -12,10 +13,12 @@ class TestContextExpressionNewSyntax:
 
     def test_basic_boolean_operations(self) -> None:
         """Test basic boolean operations."""
-        context = ContextVariables(data={
-            "var_true": True,
-            "var_false": False,
-        })
+        context = ContextVariables(
+            data={
+                "var_true": True,
+                "var_false": False,
+            }
+        )
 
         # Test simple variable lookup
         assert ContextExpression("${var_true}").evaluate(context) is True
@@ -39,10 +42,12 @@ class TestContextExpressionNewSyntax:
 
     def test_symbolic_operators(self) -> None:
         """Test the symbolic operators (!, &, |)."""
-        context = ContextVariables(data={
-            "var_true": True,
-            "var_false": False,
-        })
+        context = ContextVariables(
+            data={
+                "var_true": True,
+                "var_false": False,
+            }
+        )
 
         # Test NOT operator with ! - without parentheses
         assert ContextExpression("!${var_true}").evaluate(context) is False
@@ -66,10 +71,12 @@ class TestContextExpressionNewSyntax:
 
     def test_mixed_syntax(self) -> None:
         """Test mixing symbolic and keyword operators."""
-        context = ContextVariables(data={
-            "var_true": True,
-            "var_false": False,
-        })
+        context = ContextVariables(
+            data={
+                "var_true": True,
+                "var_false": False,
+            }
+        )
 
         # Mixing different styles
         assert ContextExpression("${var_true} and !${var_false}").evaluate(context) is True
@@ -78,12 +85,14 @@ class TestContextExpressionNewSyntax:
 
     def test_numeric_comparisons(self) -> None:
         """Test numeric comparisons."""
-        context = ContextVariables(data={
-            "num_zero": 0,
-            "num_one": 1,
-            "num_ten": 10,
-            "num_negative": -5,
-        })
+        context = ContextVariables(
+            data={
+                "num_zero": 0,
+                "num_one": 1,
+                "num_ten": 10,
+                "num_negative": -5,
+            }
+        )
 
         # Test equal comparison
         assert ContextExpression("${num_zero} == 0").evaluate(context) is True
@@ -130,11 +139,13 @@ class TestContextExpressionNewSyntax:
 
     def test_string_comparisons(self) -> None:
         """Test string comparisons."""
-        context = ContextVariables(data={
-            "str_empty": "",
-            "str_hello": "hello",
-            "str_world": "world",
-        })
+        context = ContextVariables(
+            data={
+                "str_empty": "",
+                "str_hello": "hello",
+                "str_world": "world",
+            }
+        )
 
         # Test equal comparison with string literals
         assert ContextExpression("${str_hello} == 'hello'").evaluate(context) is True
@@ -164,16 +175,18 @@ class TestContextExpressionNewSyntax:
 
     def test_complex_expressions(self) -> None:
         """Test complex expressions with nested operations."""
-        context = ContextVariables(data={
-            "user_logged_in": True,
-            "is_admin": False,
-            "has_permission": True,
-            "user_age": 25,
-            "min_age": 18,
-            "max_attempts": 3,
-            "current_attempts": 2,
-            "username": "john_doe",
-        })
+        context = ContextVariables(
+            data={
+                "user_logged_in": True,
+                "is_admin": False,
+                "has_permission": True,
+                "user_age": 25,
+                "min_age": 18,
+                "max_attempts": 3,
+                "current_attempts": 2,
+                "username": "john_doe",
+            }
+        )
 
         # Test nested boolean operations
         assert ContextExpression("${user_logged_in} and (${is_admin} or ${has_permission})").evaluate(context) is True
@@ -202,16 +215,18 @@ class TestContextExpressionNewSyntax:
 
     def test_complex_expressions_with_symbolic_operators(self) -> None:
         """Test complex expressions with symbolic operators."""
-        context = ContextVariables(data={
-            "user_logged_in": True,
-            "is_admin": False,
-            "has_permission": True,
-            "user_age": 25,
-            "min_age": 18,
-            "max_attempts": 3,
-            "current_attempts": 2,
-            "username": "john_doe",
-        })
+        context = ContextVariables(
+            data={
+                "user_logged_in": True,
+                "is_admin": False,
+                "has_permission": True,
+                "user_age": 25,
+                "min_age": 18,
+                "max_attempts": 3,
+                "current_attempts": 2,
+                "username": "john_doe",
+            }
+        )
 
         # Test complex expressions with symbolic operators
         assert (
@@ -239,48 +254,52 @@ class TestContextExpressionNewSyntax:
 
     def test_missing_variables(self) -> None:
         """Test behavior with missing variables."""
-        context = ContextVariables(data={
-            "var_true": True,
-        })
+        context = ContextVariables(
+            data={
+                "var_true": True,
+            }
+        )
 
         # Missing variables should default to False
-        with pytest.raises(KeyError) as e:
+        with pytest.raises(KeyError):
             ContextExpression("${non_existent_var}").evaluate(context) is False
 
-        with pytest.raises(KeyError) as e:
+        with pytest.raises(KeyError):
             assert ContextExpression("${var_true} and ${non_existent_var}").evaluate(context) is False
 
-        with pytest.raises(KeyError) as e:
+        with pytest.raises(KeyError):
             assert ContextExpression("${var_true} or ${non_existent_var}").evaluate(context) is True
 
-        with pytest.raises(KeyError) as e:
+        with pytest.raises(KeyError):
             assert ContextExpression("not ${non_existent_var}").evaluate(context) is True
 
         # Test with symbolic operators
-        with pytest.raises(KeyError) as e:
+        with pytest.raises(KeyError):
             assert ContextExpression("${var_true} & ${non_existent_var}").evaluate(context) is False
 
-        with pytest.raises(KeyError) as e:
+        with pytest.raises(KeyError):
             assert ContextExpression("${var_true} | ${non_existent_var}").evaluate(context) is True
 
-        with pytest.raises(KeyError) as e:
+        with pytest.raises(KeyError):
             assert ContextExpression("!${non_existent_var}").evaluate(context) is True
 
     def test_real_world_examples(self) -> None:
         """Test real-world examples with the new syntax."""
-        context = ContextVariables(data={
-            "logged_in": True,
-            "is_admin": False,
-            "has_order_id": True,
-            "order_delivered": True,
-            "return_started": False,
-            "attempts": 2,
-            "customer_angry": True,
-            "manager_already_involved": False,
-            "customer_name": "Alice Smith",
-            "is_premium_customer": True,
-            "account_type": "premium",
-        })
+        context = ContextVariables(
+            data={
+                "logged_in": True,
+                "is_admin": False,
+                "has_order_id": True,
+                "order_delivered": True,
+                "return_started": False,
+                "attempts": 2,
+                "customer_angry": True,
+                "manager_already_involved": False,
+                "customer_name": "Alice Smith",
+                "is_premium_customer": True,
+                "account_type": "premium",
+            }
+        )
 
         # Authentication example - removed parentheses
         assert ContextExpression("${logged_in} and not ${is_admin}").evaluate(context) is True
@@ -306,20 +325,22 @@ class TestContextExpressionNewSyntax:
 
     def test_real_world_examples_with_symbolic_operators(self) -> None:
         """Test real-world examples with symbolic operators."""
-        context = ContextVariables(data={
-            "logged_in": True,
-            "is_admin": False,
-            "has_order_id": True,
-            "order_delivered": True,
-            "return_started": False,
-            "attempts": 2,
-            "max_attempts": 5,
-            "customer_angry": True,
-            "manager_already_involved": False,
-            "customer_name": "Alice Smith",
-            "is_premium_customer": True,
-            "account_type": "premium",
-        })
+        context = ContextVariables(
+            data={
+                "logged_in": True,
+                "is_admin": False,
+                "has_order_id": True,
+                "order_delivered": True,
+                "return_started": False,
+                "attempts": 2,
+                "max_attempts": 5,
+                "customer_angry": True,
+                "manager_already_involved": False,
+                "customer_name": "Alice Smith",
+                "is_premium_customer": True,
+                "account_type": "premium",
+            }
+        )
 
         # Authentication example with symbolic operators
         assert ContextExpression("${logged_in} & !${is_admin}").evaluate(context) is True
@@ -350,11 +371,13 @@ class TestContextExpressionNewSyntax:
 
     def test_precedence_with_symbolic_operators(self) -> None:
         """Test operator precedence with symbolic operators."""
-        context = ContextVariables(data={
-            "a": True,
-            "b": False,
-            "c": True,
-        })
+        context = ContextVariables(
+            data={
+                "a": True,
+                "b": False,
+                "c": True,
+            }
+        )
 
         # Test precedence: NOT > AND > OR
         # a & !b | c  should be interpreted as  (a & (!b)) | c
@@ -371,15 +394,17 @@ class TestContextExpressionNewSyntax:
 
     def test_length_operations(self) -> None:
         """Test length operations with lists and other collections."""
-        context = ContextVariables(data={
-            "empty_list": [],
-            "non_empty_list": [1, 2, 3],
-            "single_item": ["test"],
-            "empty_string": "",
-            "non_empty_string": "hello",
-            "empty_dict": {},
-            "non_empty_dict": {"key": "value"},
-        })
+        context = ContextVariables(
+            data={
+                "empty_list": [],
+                "non_empty_list": [1, 2, 3],
+                "single_item": ["test"],
+                "empty_string": "",
+                "non_empty_string": "hello",
+                "empty_dict": {},
+                "non_empty_dict": {"key": "value"},
+            }
+        )
 
         # Test length with empty list
         assert ContextExpression("len(${empty_list}) == 0").evaluate(context) is True
@@ -407,7 +432,7 @@ class TestContextExpressionNewSyntax:
         assert ContextExpression("len(${non_empty_dict}) == 1").evaluate(context) is True
 
         # Test length with non-existent variables
-        with pytest.raises(KeyError) as e:
+        with pytest.raises(KeyError):
             assert ContextExpression("len(${non_existent}) == 0").evaluate(context) is True
 
         # Test length with symbolic operators

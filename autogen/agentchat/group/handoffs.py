@@ -129,7 +129,7 @@ class Handoffs(BaseModel):
         """
         if not isinstance(after_work, AfterWork):
             raise TypeError(f"Expected an AfterWork instance, got {type(after_work).__name__}")
-        
+
         self.after_work = after_work
         return self
 
