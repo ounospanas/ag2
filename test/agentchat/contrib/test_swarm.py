@@ -34,11 +34,11 @@ from autogen.agentchat.contrib.swarm_agent import (
     register_hand_off,
 )
 from autogen.agentchat.conversable_agent import ConversableAgent, UpdateSystemMessage
+from autogen.agentchat.group import ContextExpression
 from autogen.agentchat.group.context_str import ContextStr
 from autogen.agentchat.group.context_variables import ContextVariables
 from autogen.agentchat.groupchat import GroupChat, GroupChatManager
 from autogen.agentchat.user_proxy_agent import UserProxyAgent
-from autogen.agentchat.group import ContextExpression
 from autogen.import_utils import run_for_optional_imports
 from autogen.llm_config import LLMConfig
 from autogen.tools.tool import Tool

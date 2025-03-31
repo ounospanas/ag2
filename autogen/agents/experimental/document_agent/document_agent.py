@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from .... import Agent, ConversableAgent, UpdateSystemMessage
 from ....agentchat.contrib.rag.query_engine import RAGQueryEngine
+from ....agentchat.group import ContextExpression
 from ....agentchat.group.after_work import AfterWork
 from ....agentchat.group.context_condition import ExpressionContextCondition
 from ....agentchat.group.context_variables import ContextVariables
@@ -21,7 +22,6 @@ from ....agentchat.group.on_condition import OnCondition
 from ....agentchat.group.on_context_condition import OnContextCondition
 from ....agentchat.group.reply_result import ReplyResult
 from ....agentchat.group.transition_target import AfterWorkOptionTarget, AgentNameTarget, AgentTarget
-from ....agentchat.group import ContextExpression
 from ....doc_utils import export_module
 from ....llm_config import LLMConfig
 from ....oai.client import OpenAIWrapper

@@ -6,8 +6,8 @@ import ast
 import re
 from dataclasses import dataclass
 
-from .context_variables import ContextVariables
 from ...doc_utils import export_module
+from .context_variables import ContextVariables
 
 
 @dataclass

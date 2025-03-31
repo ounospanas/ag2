@@ -20,11 +20,11 @@ from ...tools.dependency_injection import inject_params, on
 from ..agent import Agent
 from ..chat import ChatResult
 from ..conversable_agent import ConversableAgent
+from ..group import ContextExpression
 from ..group.context_str import ContextStr
 from ..group.context_variables import __CONTEXT_VARIABLES_PARAM_NAME__, ContextVariables
 from ..groupchat import SELECT_SPEAKER_PROMPT_TEMPLATE, GroupChat, GroupChatManager
 from ..user_proxy_agent import UserProxyAgent
-from ..group import ContextExpression
 
 __all__ = [
     "AFTER_WORK",

@@ -11,8 +11,8 @@ from autogen.agentchat.group.context_condition import (
     ExpressionContextCondition,
     StringContextCondition,
 )
-from autogen.agentchat.group.context_variables import ContextVariables
 from autogen.agentchat.group.context_expression import ContextExpression
+from autogen.agentchat.group.context_variables import ContextVariables
 
 
 class TestContextCondition:

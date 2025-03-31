@@ -22,10 +22,10 @@ from .contrib.swarm_agent import (
     register_hand_off,
 )
 from .conversable_agent import ConversableAgent, UpdateSystemMessage, register_function
+from .group.context_expression import ContextExpression
 from .groupchat import GroupChat, GroupChatManager
 from .user_proxy_agent import UserProxyAgent
 from .utils import gather_usage_summary
-from .group.context_expression import ContextExpression
 
 __all__ = [
     "AfterWork",
