@@ -34,16 +34,39 @@ __all__ = [
 ]
 
 
-def _establish_swarm_agent(agent: ConversableAgent) -> None:
-    """Establish the swarm agent with the swarm-related attributes and hooks. Not for the tool executor.
+def _update_conditional_functions(agent: ConversableAgent, messages: Optional[list[dict[str, Any]]] = None) -> None:
+    """Updates the agent's functions based on the OnCondition's available condition.
+
+    All functions are removed and then added back if they are available
+    """
+    for on_condition in agent.handoffs.llm_conditions:
+        is_available = on_condition.available.is_available(agent, messages) if on_condition.available else True
+
+        # Remove it from their tools
+        for tool in agent.tools:
+            if tool.name == on_condition.llm_function_name:
+                agent.remove_tool_for_llm(tool)
+                break
+
+        # then add the function if it is available, so that the function signature is updated
+        if is_available:
+            agent._add_single_function(
+                _create_on_condition_handoff_function(on_condition.target),
+                on_condition.llm_function_name,
+                on_condition.condition.get_prompt(agent, messages),
+            )
+
+
+def _establish_group_agent(agent: ConversableAgent) -> None:
+    """Establish the group agent with the group-related attributes and hooks. Not for the tool executor.
 
     Args:
-        agent (ConversableAgent): The agent to establish as a swarm agent.
+        agent (ConversableAgent): The agent to establish as a group agent.
     """
 
-    def _swarm_agent_str(self: ConversableAgent) -> str:
+    def _group_agent_str(self: ConversableAgent) -> str:
         """Customise the __str__ method to show the agent name for transition messages."""
-        return f"Swarm agent --> {self.name}"
+        return f"Group agent --> {self.name}"
 
     # Register the hook to update agent state (except tool executor)
     agent.register_hook("update_agent_state", _update_conditional_functions)
@@ -51,17 +74,16 @@ def _establish_swarm_agent(agent: ConversableAgent) -> None:
     # Register a reply function to run Python function-based OnContextConditions before any other reply function
     agent.register_reply(trigger=([Agent, None]), reply_func=_run_oncontextconditions, position=0)
 
-    agent._get_display_name = MethodType(_swarm_agent_str, agent)  # type: ignore[method-assign]
+    agent._get_display_name = MethodType(_group_agent_str, agent)  # type: ignore[method-assign]
 
-    # Mark this agent as established as a swarm agent
+    # Mark this agent as established as a group agent
     agent._group_is_established = True  # type: ignore[attr-defined]
 
 
 def _link_agents_to_group_manager(agents: list[Agent], group_chat_manager: Agent) -> None:
     """Link all agents to the GroupChatManager so they can access the underlying GroupChat and other agents.
 
-    This is primarily used so that agents can set the tool executor's _swarm_next_target attribute to control
-    the next agent programmatically.
+    This is primarily used so that agents can get to the tool executor to help set the next agent.
 
     Does not link the Tool Executor agent.
     """
@@ -82,7 +104,7 @@ def _run_oncontextconditions(
         )
 
         if is_available and on_condition.condition.evaluate(agent.context_variables):
-            # Condition has been met, we'll set the Tool Executor's _swarm_next_target
+            # Condition has been met, we'll set the Tool Executor's next target
             # attribute and that will be picked up on the next iteration when
             # _determine_next_agent is called
             for agent in agent._group_manager.groupchat.agents:
@@ -164,12 +186,12 @@ def _prepare_exclude_transit_messages(agents: list[ConversableAgent]) -> None:
         for on_condition in agent.handoffs.llm_conditions:
             to_be_removed.append(on_condition.llm_function_name)
 
-    # register hook to remove transit messages for swarm agents
+    # register hook to remove transit messages for group agents
     for agent in agents:
         agent.register_hook("process_all_messages_before_reply", make_remove_function(to_be_removed))
 
 
-def _prepare_swarm_agents(
+def _prepare_group_agents(
     initial_agent: ConversableAgent,
     agents: list[ConversableAgent],
     context_variables: ContextVariables,
@@ -192,10 +214,10 @@ def _prepare_swarm_agents(
     if not all(isinstance(agent, ConversableAgent) for agent in agents):
         raise ValueError("Agents must be a list of ConversableAgents")
 
-    # Initialize all agents as swarm agents
+    # Initialise all agents as group agents
     for agent in agents:
         if not hasattr(agent, "_group_is_established"):
-            _establish_swarm_agent(agent)
+            _establish_group_agent(agent)
 
     # Ensure all agents in hand-off after-works are in the passed in agents list
     _ensure_handoff_agents_in_group(agents)
@@ -260,8 +282,8 @@ def _process_initial_messages(
 
     Args:
         messages: Initial messages to process.
-        user_agent: Optional user proxy agent passed in to a_/initiate_swarm_chat.
-        agents: Agents in swarm.
+        user_agent: Optional user proxy agent passed in to a_/initiate_group_chat.
+        agents: Agents in the group.
         wrapped_agents: List of wrapped agents.
 
     Returns:
@@ -273,9 +295,9 @@ def _process_initial_messages(
     if isinstance(messages, str):
         messages = [{"role": "user", "content": messages}]
 
-    swarm_agent_names = [agent.name for agent in agents + wrapped_agents]
+    group_agent_names = [agent.name for agent in agents + wrapped_agents]
 
-    # If there's only one message and there's no identified swarm agent
+    # If there's only one message and there's no identified group agent
     # Start with a user proxy agent, creating one if they haven't passed one in
     last_agent: Optional[Agent]
     temp_user_proxy: Optional[Agent] = None
@@ -287,16 +309,16 @@ def _process_initial_messages(
     else:
         last_message = messages[0]
         if "name" in last_message:
-            if last_message["name"] in swarm_agent_names:
+            if last_message["name"] in group_agent_names:
                 last_agent = next(agent for agent in agents + wrapped_agents if agent.name == last_message["name"])  # type: ignore[assignment]
             elif user_agent and last_message["name"] == user_agent.name:
                 last_agent = user_agent
             else:
-                raise ValueError(f"Invalid swarm agent name in last message: {last_message['name']}")
+                raise ValueError(f"Invalid group agent name in last message: {last_message['name']}")
         else:
             last_agent = user_agent if user_agent else temp_user_proxy
 
-    return messages, last_agent, swarm_agent_names, temp_user_list
+    return messages, last_agent, group_agent_names, temp_user_list
 
 
 def _setup_context_variables(
@@ -305,7 +327,7 @@ def _setup_context_variables(
     manager: GroupChatManager,
     context_variables: ContextVariables,
 ) -> None:
-    """Assign a common context_variables reference to all agents in the swarm, including the tool executor and group chat manager.
+    """Assign a common context_variables reference to all agents in the group, including the tool executor and group chat manager.
 
     Args:
         tool_execution: The tool execution agent.
@@ -330,7 +352,7 @@ def _cleanup_temp_user_messages(chat_result: ChatResult) -> None:
 
 def _prepare_groupchat_auto_speaker(
     groupchat: GroupChat,
-    last_swarm_agent: ConversableAgent,
+    last_group_agent: ConversableAgent,
     after_work_next_agent_selection_msg: Optional[AfterWorkSelectionMessage],
 ) -> None:
     """Prepare the group chat for auto speaker selection, includes updating or restore the groupchat speaker selection message.
@@ -339,7 +361,7 @@ def _prepare_groupchat_auto_speaker(
 
     Args:
         groupchat (GroupChat): GroupChat instance.
-        last_swarm_agent (ConversableAgent): The last swarm agent for which the LLM config is used
+        last_group_agent (ConversableAgent): The last group agent for which the LLM config is used
         after_work_next_agent_selection_msg (AfterWorkSelectionMessage): Optional message to use for the agent selection (in internal group chat).
     """
 
@@ -360,25 +382,25 @@ def _prepare_groupchat_auto_speaker(
     groupchat.select_speaker_prompt_template = substitute_agentlist(
         SELECT_SPEAKER_PROMPT_TEMPLATE
         if after_work_next_agent_selection_msg is None
-        else after_work_next_agent_selection_msg.get_message(last_swarm_agent, groupchat.messages)
+        else after_work_next_agent_selection_msg.get_message(last_group_agent, groupchat.messages)
     )
 
 
-def _get_last_swarm_agent(
-    groupchat: GroupChat, swarm_agent_names: list[str], tool_executor: GroupToolExecutor
+def _get_last_agent_speaker(
+    groupchat: GroupChat, group_agent_names: list[str], tool_executor: GroupToolExecutor
 ) -> ConversableAgent:
-    """Get the last swarm agent from the group chat messages. Not including the tool executor."""
-    last_swarm_speaker = None
+    """Get the last group agent from the group chat messages. Not including the tool executor."""
+    last_group_speaker = None
     for message in reversed(groupchat.messages):
-        if "name" in message and message["name"] in swarm_agent_names and message["name"] != tool_executor.name:
+        if "name" in message and message["name"] in group_agent_names and message["name"] != tool_executor.name:
             agent = groupchat.agent_by_name(name=message["name"])
             if isinstance(agent, ConversableAgent):
-                last_swarm_speaker = agent
+                last_group_speaker = agent
                 break
-    if last_swarm_speaker is None:
-        raise ValueError("No swarm agent found in the message history")
+    if last_group_speaker is None:
+        raise ValueError("No group agent found in the message history")
 
-    return last_swarm_speaker
+    return last_group_speaker
 
 
 def _determine_next_agent(
@@ -387,7 +409,7 @@ def _determine_next_agent(
     initial_agent: ConversableAgent,
     use_initial_agent: bool,
     tool_executor: GroupToolExecutor,
-    swarm_agent_names: list[str],
+    group_agent_names: list[str],
     user_agent: Optional[UserProxyAgent],
     group_after_work: Optional[AfterWork],
 ) -> Optional[Union[Agent, Literal["auto"]]]:
@@ -399,7 +421,7 @@ def _determine_next_agent(
         initial_agent (ConversableAgent): The initial agent in the conversation.
         use_initial_agent (bool): Whether to use the initial agent straight away.
         tool_executor (ConversableAgent): The tool execution agent.
-        swarm_agent_names (list[str]): List of agent names.
+        group_agent_names (list[str]): List of agent names.
         user_agent (UserProxyAgent): Optional user proxy agent.
         group_after_work (AfterWork): Group-level Transition option when an agent doesn't select the next agent.
     """
@@ -435,32 +457,32 @@ def _determine_next_agent(
                 "Tool Executor next target must be a valid TransitionTarget that can resolve for speaker selection."
             )
 
-    # get the last swarm agent
-    last_swarm_speaker = _get_last_swarm_agent(groupchat, swarm_agent_names, tool_executor)
+    # get the last group agent
+    last_agent_speaker = _get_last_agent_speaker(groupchat, group_agent_names, tool_executor)
 
     # If the user last spoke, return to the agent prior to them
     if (user_agent and last_speaker == user_agent) or groupchat.messages[-1][
         "role"
     ] == "tool":  # MS Not sure the "tool" role check is needed here
-        return last_swarm_speaker
+        return last_agent_speaker
 
     # AFTER WORK:
 
     # Get the appropriate After Work condition (from the agent if they have one, otherwise the group level one)
     after_work_condition = (
-        last_swarm_speaker.handoffs.after_work
-        if last_swarm_speaker.handoffs.after_work is not None
+        last_agent_speaker.handoffs.after_work
+        if last_agent_speaker.handoffs.after_work is not None
         else group_after_work
     )
 
     # Resolve the next agent, termination, or speaker selection method
     resolved_speaker_selection_result = after_work_condition.target.resolve(
-        last_speaker, groupchat.messages, groupchat, last_swarm_speaker, user_agent
+        last_speaker, groupchat.messages, groupchat, last_agent_speaker, user_agent
     ).get_speaker_selection_result(groupchat)
 
     # If the resolved speaker selection result is "auto", meaning it's a speaker selection method of "auto", we need to prepare the group chat for auto speaker selection
     if resolved_speaker_selection_result == "auto":
-        _prepare_groupchat_auto_speaker(groupchat, last_swarm_speaker, after_work_condition.selection_message)
+        _prepare_groupchat_auto_speaker(groupchat, last_agent_speaker, after_work_condition.selection_message)
 
     return resolved_speaker_selection_result
 
@@ -468,27 +490,27 @@ def _determine_next_agent(
 def create_group_transition(
     initial_agent: ConversableAgent,
     tool_execution: GroupToolExecutor,
-    swarm_agent_names: list[str],
+    group_agent_names: list[str],
     user_agent: Optional[UserProxyAgent],
     group_after_work: Optional[TransitionOption],
 ) -> Callable[[ConversableAgent, GroupChat], Optional[Union[Agent, Literal["auto"]]]]:
-    """Creates a transition function for swarm chat with enclosed state for the use_initial_agent.
+    """Creates a transition function for group chat with enclosed state for the use_initial_agent.
 
     Args:
         initial_agent (ConversableAgent): The first agent to speak
         tool_execution (GroupToolExecutor): The tool execution agent
-        swarm_agent_names (list[str]): List of all agent names
+        group_agent_names (list[str]): List of all agent names
         user_agent (UserProxyAgent): Optional user proxy agent
         group_after_work (TransitionOption): Group-level after work
 
     Returns:
-        Callable transition function (for sync and async swarm chats)
+        Callable transition function (for sync and async group chats)
     """
     # Create enclosed state, this will be set once per creation so will only be True on the first execution
-    # of swarm_transition
+    # of group_transition
     state = {"use_initial_agent": True}
 
-    def swarm_transition(
+    def group_transition(
         last_speaker: ConversableAgent, groupchat: GroupChat
     ) -> Optional[Union[Agent, Literal["auto"]]]:
         result = _determine_next_agent(
@@ -497,42 +519,42 @@ def create_group_transition(
             initial_agent=initial_agent,
             use_initial_agent=state["use_initial_agent"],
             tool_executor=tool_execution,
-            swarm_agent_names=swarm_agent_names,
+            group_agent_names=group_agent_names,
             user_agent=user_agent,
             group_after_work=group_after_work,
         )
         state["use_initial_agent"] = False
         return result
 
-    return swarm_transition
+    return group_transition
 
 
 def _create_group_manager(
-    groupchat: GroupChat, swarm_manager_args: Optional[dict[str, Any]], agents: list[ConversableAgent]
+    groupchat: GroupChat, group_manager_args: Optional[dict[str, Any]], agents: list[ConversableAgent]
 ) -> GroupChatManager:
-    """Create a GroupChatManager for the swarm chat utilising any arguments passed in and ensure an LLM Config exists if needed
+    """Create a GroupChatManager for the group chat utilising any arguments passed in and ensure an LLM Config exists if needed
 
     Args:
-        groupchat (GroupChat): Swarm groupchat.
-        swarm_manager_args (dict[str, Any]): Swarm manager arguments to create the GroupChatManager.
-        agents (list[ConversableAgent]): List of agents in the swarm.
+        groupchat (GroupChat): The groupchat.
+        group_manager_args (dict[str, Any]): Group manager arguments to create the GroupChatManager.
+        agents (list[ConversableAgent]): List of agents in the group.
 
     Returns:
         GroupChatManager: GroupChatManager instance.
     """
-    manager_args = (swarm_manager_args or {}).copy()
+    manager_args = (group_manager_args or {}).copy()
     if "groupchat" in manager_args:
-        raise ValueError("'groupchat' cannot be specified in swarm_manager_args as it is set by initiate_swarm_chat")
+        raise ValueError("'groupchat' cannot be specified in group_manager_args as it is set by initiate_group_chat")
     manager = GroupChatManager(groupchat, **manager_args)
 
-    # Ensure that our manager has an LLM Config if we have any AfterWorkOption.SWARM_MANAGER after works
+    # Ensure that our manager has an LLM Config if we have any AfterWorkOptionTarget of "group_manager" after works
     if manager.llm_config is False:
         for agent in agents:
             if agent.handoffs.after_work is not None and agent.handoffs.after_work.target == AfterWorkOptionTarget(
                 "group_manager"
             ):
                 raise ValueError(
-                    "The swarm manager doesn't have an LLM Config and it is required for AfterWorkOptionTarget('group_manager'). Use the swarm_manager_args to specify the LLM Config for the swarm manager."
+                    "The group manager doesn't have an LLM Config and it is required for AfterWorkOptionTarget('group_manager'). Use the group_manager_args to specify the LLM Config for the group manager."
                 )
 
     return manager
@@ -594,7 +616,7 @@ def initiate_group_chat(
     messages: Union[list[dict[str, Any]], str],
     agents: list[ConversableAgent],
     user_agent: Optional[UserProxyAgent] = None,
-    swarm_manager_args: Optional[dict[str, Any]] = None,
+    group_manager_args: Optional[dict[str, Any]] = None,
     max_rounds: int = 20,
     context_variables: Optional[ContextVariables] = None,
     after_work: Optional[AfterWork] = None,
@@ -605,22 +627,13 @@ def initiate_group_chat(
     Args:
         initial_agent: The first receiving agent of the conversation.
         messages: Initial message(s).
-        agents: list of swarm agents.
+        agents: list of group agents.
         user_agent: Optional user proxy agent for falling back to.
-        swarm_manager_args: Optional group chat manager arguments used to establish the swarm's groupchat manager, required when AfterWorkOption.SWARM_MANAGER is used.
+        group_manager_args: Optional group chat manager arguments used to establish the group's groupchat manager, required when AfterWorkOptionTarget("group_manager") is used.
         max_rounds: Maximum number of conversation rounds.
         context_variables: Starting context variables.
         after_work: Method to handle conversation continuation when an agent doesn't select the next agent. If no agent is selected and no tool calls are output, we will use this method to determine the next agent.
-            Must be a AfterWork instance (which is a dataclass accepting a ConversableAgent, AfterWorkOption, A str (of the AfterWorkOption)) or a callable.
-            AfterWorkOption:
-                - TERMINATE (Default): Terminate the conversation.
-                - REVERT_TO_USER : Revert to the user agent if a user agent is provided. If not provided, terminate the conversation.
-                - STAY : Stay with the last speaker.
-
-            Callable: A custom function that takes the current agent, messages, and groupchat as arguments and returns an AfterWorkOption or a ConversableAgent (by reference or string name).
-                ```python
-                def custom_afterwork_func(last_speaker: ConversableAgent, messages: list[dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, ConversableAgent, str]:
-                ```
+            Must be a AfterWork instance.
         exclude_transit_message:  all registered handoff function call and responses messages will be removed from message list before calling an LLM.
             Note: only with transition functions added with `register_handoff` will be removed. If you pass in a function to manage workflow, it will not be removed. You may register a cumstomized hook to `process_all_messages_before_reply` to remove that.
     Returns:
@@ -638,19 +651,19 @@ def initiate_group_chat(
     # Default to terminate
     group_after_work = after_work if after_work is not None else AfterWork(target=AfterWorkOptionTarget("terminate"))
 
-    tool_execution, wrapped_agents = _prepare_swarm_agents(
+    tool_execution, wrapped_agents = _prepare_group_agents(
         initial_agent, agents, context_variables, exclude_transit_message
     )
 
-    processed_messages, last_agent, swarm_agent_names, temp_user_list = _process_initial_messages(
+    processed_messages, last_agent, group_agent_names, temp_user_list = _process_initial_messages(
         messages, user_agent, agents, wrapped_agents
     )
 
     # Create transition function (has enclosed state for initial agent)
-    swarm_transition = create_group_transition(
+    group_transition = create_group_transition(
         initial_agent=initial_agent,
         tool_execution=tool_execution,
-        swarm_agent_names=swarm_agent_names,
+        group_agent_names=group_agent_names,
         user_agent=user_agent,
         group_after_work=group_after_work,
     )
@@ -659,16 +672,15 @@ def initiate_group_chat(
         agents=[tool_execution] + agents + wrapped_agents + ([user_agent] if user_agent else temp_user_list),
         messages=[],
         max_round=max_rounds,
-        speaker_selection_method=swarm_transition,
+        speaker_selection_method=group_transition,
     )
 
-    manager = _create_group_manager(groupchat, swarm_manager_args, agents)
+    manager = _create_group_manager(groupchat, group_manager_args, agents)
 
     # Point all ConversableAgent's context variables to this function's context_variables
     _setup_context_variables(tool_execution, agents, manager, context_variables)
 
     # Link all agents with the GroupChatManager to allow access to the group chat
-    # and other agents, particularly the tool executor for setting _swarm_next_target
     _link_agents_to_group_manager(groupchat.agents, manager)  # Commented out as the function is not defined
 
     if len(processed_messages) > 1:
@@ -698,40 +710,24 @@ async def a_initiate_group_chat(
     messages: Union[list[dict[str, Any]], str],
     agents: list[ConversableAgent],
     user_agent: Optional[UserProxyAgent] = None,
-    swarm_manager_args: Optional[dict[str, Any]] = None,
+    group_manager_args: Optional[dict[str, Any]] = None,
     max_rounds: int = 20,
     context_variables: Optional[ContextVariables] = None,
-    after_work: Optional[
-        Union[
-            TransitionOption,
-            Callable[
-                [ConversableAgent, list[dict[str, Any]], GroupChat], Union[TransitionOption, ConversableAgent, str]
-            ],
-        ]
-    ] = "terminate",
+    after_work: Optional[AfterWork] = None,
     exclude_transit_message: bool = True,
-) -> tuple[ChatResult, dict[str, Any], ConversableAgent]:
-    """Initialize and run a swarm chat asynchronously
+) -> tuple[ChatResult, ContextVariables, ConversableAgent]:
+    """Initialize and run a group chat
 
     Args:
         initial_agent: The first receiving agent of the conversation.
         messages: Initial message(s).
-        agents: List of swarm agents.
+        agents: list of group agents.
         user_agent: Optional user proxy agent for falling back to.
-        swarm_manager_args: Optional group chat manager arguments used to establish the swarm's groupchat manager, required when AfterWorkOption.SWARM_MANAGER is used.
+        group_manager_args: Optional group chat manager arguments used to establish the group's groupchat manager, required when AfterWorkOptionTarget("group_manager") is used.
         max_rounds: Maximum number of conversation rounds.
         context_variables: Starting context variables.
         after_work: Method to handle conversation continuation when an agent doesn't select the next agent. If no agent is selected and no tool calls are output, we will use this method to determine the next agent.
-            Must be a AfterWork instance (which is a dataclass accepting a ConversableAgent, AfterWorkOption, A str (of the AfterWorkOption)) or a callable.
-            AfterWorkOption:
-                - TERMINATE (Default): Terminate the conversation.
-                - REVERT_TO_USER : Revert to the user agent if a user agent is provided. If not provided, terminate the conversation.
-                - STAY : Stay with the last speaker.
-
-            Callable: A custom function that takes the current agent, messages, and groupchat as arguments and returns an AfterWorkOption or a ConversableAgent (by reference or string name).
-                ```python
-                def custom_afterwork_func(last_speaker: ConversableAgent, messages: list[dict[str, Any]], groupchat: GroupChat) -> Union[AfterWorkOption, ConversableAgent, str]:
-                ```
+            Must be a AfterWork instance.
         exclude_transit_message:  all registered handoff function call and responses messages will be removed from message list before calling an LLM.
             Note: only with transition functions added with `register_handoff` will be removed. If you pass in a function to manage workflow, it will not be removed. You may register a cumstomized hook to `process_all_messages_before_reply` to remove that.
     Returns:
@@ -740,26 +736,3 @@ async def a_initiate_group_chat(
         ConversableAgent:   Last speaker.
     """
     raise NotImplementedError("This function is not implemented yet")
-
-
-def _update_conditional_functions(agent: ConversableAgent, messages: Optional[list[dict[str, Any]]] = None) -> None:
-    """Updates the agent's functions based on the OnCondition's available condition.
-
-    All functions are removed and then added back if they are available
-    """
-    for on_condition in agent.handoffs.llm_conditions:
-        is_available = on_condition.available.is_available(agent, messages) if on_condition.available else True
-
-        # Remove it from their tools
-        for tool in agent.tools:
-            if tool.name == on_condition.llm_function_name:
-                agent.remove_tool_for_llm(tool)
-                break
-
-        # then add the function if it is available, so that the function signature is updated
-        if is_available:
-            agent._add_single_function(
-                _create_on_condition_handoff_function(on_condition.target),
-                on_condition.llm_function_name,
-                on_condition.condition.get_prompt(agent, messages),
-            )

@@ -255,16 +255,11 @@ class TestContextExpressionAvailableCondition:
 
     def test_is_available_with_nested_variables(self) -> None:
         """Test is_available with a nested context expression."""
-        expression = ContextExpression("${user.is_premium} and ${user.status} == 'active'")
-        condition = ContextExpressionAvailableCondition(expression=expression)
-
-        mock_agent = MagicMock()
-        mock_agent.context_variables = ContextVariables(data={"user": {"is_premium": True, "status": "active"}})
-
         # This would typically fail with the current implementation
         # as nested lookups are not supported directly by ContextExpression
-        with pytest.raises(KeyError):
-            condition.is_available(mock_agent, [])
+        expression_string = "${user.is_premium} and ${user.status} == 'active'"
+        with pytest.raises(ValueError, match="Operation type Attribute is not allowed"):
+            ContextExpression(expression_string)
 
     def test_messages_parameter_ignored(self) -> None:
         """Test that the messages parameter is ignored."""

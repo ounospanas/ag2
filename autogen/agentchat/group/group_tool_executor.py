@@ -15,7 +15,7 @@ from .context_variables import __CONTEXT_VARIABLES_PARAM_NAME__, ContextVariable
 from .reply_result import ReplyResult
 from .transition_target import TransitionTarget
 
-__TOOL_EXECUTOR_NAME__ = "_Swarm_Tool_Executor"
+__TOOL_EXECUTOR_NAME__ = "_Group_Tool_Executor"
 
 
 class GroupToolExecutor(ConversableAgent):
@@ -30,33 +30,32 @@ class GroupToolExecutor(ConversableAgent):
         )
 
         # Store the next target from a tool call
-        self._swarm_next_target = None
+        self._group_next_target = None
 
         # Primary tool reply function for handling the tool reply and the ReplyResult and TransitionTarget returns
-        # self.register_reply([Agent, None], self._generate_swarm_tool_reply)
-        self.register_reply([Agent, None], self._generate_swarm_tool_reply, remove_other_reply_funcs=True)
+        self.register_reply([Agent, None], self._generate_group_tool_reply, remove_other_reply_funcs=True)
 
     def set_next_target(self, next_target: TransitionTarget) -> None:
         """Sets the next target to transition to, used in the determine_next_agent function."""
-        self._swarm_next_target = next_target
+        self._group_next_target = next_target
 
     def get_next_target(self) -> Optional[TransitionTarget]:
         """Gets the next target to transition to."""
         """Returns the next target to transition to, if it exists."""
-        return self._swarm_next_target
+        return self._group_next_target
 
     def has_next_target(self) -> bool:
         """Checks if there is a next target to transition to."""
-        return self._swarm_next_target is not None
+        return self._group_next_target is not None
 
     def clear_next_target(self) -> None:
         """Clears the next target to transition to."""
-        self._swarm_next_target = None
+        self._group_next_target = None
 
     def _modify_context_variables_param(
         self, f: Callable[..., Any], context_variables: ContextVariables
     ) -> Callable[..., Any]:
-        """Modifies the context_variables parameter to use dependency injection and link it to the swarm context variables.
+        """Modifies the context_variables parameter to use dependency injection and link it to the group context variables.
 
         This essentially changes:
         def some_function(some_variable: int, context_variables: ContextVariables) -> str:
@@ -123,7 +122,7 @@ class GroupToolExecutor(ConversableAgent):
             for tool in agent.tools:
                 self.register_for_execution(serialize=False, silent_override=True)(tool)
 
-    def _generate_swarm_tool_reply(
+    def _generate_group_tool_reply(
         self,
         agent: ConversableAgent,
         messages: Optional[list[dict[str, Any]]] = None,
@@ -185,7 +184,7 @@ class GroupToolExecutor(ConversableAgent):
                     tool_responses_inner.append(tool_response)
                     contents.append(str(tool_response["content"]))
 
-            self._swarm_next_target = next_agent  # type: ignore[attr-defined]
+            self._group_next_target = next_agent  # type: ignore[attr-defined]
 
             # Put the tool responses and content strings back into the response message
             # Caters for multiple tool calls

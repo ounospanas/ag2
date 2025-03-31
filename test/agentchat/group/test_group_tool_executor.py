@@ -33,7 +33,7 @@ class TestGroupToolExecutor:
     def test_initialisation(self, executor):
         """Test that the executor initialises with the correct name and defaults."""
         assert executor.name == __TOOL_EXECUTOR_NAME__
-        assert executor._swarm_next_target is None
+        assert executor._group_next_target is None
         assert executor.system_message == "Tool Execution, do not use this agent directly."
         assert executor.human_input_mode == "NEVER"
         assert not executor._code_execution_config
@@ -182,21 +182,21 @@ class TestGroupToolExecutor:
                 any_order=True,
             )
 
-    def test_generate_swarm_tool_reply_with_no_tool_calls(self, executor):
-        """Test _generate_swarm_tool_reply with a message without tool_calls."""
+    def test_generate_group_tool_reply_with_no_tool_calls(self, executor):
+        """Test _generate_group_tool_reply with a message without tool_calls."""
         # Create message without tool_calls
         message = {"role": "user", "content": "Hello"}
         messages = [message]
 
         # Run the function
-        success, result = executor._generate_swarm_tool_reply(agent=executor, messages=messages)
+        success, result = executor._generate_group_tool_reply(agent=executor, messages=messages)
 
         # Should return False and None
         assert success is False
         assert result is None
 
-    def test_generate_swarm_tool_reply_with_tool_calls(self, executor):
-        """Test _generate_swarm_tool_reply with a message with tool_calls."""
+    def test_generate_group_tool_reply_with_tool_calls(self, executor):
+        """Test _generate_group_tool_reply with a message with tool_calls."""
 
         # Create a mock function to execute
         def mock_func(arg1, arg2):
@@ -224,7 +224,7 @@ class TestGroupToolExecutor:
             executor, "generate_tool_calls_reply", return_value=(True, mock_tool_response)
         ) as mock_generate:
             # Run the function
-            success, result = executor._generate_swarm_tool_reply(agent=executor, messages=messages)
+            success, result = executor._generate_group_tool_reply(agent=executor, messages=messages)
 
             # Should call generate_tool_calls_reply with the message containing only the first tool call
             mock_generate.assert_called_once()
@@ -237,8 +237,8 @@ class TestGroupToolExecutor:
             assert success is True
             assert result == mock_tool_response
 
-    def test_generate_swarm_tool_reply_with_reply_result(self, executor):
-        """Test _generate_swarm_tool_reply handling a ReplyResult response."""
+    def test_generate_group_tool_reply_with_reply_result(self, executor):
+        """Test _generate_group_tool_reply handling a ReplyResult response."""
         # Create a ReplyResult to be returned by the tool
         result = ReplyResult(
             message="Tool executed successfully",
@@ -264,21 +264,21 @@ class TestGroupToolExecutor:
 
         with patch.object(mock_agent, "generate_tool_calls_reply", return_value=(True, mock_tool_response)):
             # Run the function
-            success, response = executor._generate_swarm_tool_reply(agent=mock_agent, messages=messages)
+            success, response = executor._generate_group_tool_reply(agent=mock_agent, messages=messages)
 
             # Context variables should be updated
             assert mock_agent.context_variables.get("new_var") == "new_value"
 
             # Next target should be set
-            assert executor._swarm_next_target == result.target
+            assert executor._group_next_target == result.target
 
             # Response content should be converted to string
             assert success is True
             assert "content" in response
             assert response["content"] == str(result)
 
-    def test_generate_swarm_tool_reply_with_multiple_tools(self, executor):
-        """Test _generate_swarm_tool_reply with multiple tool calls."""
+    def test_generate_group_tool_reply_with_multiple_tools(self, executor):
+        """Test _generate_group_tool_reply with multiple tool calls."""
         # Create a ReplyResult to be returned by the first tool
         result1 = ReplyResult(
             message="Tool 1 executed", target=None, context_variables=ContextVariables(data={"var1": "value1"})
@@ -325,14 +325,14 @@ class TestGroupToolExecutor:
 
         with patch.object(mock_agent, "generate_tool_calls_reply", side_effect=side_effect):
             # Run the function
-            success, response = executor._generate_swarm_tool_reply(agent=mock_agent, messages=messages)
+            success, response = executor._generate_group_tool_reply(agent=mock_agent, messages=messages)
 
             # Context variables should be updated with all values
             assert mock_agent.context_variables.get("var1") == "value1"
             assert mock_agent.context_variables.get("var2") == "value2"
 
             # Next target should be set to the last non-None target
-            assert executor._swarm_next_target == result2.target
+            assert executor._group_next_target == result2.target
 
             # Response should contain concatenated content
             assert success is True
@@ -341,7 +341,7 @@ class TestGroupToolExecutor:
             assert str(result2) in response["content"]
 
     def test_error_handling(self, executor):
-        """Test error handling in _generate_swarm_tool_reply."""
+        """Test error handling in _generate_group_tool_reply."""
         # Create message with tool_calls
         tool_call = {"id": "call1", "function": {"name": "test_function", "arguments": "{}"}}
         message = {"role": "user", "content": "Execute tool", "tool_calls": [tool_call]}
@@ -351,6 +351,6 @@ class TestGroupToolExecutor:
         with patch.object(executor, "generate_tool_calls_reply", return_value=(True, None)):
             # Run the function - should raise ValueError
             with pytest.raises(ValueError) as excinfo:
-                executor._generate_swarm_tool_reply(agent=executor, messages=messages)
+                executor._generate_group_tool_reply(agent=executor, messages=messages)
 
             assert "Tool call did not return a message" in str(excinfo.value)

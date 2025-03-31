@@ -204,10 +204,7 @@ class ConversableAgent(LLMAgent):
             context_variables (ContextVariables or None): Context variables that provide a persistent context for the agent.
                 Note: This will be a reference to a shared context for multi-agent chats.
                 Behaves like a dictionary with keys and values (akin to dict[str, Any]).
-            functions (List[Callable[..., Any]]): A list of functions to register with the agent.
-                These functions will be provided to the LLM, however they won't, by default, be executed by the agent.
-                If the agent is in a swarm, the swarm's tool executor will execute the function.
-                When not in a swarm, you can have another agent execute the tools by adding them to that agent's function_map.
+            functions (List[Callable[..., Any]]): A list of functions to register with the agent, these will be wrapped up as tools and registered for LLM (not execution).
             update_agent_state_before_reply (List[Callable[..., Any]]): A list of functions, including UpdateSystemMessage's, called to update the agent before it replies.
             handoffs (Handoffs): Handoffs object containing all handoff transition conditions.
         """
@@ -372,8 +369,8 @@ class ConversableAgent(LLMAgent):
 
         If you would like to change the standard string representation for an
         instance of ConversableAgent, you can point it to another function.
-        In this example a function called _swarm_agent_str that returns a string:
-        agent._get_display_name = MethodType(_swarm_agent_str, agent)
+        In this example a function called _group_agent_str that returns a string:
+        agent._get_display_name = MethodType(_group_agent_str, agent)
         """
         return self.name
 
@@ -641,7 +638,7 @@ class ConversableAgent(LLMAgent):
         config: Any,
         trim_n_messages: int = 0,
     ) -> None:
-        """Process carryover messages for a nested chat (typically for the first chat of a swarm)
+        """Process carryover messages for a nested chat (typically for the first chat of a group chat)
 
         The carryover_config key is a dictionary containing:
             "summary_method": The method to use to summarise the messages, can be "all", "last_msg", "reflection_with_llm" or a Callable
@@ -746,7 +743,7 @@ class ConversableAgent(LLMAgent):
             messages: Chat messages
             sender: Sending agent
             config: LLM configuration
-            trim_messages: Number of messages to trim for nested chat carryover (default 2 for swarm chats)
+            trim_messages: Number of messages to trim for nested chat carryover (default 2 for nested chat in group chats)
 
         Returns:
             Tuple containing:
@@ -756,14 +753,14 @@ class ConversableAgent(LLMAgent):
         restore_chat_queue_message = False
         original_chat_queue_message = None
 
-        # Carryover configuration allowed on the first chat in the queue only, trim the last two messages specifically for swarm nested chat carryover as these are the messages for the transition to the nested chat agent
+        # Carryover configuration allowed on the first chat in the queue only, trim the last two messages specifically for group chat nested chat carryover as these are the messages for the transition to the nested chat agent
         if len(chat_queue) > 0 and "carryover_config" in chat_queue[0]:
             if "message" in chat_queue[0]:
                 # As we're updating the message in the nested chat queue, we need to restore it after finishing this nested chat.
                 restore_chat_queue_message = True
                 original_chat_queue_message = chat_queue[0]["message"]
 
-            # TODO Check the trimming required if not a swarm chat, it may not be 2 because other chats don't have the swarm transition messages. We may need to add as a carryover_config parameter.
+            # TODO Check the trimming required if not a group chat, it may not be 2 because other chats don't have the group transition messages. We may need to add as a carryover_config parameter.
             ConversableAgent._process_nested_chat_carryover(
                 chat=chat_queue[0],
                 recipient=recipient,

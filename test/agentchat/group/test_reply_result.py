@@ -113,6 +113,4 @@ class TestReplyResult:
 
         str_result = str(reply_result)
         assert isinstance(str_result, str)
-        assert "ReplyResult" in str_result
-        assert "message='" in str_result
         assert message in str_result

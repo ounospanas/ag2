@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from autogen.agentchat.group.available_condition import StringAvailableCondition
 from autogen.agentchat.group.context_condition import ExpressionContextCondition, StringContextCondition
@@ -85,19 +85,16 @@ class TestOnContextCondition:
         """Test initialisation with ContextExpression available."""
         target = MagicMock(spec=TransitionTarget)
         condition = StringContextCondition(variable_name="is_valid")
-        available = MagicMock()
-        available.evaluate = MagicMock()
+        available = StringAvailableCondition("is_logged_in")
 
         on_context_condition = OnContextCondition(target=target, condition=condition, available=available)
 
         assert on_context_condition.available == available
 
-    @patch("autogen.agentchat.group.on_context_condition.ContextCondition.__subclasshook__")
-    def test_condition_evaluate(self, mock_subclasshook) -> None:
+    def test_condition_evaluate(self) -> None:
         """Test that condition.evaluate is called correctly."""
         target = MagicMock(spec=TransitionTarget)
-        condition = MagicMock()
-        condition.evaluate = MagicMock(return_value=True)
+        condition = StringContextCondition(variable_name="is_valid")
 
         on_context_condition = OnContextCondition(target=target, condition=condition)
 
@@ -107,16 +104,13 @@ class TestOnContextCondition:
         result = on_context_condition.condition.evaluate(mock_context_variables)
 
         # Verify the mock was called correctly
-        condition.evaluate.assert_called_once_with(mock_context_variables)
         assert result is True
 
-    @patch("autogen.agentchat.group.on_context_condition.AvailableCondition.__subclasshook__")
-    def test_available_is_available(self, mock_subclasshook) -> None:
+    def test_available_is_available(self) -> None:
         """Test that available.is_available is called correctly."""
         target = MagicMock(spec=TransitionTarget)
-        condition = MagicMock()
-        available = MagicMock()
-        available.is_available = MagicMock(return_value=True)
+        condition = StringContextCondition(variable_name="Test Variable")
+        available = StringAvailableCondition("is_logged_in")
 
         on_context_condition = OnContextCondition(target=target, condition=condition, available=available)
 
@@ -126,6 +120,4 @@ class TestOnContextCondition:
         # Call is_available through the available
         result = on_context_condition.available.is_available(mock_agent, messages)
 
-        # Verify the mock was called correctly
-        available.is_available.assert_called_once_with(mock_agent, messages)
         assert result is True
