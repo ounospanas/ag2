@@ -29,7 +29,7 @@ class TestTransitionTarget:
         """Test that the base TransitionTarget class raises NotImplementedError when resolve is called."""
         target = TransitionTarget()
         with pytest.raises(NotImplementedError) as excinfo:
-            target.resolve(None, [], None, None, None)
+            target.resolve(None, None)
         assert "Requires subclasses to implement" in str(excinfo.value)
 
     def test_base_target_display_name(self) -> None:
@@ -83,7 +83,7 @@ class TestAgentTarget:
         mock_agent.name = "test_agent"
 
         target = AgentTarget(agent=mock_agent)
-        result = target.resolve(None, [], None, None, None)
+        result = target.resolve(None, None)
 
         assert isinstance(result, SpeakerSelectionResult)
         assert result.agent_name == "test_agent"
@@ -143,7 +143,7 @@ class TestAgentNameTarget:
     def test_resolve(self) -> None:
         """Test that resolve returns a SpeakerSelectionResult with the agent name."""
         target = AgentNameTarget(agent_name="test_agent")
-        result = target.resolve(None, [], None, None, None)
+        result = target.resolve(None, None)
 
         assert isinstance(result, SpeakerSelectionResult)
         assert result.agent_name == "test_agent"
@@ -199,7 +199,7 @@ class TestNestedChatTarget:
         target = NestedChatTarget(nested_chat_config=nested_chat_config)
 
         with pytest.raises(NotImplementedError) as excinfo:
-            target.resolve(None, [], None, None, None)
+            target.resolve(None, None)
         assert "NestedChatTarget does not support the resolve method" in str(excinfo.value)
 
     def test_display_name(self) -> None:
@@ -276,7 +276,7 @@ class TestAfterWorkOptionTarget:
     def test_resolve_terminate(self) -> None:
         """Test that resolve returns a SpeakerSelectionResult with terminate=True for 'terminate' option."""
         target = AfterWorkOptionTarget(after_work_option="terminate")
-        result = target.resolve(None, [], None, None, None)
+        result = target.resolve(None, None)
 
         assert isinstance(result, SpeakerSelectionResult)
         assert result.terminate is True
@@ -289,7 +289,7 @@ class TestAfterWorkOptionTarget:
         mock_current_agent = MagicMock(spec=ConversableAgent)
         mock_current_agent.name = "current_agent"
 
-        result = target.resolve(None, [], None, mock_current_agent, None)
+        result = target.resolve(mock_current_agent, None)
 
         assert isinstance(result, SpeakerSelectionResult)
         assert result.agent_name == "current_agent"
@@ -302,7 +302,7 @@ class TestAfterWorkOptionTarget:
         mock_user_agent = MagicMock(spec=ConversableAgent)
         mock_user_agent.name = "user_agent"
 
-        result = target.resolve(None, [], None, None, mock_user_agent)
+        result = target.resolve(None, mock_user_agent)
 
         assert isinstance(result, SpeakerSelectionResult)
         assert result.agent_name == "user_agent"
@@ -312,7 +312,7 @@ class TestAfterWorkOptionTarget:
     def test_resolve_group_manager(self) -> None:
         """Test that resolve returns a SpeakerSelectionResult with 'auto' for 'group_manager' option."""
         target = AfterWorkOptionTarget(after_work_option="group_manager")
-        result = target.resolve(None, [], None, None, None)
+        result = target.resolve(None, None)
 
         assert isinstance(result, SpeakerSelectionResult)
         assert result.speaker_selection_method == "auto"
@@ -326,7 +326,7 @@ class TestAfterWorkOptionTarget:
         target.after_work_option = "unknown_option"  # type: ignore
 
         with pytest.raises(ValueError) as excinfo:
-            target.resolve(None, [], None, None, None)
+            target.resolve(None, None)
         assert "Unknown after work option: unknown_option" in str(excinfo.value)
 
     def test_display_name(self) -> None:

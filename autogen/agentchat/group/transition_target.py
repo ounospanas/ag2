@@ -11,7 +11,6 @@ from .speaker_selection_result import SpeakerSelectionResult
 if TYPE_CHECKING:
     # Avoid circular import
     from ..conversable_agent import ConversableAgent
-    from ..groupchat import GroupChat
 
 __all__ = ["AfterWorkOptionTarget", "AgentNameTarget", "AgentTarget", "NestedChatTarget", "TransitionTarget"]
 
@@ -31,9 +30,6 @@ class TransitionTarget(BaseModel):
 
     def resolve(
         self,
-        last_speaker: "ConversableAgent",
-        messages: list[dict[str, Any]],
-        groupchat: "GroupChat",
         current_agent: "ConversableAgent",
         user_agent: "ConversableAgent",
     ) -> SpeakerSelectionResult:
@@ -72,9 +68,6 @@ class AgentTarget(TransitionTarget):
 
     def resolve(
         self,
-        last_speaker: "ConversableAgent",
-        messages: list[dict[str, Any]],
-        groupchat: "GroupChat",
         current_agent: "ConversableAgent",
         user_agent: "ConversableAgent",
     ) -> SpeakerSelectionResult:
@@ -107,18 +100,12 @@ class AgentNameTarget(TransitionTarget):
 
     agent_name: str
 
-    def __init__(self, agent_name: str, **data):
-        super().__init__(agent_name=agent_name, **data)
-
     def can_resolve_for_speaker_selection(self) -> bool:
         """Check if the target can resolve for speaker selection."""
         return True
 
     def resolve(
         self,
-        last_speaker: "ConversableAgent",
-        messages: list[dict[str, Any]],
-        groupchat: "GroupChat",
         current_agent: "ConversableAgent",
         user_agent: "ConversableAgent",
     ) -> SpeakerSelectionResult:
@@ -151,18 +138,12 @@ class NestedChatTarget(TransitionTarget):
 
     nested_chat_config: dict[str, Any]
 
-    def __init__(self, nested_chat_config: dict[str, Any], **data):
-        super().__init__(nested_chat_config=nested_chat_config, **data)
-
     def can_resolve_for_speaker_selection(self) -> bool:
         """Check if the target can resolve for speaker selection. For NestedChatTarget the nested chat must be encapsulated into an agent."""
         return False
 
     def resolve(
         self,
-        last_speaker: "ConversableAgent",
-        messages: list[dict[str, Any]],
-        groupchat: "GroupChat",
         current_agent: "ConversableAgent",
         user_agent: "ConversableAgent",
     ) -> SpeakerSelectionResult:
@@ -215,18 +196,12 @@ class AfterWorkOptionTarget(TransitionTarget):
 
     after_work_option: TransitionOption
 
-    def __init__(self, after_work_option: TransitionOption, **data):
-        super().__init__(after_work_option=after_work_option, **data)
-
     def can_resolve_for_speaker_selection(self) -> bool:
-        """Check if the target can resolve for speaker selection. AfterWorkOptionTarget does not resolve to an agent."""
+        """Check if the target can resolve for speaker selection."""
         return True
 
     def resolve(
         self,
-        last_speaker: "ConversableAgent",
-        messages: list[dict[str, Any]],
-        groupchat: "GroupChat",
         current_agent: "ConversableAgent",
         user_agent: "ConversableAgent",
     ) -> SpeakerSelectionResult:

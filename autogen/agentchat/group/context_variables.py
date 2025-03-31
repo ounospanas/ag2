@@ -24,12 +24,6 @@ class ContextVariables(BaseModel):
     # Internal storage for context variables
     data: dict[str, Any] = Field(default_factory=dict)
 
-    def __init__(self, data: dict[str, Any] = None, **kwargs):
-        """Initialise ContextVariables with optional data dictionary."""
-        if data is None:
-            data = {}
-        super().__init__(data=data, **kwargs)
-
     def get(self, key: str, default: Optional[Any] = None) -> Optional[Any]:
         """
         Get a value from the context by key.

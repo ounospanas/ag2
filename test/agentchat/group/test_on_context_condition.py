@@ -85,7 +85,7 @@ class TestOnContextCondition:
         """Test initialisation with ContextExpression available."""
         target = MagicMock(spec=TransitionTarget)
         condition = StringContextCondition(variable_name="is_valid")
-        available = StringAvailableCondition("is_logged_in")
+        available = StringAvailableCondition(context_variable="is_logged_in")
 
         on_context_condition = OnContextCondition(target=target, condition=condition, available=available)
 
@@ -110,7 +110,7 @@ class TestOnContextCondition:
         """Test that available.is_available is called correctly."""
         target = MagicMock(spec=TransitionTarget)
         condition = StringContextCondition(variable_name="Test Variable")
-        available = StringAvailableCondition("is_logged_in")
+        available = StringAvailableCondition(context_variable="is_logged_in")
 
         on_context_condition = OnContextCondition(target=target, condition=condition, available=available)
 

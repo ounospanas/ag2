@@ -39,9 +39,6 @@ class StringLLMCondition(LLMCondition):
 
     prompt: str
 
-    def __init__(self, prompt: str, **data):
-        super().__init__(prompt=prompt, **data)
-
     def get_prompt(self, agent: "ConversableAgent", messages: list[dict[str, Any]]) -> str:
         """Return the static prompt string.
 
@@ -63,9 +60,6 @@ class ContextStrLLMCondition(LLMCondition):
     """
 
     context_str: ContextStr
-
-    def __init__(self, context_str: ContextStr, **data):
-        super().__init__(context_str=context_str, **data)
 
     def get_prompt(self, agent: "ConversableAgent", messages: list[dict[str, Any]]) -> str:
         """Return the prompt with context variables substituted.

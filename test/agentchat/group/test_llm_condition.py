@@ -126,7 +126,7 @@ class TestContextStrLLMCondition:
         """Test get_prompt using a real ContextStr with variable substitution."""
         # Create a real ContextStr
         template = "Is the value of x equal to {x}?"
-        context_str = ContextStr(template)
+        context_str = ContextStr(template=template)
 
         condition = ContextStrLLMCondition(context_str=context_str)
 
@@ -144,7 +144,7 @@ class TestContextStrLLMCondition:
         """Test get_prompt with a ContextStr containing multiple variables."""
         # Create a real ContextStr with multiple variables
         template = "User {name} has account type {account_type} with balance {balance}."
-        context_str = ContextStr(template)
+        context_str = ContextStr(template=template)
 
         condition = ContextStrLLMCondition(context_str=context_str)
 
@@ -164,7 +164,7 @@ class TestContextStrLLMCondition:
         """Test get_prompt raises KeyError when variables are missing from context variables."""
         # Create a real ContextStr with a variable that might be missing
         template = "User {name} has access level {access_level}."
-        context_str = ContextStr(template)
+        context_str = ContextStr(template=template)
 
         condition = ContextStrLLMCondition(context_str=context_str)
 
@@ -191,7 +191,7 @@ class TestContextStrLLMCondition:
         """Test get_prompt with empty context variables."""
         # Create a template with no variables
         template = "This is a static message with no variables."
-        context_str = ContextStr(template)
+        context_str = ContextStr(template=template)
 
         condition = ContextStrLLMCondition(context_str=context_str)
 
@@ -210,7 +210,7 @@ class TestContextStrLLMCondition:
         """Test integration with nested context variables."""
         # Create a template using nested variables
         template = "User info: {user_info}"
-        context_str = ContextStr(template)
+        context_str = ContextStr(template=template)
 
         condition = ContextStrLLMCondition(context_str=context_str)
 

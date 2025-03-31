@@ -34,9 +34,6 @@ class StringContextCondition(ContextCondition):
 
     variable_name: str
 
-    def __init__(self, variable_name: str, **data):
-        super().__init__(variable_name=variable_name, **data)
-
     def evaluate(self, context_variables: ContextVariables) -> bool:
         """Check if the named context variable is truthy.
 
@@ -56,9 +53,6 @@ class ExpressionContextCondition(ContextCondition):
     """
 
     expression: ContextExpression
-
-    def __init__(self, expression: ContextExpression, **data):
-        super().__init__(expression=expression, **data)
 
     def evaluate(self, context_variables: ContextVariables) -> bool:
         """Evaluate the expression against the context variables.

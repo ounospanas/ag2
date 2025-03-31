@@ -388,7 +388,7 @@ def _prepare_groupchat_auto_speaker(
     groupchat.select_speaker_prompt_template = substitute_agentlist(
         SELECT_SPEAKER_PROMPT_TEMPLATE
         if after_work_next_agent_selection_msg is None
-        else after_work_next_agent_selection_msg.get_message(last_group_agent, groupchat.messages)
+        else after_work_next_agent_selection_msg.get_message(last_group_agent)
     )
 
 
@@ -455,9 +455,7 @@ def _determine_next_agent(
         tool_executor.clear_next_target()
 
         if next_agent.can_resolve_for_speaker_selection():
-            return next_agent.resolve(
-                last_speaker, groupchat.messages, groupchat, last_speaker, user_agent
-            ).get_speaker_selection_result(groupchat)
+            return next_agent.resolve(last_speaker, user_agent).get_speaker_selection_result(groupchat)
         else:
             raise ValueError(
                 "Tool Executor next target must be a valid TransitionTarget that can resolve for speaker selection."
@@ -483,7 +481,7 @@ def _determine_next_agent(
 
     # Resolve the next agent, termination, or speaker selection method
     resolved_speaker_selection_result = after_work_condition.target.resolve(
-        last_speaker, groupchat.messages, groupchat, last_agent_speaker, user_agent
+        last_agent_speaker, user_agent
     ).get_speaker_selection_result(groupchat)
 
     # If the resolved speaker selection result is "auto", meaning it's a speaker selection method of "auto", we need to prepare the group chat for auto speaker selection

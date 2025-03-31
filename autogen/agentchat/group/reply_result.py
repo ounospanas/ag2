@@ -21,15 +21,6 @@ class ReplyResult(BaseModel):
     target: Optional[TransitionTarget] = None
     context_variables: Optional[ContextVariables] = None
 
-    def __init__(
-        self,
-        message: str,
-        target: Optional[TransitionTarget] = None,
-        context_variables: Optional[ContextVariables] = None,
-        **data,
-    ):
-        super().__init__(message=message, target=target, context_variables=context_variables, **data)
-
     def __str__(self) -> str:
         """The string representation for ReplyResult will be just the message."""
         return self.message

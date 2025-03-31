@@ -19,7 +19,6 @@ from autogen.agentchat.group.handoffs import Handoffs
 from autogen.agentchat.group.llm_condition import StringLLMCondition
 from autogen.agentchat.group.multi_agent_chat import (
     _cleanup_temp_user_messages,
-    _create_group_manager,
     _create_on_condition_handoff_function,
     _create_on_condition_handoff_functions,
     _determine_next_agent,
@@ -167,7 +166,7 @@ class TestHelperFunctions:
         available_cond.is_available.return_value = True
         on_cond = OnCondition(
             target=AgentTarget(agent=agent1),
-            condition=StringLLMCondition("prompt"),
+            condition=StringLLMCondition(prompt="prompt"),
             available=available_cond,
             llm_function_name="test_func_name",
         )
@@ -277,9 +276,9 @@ class TestHelperFunctions:
     def test_create_on_condition_handoff_functions(self, agent1, agent2):
         """Test creating functions for multiple OnConditions."""
         target1 = AgentTarget(agent=agent2)
-        cond1 = OnCondition(target=target1, condition=StringLLMCondition("prompt1"))
-        target2 = AgentNameTarget("agent3")
-        cond2 = OnCondition(target=target2, condition=StringLLMCondition("prompt2"))
+        cond1 = OnCondition(target=target1, condition=StringLLMCondition(prompt="prompt1"))
+        target2 = AgentNameTarget(agent_name="agent3")
+        cond2 = OnCondition(target=target2, condition=StringLLMCondition(prompt="prompt2"))
         agent1.handoffs.llm_conditions = [cond1, cond2]
 
         _create_on_condition_handoff_functions(agent1)
@@ -296,21 +295,23 @@ class TestHelperFunctions:
         """Test validation of handoff targets."""
         # Valid case
         target = AgentTarget(agent=agent2)
-        cond = OnCondition(target=target, condition=StringLLMCondition("prompt"))
+        cond = OnCondition(target=target, condition=StringLLMCondition(prompt="prompt"))
         agent1.handoffs.llm_conditions = [cond]
-        agent1.handoffs.after_work = AfterWork(target=AgentNameTarget(agent1.name))
+        agent1.handoffs.after_work = AfterWork(target=AgentNameTarget(agent_name=agent1.name))
         _ensure_handoff_agents_in_group([agent1, agent2])  # Should not raise
 
         # Invalid case (LLM condition)
-        target_invalid = AgentNameTarget("non_existent_agent")
-        cond_invalid = OnCondition(target=target_invalid, condition=StringLLMCondition("prompt"))
+        target_invalid = AgentNameTarget(agent_name="non_existent_agent")
+        cond_invalid = OnCondition(target=target_invalid, condition=StringLLMCondition(prompt="prompt"))
         agent1.handoffs.llm_conditions = [cond_invalid]
         with pytest.raises(ValueError, match="Agent in OnCondition Hand-offs must be in the agents list"):
             _ensure_handoff_agents_in_group([agent1, agent2])
 
         # Invalid case (Context condition)
         agent1.handoffs.llm_conditions = []
-        context_cond_invalid = OnContextCondition(target=target_invalid, condition=StringContextCondition("var"))
+        context_cond_invalid = OnContextCondition(
+            target=target_invalid, condition=StringContextCondition(variable_name="var")
+        )
         agent1.handoffs.context_conditions = [context_cond_invalid]
         with pytest.raises(ValueError, match="Agent in OnContextCondition Hand-offs must be in the agents list"):
             _ensure_handoff_agents_in_group([agent1, agent2])
@@ -328,7 +329,9 @@ class TestHelperFunctions:
         mock_make_remove.return_value = remove_func
 
         target = AgentTarget(agent=agent2)
-        cond = OnCondition(target=target, condition=StringLLMCondition("prompt"), llm_function_name="handoff_func")
+        cond = OnCondition(
+            target=target, condition=StringLLMCondition(prompt="prompt"), llm_function_name="handoff_func"
+        )
         agent1.handoffs.llm_conditions = [cond]
 
         _prepare_exclude_transit_messages([agent1, agent2])
@@ -378,10 +381,12 @@ class TestHelperFunctions:
                 "use_async": False,
             }
         )
-        on_cond_nested = OnCondition(target=nested_target, condition=StringLLMCondition("prompt"))
+        on_cond_nested = OnCondition(target=nested_target, condition=StringLLMCondition(prompt="prompt"))
         agent1.handoffs.add_llm_condition(on_cond_nested)
 
-        on_context_cond_nested = OnContextCondition(target=nested_target_2, condition=StringContextCondition("var"))
+        on_context_cond_nested = OnContextCondition(
+            target=nested_target_2, condition=StringContextCondition(variable_name="var")
+        )
         agent1.handoffs.add_context_condition(on_context_cond_nested)
 
         wrapped_list = []
@@ -493,7 +498,7 @@ class TestHelperFunctions:
 
         # Case 2: With specific selection message
         mock_group_chat.select_speaker_prompt.reset_mock()
-        selection_msg = AfterWorkSelectionMessageString("Custom prompt {agentlist}")
+        selection_msg = AfterWorkSelectionMessageString(message="Custom prompt {agentlist}")
         _prepare_groupchat_auto_speaker(mock_group_chat, last_agent, selection_msg)
         # get_message is called internally by _prepare_groupchat_auto_speaker's call to substitute_agentlist
         # substitute_agentlist calls select_speaker_prompt internally
@@ -577,7 +582,7 @@ class TestHelperFunctions:
 
         # Case 4: Tool executor has next target (Terminate)
         mock_tool_executor.clear_next_target.reset_mock()
-        next_target = AfterWorkOptionTarget("terminate")
+        next_target = AfterWorkOptionTarget(after_work_option="terminate")
         mock_tool_executor.has_next_target.return_value = True
         mock_tool_executor.get_next_target.return_value = next_target
         next_agent = _determine_next_agent(
@@ -600,7 +605,7 @@ class TestHelperFunctions:
 
         # Case 6: After Work (Agent level - stay)
         mock_group_chat.messages = [{"role": "assistant", "name": "agent1", "content": "..."}]
-        agent1.handoffs.after_work = AfterWork(target=AfterWorkOptionTarget("stay"))
+        agent1.handoffs.after_work = AfterWork(target=AfterWorkOptionTarget(after_work_option="stay"))
         next_agent = _determine_next_agent(
             agent1, mock_group_chat, agent1, False, mock_tool_executor, group_agent_names, user_proxy, None
         )
@@ -608,14 +613,14 @@ class TestHelperFunctions:
 
         # Case 7: After Work (Group level - terminate)
         agent1.handoffs.after_work = None  # Remove agent level
-        group_after_work = AfterWork(target=AfterWorkOptionTarget("terminate"))
+        group_after_work = AfterWork(target=AfterWorkOptionTarget(after_work_option="terminate"))
         next_agent = _determine_next_agent(
             agent1, mock_group_chat, agent1, False, mock_tool_executor, group_agent_names, user_proxy, group_after_work
         )
         assert next_agent is None
 
         # Case 8: After Work (Group level - group_manager)
-        group_after_work = AfterWork(target=AfterWorkOptionTarget("group_manager"))
+        group_after_work = AfterWork(target=AfterWorkOptionTarget(after_work_option="group_manager"))
         next_agent = _determine_next_agent(
             agent1, mock_group_chat, agent1, False, mock_tool_executor, group_agent_names, user_proxy, group_after_work
         )
@@ -624,9 +629,9 @@ class TestHelperFunctions:
 
         # Case 9: After Work (Agent level - group_manager with selection message)
         mock_prep_auto_speaker.reset_mock()
-        selection_msg = AfterWorkSelectionMessageString("Select:")
+        selection_msg = AfterWorkSelectionMessageString(message="Select:")
         agent1.handoffs.after_work = AfterWork(
-            target=AfterWorkOptionTarget("group_manager"), selection_message=selection_msg
+            target=AfterWorkOptionTarget(after_work_option="group_manager"), selection_message=selection_msg
         )
         next_agent = _determine_next_agent(
             agent1, mock_group_chat, agent1, False, mock_tool_executor, group_agent_names, user_proxy, None
@@ -637,7 +642,7 @@ class TestHelperFunctions:
     def test_create_group_transition(self, agent1, agent2, user_proxy, mock_tool_executor, mock_group_chat):
         """Test the creation and behavior of the group transition function."""
         group_agent_names = ["agent1", "agent2"]
-        group_after_work = AfterWork(target=AfterWorkOptionTarget("terminate"))
+        group_after_work = AfterWork(target=AfterWorkOptionTarget(after_work_option="terminate"))
 
         transition_func = create_group_transition(
             agent1, mock_tool_executor, group_agent_names, user_proxy, group_after_work
@@ -676,30 +681,6 @@ class TestHelperFunctions:
                 group_after_work=group_after_work,
             )
             assert result2 == agent2
-
-    def test_create_group_manager_old(self):
-        """Test creating the group manager."""
-        agent1 = ConversableAgent(name="agent1")
-        agent2 = ConversableAgent(name="agent2")
-        groupchat = GroupChat(agents=[agent1, agent2])
-
-        # Case 1: No args
-        manager = _create_group_manager(groupchat, None, [agent1, agent2])
-        assert manager.name == "chat_manager"
-
-        # Case 2: With args
-        args = {"max_consecutive_auto_reply": 5}
-        manager_with_args = _create_group_manager(groupchat, args, [agent1, agent2])
-        assert manager_with_args._max_consecutive_auto_reply == 5
-
-        # Case 3: Error if groupchat specified in args
-        with pytest.raises(ValueError, match="'groupchat' cannot be specified"):
-            _create_group_manager(mock_group_chat, {"groupchat": "some_value"}, [agent1, agent2])  # type: ignore
-
-        # Case 4: Error if manager needed ('group_manager' target) but no LLM config
-        agent1.handoffs.after_work = AfterWork(target=AfterWorkOptionTarget("group_manager"))
-        with pytest.raises(ValueError, match="group manager doesn't have an LLM Config"):
-            _create_group_manager(mock_group_chat, None, [agent1, agent2])
 
     def test_make_remove_function(self):
         """Test the function created by make_remove_function."""
@@ -824,7 +805,7 @@ class TestInitiateGroupChat:
             user_agent=user_proxy,
             context_variables=context_vars,
             max_rounds=5,
-            after_work=AfterWork(target=AfterWorkOptionTarget("terminate")),  # Example AfterWork
+            after_work=AfterWork(target=AfterWorkOptionTarget(after_work_option="terminate")),  # Example AfterWork
         )
 
         # Assertions

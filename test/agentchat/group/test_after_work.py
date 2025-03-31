@@ -6,13 +6,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from autogen import ConversableAgent
 from autogen.agentchat.group.after_work import (
     AfterWork,
     AfterWorkSelectionMessage,
     AfterWorkSelectionMessageContextStr,
     AfterWorkSelectionMessageString,
 )
-from autogen.agentchat.group.context_str import ContextStr
 from autogen.agentchat.group.context_variables import ContextVariables
 from autogen.agentchat.group.transition_target import (
     AfterWorkOptionTarget,
@@ -27,7 +27,7 @@ class TestAfterWorkSelectionMessage:
         """Test that the base AfterWorkSelectionMessage class raises NotImplementedError when get_message is called."""
         message = AfterWorkSelectionMessage()
         with pytest.raises(NotImplementedError) as excinfo:
-            message.get_message(None, [])
+            message.get_message(None)
         assert "Requires subclasses to implement" in str(excinfo.value)
 
 
@@ -35,14 +35,14 @@ class TestAfterWorkSelectionMessageString:
     def test_init(self) -> None:
         """Test initialisation with a string template."""
         template = "This is a test template"
-        message = AfterWorkSelectionMessageString(template=template)
-        assert message.template == template
+        message = AfterWorkSelectionMessageString(message=template)
+        assert message.message == template
 
     def test_get_message(self) -> None:
         """Test that get_message returns the template string."""
         template = "This is a test template"
-        message = AfterWorkSelectionMessageString(template=template)
-        result = message.get_message(None, [])
+        message = AfterWorkSelectionMessageString(message=template)
+        result = message.get_message(None)
         assert result == template
 
 
@@ -58,10 +58,10 @@ class TestAfterWorkSelectionMessageContextStr:
         template = "Hello, {name}!"
         message = AfterWorkSelectionMessageContextStr(context_str_template=template)
 
-        mock_agent = MagicMock()
+        mock_agent = ConversableAgent(name="mock_agent")
         mock_agent.context_variables = ContextVariables(data={"name": "World"})
 
-        result = message.get_message(mock_agent, [])
+        result = message.get_message(mock_agent)
         assert result == "Hello, World!"
 
     def test_init_with_agentlist(self) -> None:
@@ -72,17 +72,13 @@ class TestAfterWorkSelectionMessageContextStr:
         # Check that the template is properly transformed during initialisation
         assert message.context_str_template == "Choose an agent from: <<agent_list>>"
 
-        # Directly create a mock for ContextStr to test the replacement behavior
-        mock_format_result = "Choose an agent from: <<agent_list>>"
+        mock_agent = ConversableAgent(name="mock_agent")
+        mock_agent.context_variables = ContextVariables(data={})
 
-        with patch.object(ContextStr, "format", return_value=mock_format_result):
-            mock_agent = MagicMock()
-            mock_agent.context_variables = ContextVariables(data={})
+        result = message.get_message(mock_agent)
 
-            result = message.get_message(mock_agent, [])
-
-            # Verify it replaced <<agent_list>> back to {agentlist} for the GroupChat's speaker selection
-            assert result == "Choose an agent from: {agentlist}"
+        # Verify it replaced <<agent_list>> back to {agentlist} for the GroupChat's speaker selection
+        assert result == "Choose an agent from: {agentlist}"
 
 
 class TestAfterWork:
@@ -95,7 +91,7 @@ class TestAfterWork:
         assert after_work.selection_message is None
 
         # Test with target and selection message
-        message = AfterWorkSelectionMessageString(template="Test message")
+        message = AfterWorkSelectionMessageString(message="Test message")
         after_work = AfterWork(target=target, selection_message=message)
         assert after_work.target == target
         assert after_work.selection_message == message
@@ -120,7 +116,7 @@ class TestAfterWork:
         mock_agent.context_variables = ContextVariables(data={"name": "Test Agent"})
 
         # Test get_message
-        message_result = after_work.selection_message.get_message(mock_agent, [])
+        message_result = after_work.selection_message.get_message(mock_agent)
         mock_context_str_instance.format.assert_called_once_with(mock_agent.context_variables)
         assert message_result == "Hello, Test Agent!"
 
@@ -158,7 +154,7 @@ class TestAfterWork:
     def test_init_with_selection_message(self) -> None:
         """Test initialisation with target and selection message."""
         target = AfterWorkOptionTarget(after_work_option="terminate")
-        message = AfterWorkSelectionMessageString(template="Test message")
+        message = AfterWorkSelectionMessageString(message="Test message")
         after_work = AfterWork(target=target, selection_message=message)
         assert after_work.target == target
         assert after_work.selection_message == message
@@ -166,9 +162,6 @@ class TestAfterWork:
     def test_target_resolution(self) -> None:
         """Test that different target types resolve correctly through AfterWork."""
         # Mock the components needed for resolution
-        mock_last_speaker = MagicMock()
-        mock_messages = []
-        mock_groupchat = MagicMock()
         mock_current_agent = MagicMock(name="current_agent")
         mock_current_agent.name = "current_agent"
         mock_user_agent = MagicMock(name="user_agent")
@@ -177,7 +170,7 @@ class TestAfterWork:
         # Test with terminate option
         target = AfterWorkOptionTarget(after_work_option="terminate")
 
-        result = target.resolve(mock_last_speaker, mock_messages, mock_groupchat, mock_current_agent, mock_user_agent)
+        result = target.resolve(mock_current_agent, mock_user_agent)
 
         # Verify SpeakerSelectionResult was created with terminate=True
         assert result.terminate is True
@@ -187,7 +180,7 @@ class TestAfterWork:
         # Test with stay option
         target = AfterWorkOptionTarget(after_work_option="stay")
 
-        result = target.resolve(mock_last_speaker, mock_messages, mock_groupchat, mock_current_agent, mock_user_agent)
+        result = target.resolve(mock_current_agent, mock_user_agent)
 
         # Verify SpeakerSelectionResult was created with the current agent's name
         assert result.terminate is None
@@ -197,7 +190,7 @@ class TestAfterWork:
         # Test with revert_to_user option
         target = AfterWorkOptionTarget(after_work_option="revert_to_user")
 
-        result = target.resolve(mock_last_speaker, mock_messages, mock_groupchat, mock_current_agent, mock_user_agent)
+        result = target.resolve(mock_current_agent, mock_user_agent)
 
         # Verify SpeakerSelectionResult was created with the user agent's name
         assert result.terminate is None
@@ -207,7 +200,7 @@ class TestAfterWork:
         # Test with group_manager option
         target = AfterWorkOptionTarget(after_work_option="group_manager")
 
-        result = target.resolve(mock_last_speaker, mock_messages, mock_groupchat, mock_current_agent, mock_user_agent)
+        result = target.resolve(mock_current_agent, mock_user_agent)
 
         # Verify SpeakerSelectionResult was created with speaker_selection_method="auto"
         assert result.terminate is None

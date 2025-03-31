@@ -2,16 +2,16 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from dataclasses import dataclass
 from typing import Optional
+
+from pydantic import BaseModel
 
 from .context_variables import ContextVariables
 
 __all__ = ["ContextStr"]
 
 
-@dataclass
-class ContextStr:
+class ContextStr(BaseModel):
     """A string that requires context variable substitution.
 
     Use the format method to substitute context variables into the string.
@@ -22,9 +22,6 @@ class ContextStr:
     """
 
     template: str
-
-    def __init__(self, template: str):
-        self.template = template
 
     def format(self, context_variables: ContextVariables) -> Optional[str]:
         """Substitute context variables into the string.

@@ -55,7 +55,7 @@ class TestOnCondition:
     def test_init_with_context_str_llm_condition(self) -> None:
         """Test initialisation with ContextStrLLMCondition."""
         target = MagicMock(spec=TransitionTarget)
-        context_str = ContextStr("Is the value of x equal to {x}?")
+        context_str = ContextStr(template="Is the value of x equal to {x}?")
         condition = ContextStrLLMCondition(context_str=context_str)
 
         on_condition = OnCondition(target=target, condition=condition)
@@ -91,7 +91,7 @@ class TestOnCondition:
         """Test initialisation with ContextExpression available."""
         target = MagicMock(spec=TransitionTarget)
         condition = StringLLMCondition(prompt="Is this a valid condition?")
-        available = StringAvailableCondition("is_logged_in")
+        available = StringAvailableCondition(context_variable="is_logged_in")
 
         on_condition = OnCondition(target=target, condition=condition, available=available)
 

@@ -22,17 +22,6 @@ class SpeakerSelectionResult(BaseModel):
     terminate: Optional[bool] = None
     agent_name: Optional[str] = None
     speaker_selection_method: Optional[str] = None
-    """
-    def __init__(
-            self,
-            terminate: Optional[bool] = None,
-            agent: Optional[Agent] = None,
-            speaker_selection_method: Optional[str] = None) -> None:
-        super().__init__(terminate=terminate, agent=agent, speaker_selection_method=speaker_selection_method)
-        self.terminate = terminate if terminate is not None else False
-        self.agent = agent if agent is not None else None
-        self.speaker_selection_method = speaker_selection_method if speaker_selection_method is not None else None
-    """
 
     def get_speaker_selection_result(self, groupchat: "GroupChat") -> Optional[Union[Agent, str]]:
         """Get the speaker selection result. If None, the conversation will end."""

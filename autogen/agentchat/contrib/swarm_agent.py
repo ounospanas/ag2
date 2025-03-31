@@ -617,7 +617,9 @@ def _prepare_groupchat_auto_speaker(
         groupchat.select_speaker_prompt_template = substitute_agentlist(after_work_next_agent_selection_msg)
     elif isinstance(after_work_next_agent_selection_msg, ContextStr):
         # Replace the agentlist in the string first, putting it into a new ContextStr
-        agent_list_replaced_string = ContextStr(substitute_agentlist(after_work_next_agent_selection_msg.template))
+        agent_list_replaced_string = ContextStr(
+            template=substitute_agentlist(after_work_next_agent_selection_msg.template)
+        )
 
         # Then replace the context variables
         groupchat.select_speaker_prompt_template = agent_list_replaced_string.format(  # type: ignore[assignment]

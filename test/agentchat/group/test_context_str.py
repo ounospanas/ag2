@@ -19,17 +19,17 @@ class TestContextStr:
             data={"user_id": "12345", "num_items": 3, "items": ["apple", "banana", "orange"]}
         )
 
-        self.simple_context_str = ContextStr(self.simple_template)
-        self.complex_context_str = ContextStr(self.complex_template)
+        self.simple_context_str = ContextStr(template=self.simple_template)
+        self.complex_context_str = ContextStr(template=self.complex_template)
 
     def test_init(self) -> None:
         # Test initialisation with a template
-        context_str = ContextStr("Test {variable}")
+        context_str = ContextStr(template="Test {variable}")
         assert context_str.template == "Test {variable}"
 
     def test_str(self) -> None:
         # Test string representation
-        context_str = ContextStr("Test {variable}")
+        context_str = ContextStr(template="Test {variable}")
         str_representation = str(context_str)
         assert str_representation == "ContextStr, unformatted: Test {variable}"
 
@@ -59,7 +59,7 @@ class TestContextStr:
         nested_context = ContextVariables(data={"user": {"name": "Alice", "account": {"id": "ACC123", "balance": 500}}})
 
         # Create a new ContextStr
-        nested_context_str = ContextStr(nested_template)
+        nested_context_str = ContextStr(template=nested_template)
 
         # Call format method
         result = nested_context_str.format(nested_context)
@@ -72,7 +72,7 @@ class TestContextStr:
         """Test what happens when we reference a variable not in context."""
         # Reference a variable not in the context
         missing_var_template = "Hello, {missing}!"
-        missing_var_context_str = ContextStr(missing_var_template)
+        missing_var_context_str = ContextStr(template=missing_var_template)
 
         # Raise a KeyError
         with pytest.raises(KeyError):
@@ -82,7 +82,7 @@ class TestContextStr:
         """Test formatting with empty context variables."""
         # Create a template
         template = "Hello, {name}!"
-        context_str = ContextStr(template)
+        context_str = ContextStr(template=template)
 
         # Create empty context variables
         empty_context = ContextVariables()
@@ -97,7 +97,7 @@ class TestContextStr:
         """Test formatting a string with no placeholders."""
         # Create a template with no placeholders
         template = "Hello, World!"
-        context_str = ContextStr(template)
+        context_str = ContextStr(template=template)
 
         # Format with any context
         result = context_str.format(self.simple_context)
@@ -109,7 +109,7 @@ class TestContextStr:
         """Test formatting with repeated placeholders."""
         # Create a template with repeated placeholders
         template = "Hello, {name}! Your name is {name}."
-        context_str = ContextStr(template)
+        context_str = ContextStr(template=template)
 
         # Format with context
         result = context_str.format(self.simple_context)
@@ -123,7 +123,7 @@ class TestContextStr:
         template = (
             "String: {string}, Integer: {integer}, Float: {float}, Boolean: {boolean}, List: {list}, Dict: {dict}"
         )
-        context_str = ContextStr(template)
+        context_str = ContextStr(template=template)
 
         # Create context with various data types
         context = ContextVariables(

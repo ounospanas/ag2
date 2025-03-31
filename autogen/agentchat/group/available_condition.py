@@ -39,9 +39,6 @@ class StringAvailableCondition(AvailableCondition):
 
     context_variable: str
 
-    def __init__(self, context_variable: str, **data):
-        super().__init__(context_variable=context_variable, **data)
-
     def is_available(self, agent: "ConversableAgent", messages: list[dict[str, Any]]) -> bool:
         """Check if the named context variable is truthy.
 
@@ -62,9 +59,6 @@ class ExpressionAvailableCondition(AvailableCondition):
     """
 
     expression: ContextExpression
-
-    def __init__(self, expression: ContextExpression, **data):
-        super().__init__(expression=expression, **data)
 
     def is_available(self, agent: "ConversableAgent", messages: list[dict[str, Any]]) -> bool:
         """Evaluate the expression against the context variables.

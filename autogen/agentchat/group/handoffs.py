@@ -4,7 +4,7 @@
 
 from typing import Optional, Union, overload
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .after_work import AfterWork
 from .on_condition import OnCondition
@@ -28,26 +28,9 @@ class Handoffs(BaseModel):
                    .set_after_work(after_work)
     """
 
-    context_conditions: Optional[list[OnContextCondition]] = None
-    llm_conditions: Optional[list[OnCondition]] = None
+    context_conditions: list[OnContextCondition] = Field(default_factory=list)
+    llm_conditions: list[OnCondition] = Field(default_factory=list)
     after_work: Optional[AfterWork] = None
-
-    def __init__(
-        self,
-        context_conditions: Optional[list[OnContextCondition]] = None,
-        llm_conditions: Optional[list[OnCondition]] = None,
-        after_work: Optional[AfterWork] = None,
-        **data,
-    ):
-        final_context_conditions = context_conditions if context_conditions is not None else []
-        final_llm_conditions = llm_conditions if llm_conditions is not None else []
-
-        super().__init__(
-            context_conditions=final_context_conditions,
-            llm_conditions=final_llm_conditions,
-            after_work=after_work,
-            **data,
-        )
 
     def add_context_condition(self, condition: OnContextCondition) -> "Handoffs":
         """

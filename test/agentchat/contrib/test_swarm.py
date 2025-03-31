@@ -1284,7 +1284,7 @@ def test_update_on_condition_str() -> None:
         initial_agent=agent1,
         messages=TEST_MESSAGES,
         agents=[agent1, agent2],
-        context_variables=ContextVariables({"test_var": "condition1"}),
+        context_variables=ContextVariables(data={"test_var": "condition1"}),
         max_rounds=3,
     )
 
@@ -1318,7 +1318,7 @@ def test_update_on_condition_str() -> None:
         initial_agent=agent2,
         messages=TEST_MESSAGES,
         agents=[agent2, agent3],
-        context_variables=ContextVariables({"test_var": "condition2"}),
+        context_variables=ContextVariables(data={"test_var": "condition2"}),
         max_rounds=3,
     )
     assert chat_result is not None
@@ -1649,7 +1649,7 @@ def test_on_context_condition_run() -> None:
     agent1._swarm_oncontextconditions = [OnContextCondition(target=agent2, condition="transfer_to_agent2")]  # type: ignore[attr-defined]
 
     # Set up context variables for agent1
-    agent1.context_variables = ContextVariables({"transfer_to_agent2": True})
+    agent1.context_variables = ContextVariables(data={"transfer_to_agent2": True})
 
     # Call _run_oncontextconditions
     result, message = _run_oncontextconditions(agent1, messages=[{"role": "user", "content": "Test"}])
@@ -1662,7 +1662,7 @@ def test_on_context_condition_run() -> None:
     assert tool_executor._swarm_next_agent == agent2  # type: ignore[attr-defined]
 
     # Check that the function returns False when the condition is not met
-    agent1.context_variables = ContextVariables({"transfer_to_agent2": False})
+    agent1.context_variables = ContextVariables(data={"transfer_to_agent2": False})
     tool_executor._swarm_next_agent = None  # type: ignore[attr-defined]
 
     result, message = _run_oncontextconditions(agent1, messages=[{"role": "user", "content": "Test"}])
@@ -1680,7 +1680,7 @@ def test_on_context_condition_run() -> None:
     }
 
     agent1._swarm_oncontextconditions = [OnContextCondition(target=nested_chat_config, condition="transfer_to_nested")]  # type: ignore[attr-defined]
-    agent1.context_variables = ContextVariables({"transfer_to_nested": True})
+    agent1.context_variables = ContextVariables(data={"transfer_to_nested": True})
 
     result, message = _run_oncontextconditions(agent1, messages=[{"role": "user", "content": "Test"}])
 
@@ -1709,7 +1709,7 @@ def test_on_context_condition_available() -> None:
     # 1. Test with no available parameter (should be available)
     agent1._swarm_oncontextconditions = [OnContextCondition(target=agent2, condition="transfer_condition")]  # type: ignore[attr-defined]
 
-    agent1.context_variables = ContextVariables({"transfer_condition": True})
+    agent1.context_variables = ContextVariables(data={"transfer_condition": True})
     result, _ = _run_oncontextconditions(agent1, messages=[{"role": "user", "content": "Test"}])
     assert result is True
 
@@ -1718,12 +1718,12 @@ def test_on_context_condition_available() -> None:
         OnContextCondition(target=agent2, condition="transfer_condition", available="is_available")
     ]
 
-    agent1.context_variables = ContextVariables({"transfer_condition": True, "is_available": True})
+    agent1.context_variables = ContextVariables(data={"transfer_condition": True, "is_available": True})
     result, _ = _run_oncontextconditions(agent1, messages=[{"role": "user", "content": "Test"}])
     assert result is True
 
     # 3. Test with string available parameter that's False
-    agent1.context_variables = ContextVariables({"transfer_condition": True, "is_available": False})
+    agent1.context_variables = ContextVariables(data={"transfer_condition": True, "is_available": False})
     result, _ = _run_oncontextconditions(agent1, messages=[{"role": "user", "content": "Test"}])
     assert result is False
 
@@ -1733,20 +1733,24 @@ def test_on_context_condition_available() -> None:
         OnContextCondition(target=agent2, condition="transfer_condition", available=expr)
     ]
 
-    agent1.context_variables = ContextVariables({
-        "transfer_condition": True,
-        "feature_enabled": True,
-        "user_authorized": True,
-    })
+    agent1.context_variables = ContextVariables(
+        data={
+            "transfer_condition": True,
+            "feature_enabled": True,
+            "user_authorized": True,
+        }
+    )
     result, _ = _run_oncontextconditions(agent1, messages=[{"role": "user", "content": "Test"}])
     assert result is True
 
     # 5. Test with ContextExpression available parameter that's False
-    agent1.context_variables = ContextVariables({
-        "transfer_condition": True,
-        "feature_enabled": True,
-        "user_authorized": False,
-    })
+    agent1.context_variables = ContextVariables(
+        data={
+            "transfer_condition": True,
+            "feature_enabled": True,
+            "user_authorized": False,
+        }
+    )
     result, _ = _run_oncontextconditions(agent1, messages=[{"role": "user", "content": "Test"}])
     assert result is False
 
@@ -1758,12 +1762,12 @@ def test_on_context_condition_available() -> None:
         OnContextCondition(target=agent2, condition="transfer_condition", available=is_available)
     ]
 
-    agent1.context_variables = ContextVariables({"transfer_condition": True, "dynamic_availability": True})
+    agent1.context_variables = ContextVariables(data={"transfer_condition": True, "dynamic_availability": True})
     agent1._oai_messages[agent2].append({"role": "user", "content": "Test"})
     result, _ = _run_oncontextconditions(agent1, messages=[{"role": "user", "content": "Test"}])
     assert result is True
 
-    agent1.context_variables = ContextVariables({"transfer_condition": True, "dynamic_availability": False})
+    agent1.context_variables = ContextVariables(data={"transfer_condition": True, "dynamic_availability": False})
     result, _ = _run_oncontextconditions(agent1, messages=[{"role": "user", "content": "Test"}])
     assert result is False
 
@@ -1822,7 +1826,7 @@ def test_change_tool_context_variables_to_depends() -> None:
     assert "context_variables" in tool_with_context.tool_schema["function"]["parameters"]["properties"]
 
     # Test context variables
-    context_variables = ContextVariables({"test_key": "test_value"})
+    context_variables = ContextVariables(data={"test_key": "test_value"})
 
     # Keep track of the number of tools before the change
     tools_count_before = len(agent.tools)
@@ -1870,7 +1874,7 @@ def test_change_tool_context_variables_dependency_injection() -> None:
     agent = ConversableAgent(name="test_agent", llm_config=testing_llm_config)
 
     # Context variables to be injected
-    context_variables = ContextVariables({"test_key": "injected_value"})
+    context_variables = ContextVariables(data={"test_key": "injected_value"})
     agent.context_variables = context_variables
 
     # Create a test function that has a context_variables parameter
@@ -1958,7 +1962,7 @@ def test_change_tool_context_variables_function_signature() -> None:
     orig_default = orig_param.default
 
     # Context variables
-    context_variables = ContextVariables({"test_key": "test_value"})
+    context_variables = ContextVariables(data={"test_key": "test_value"})
 
     # Call the function to modify the tool
     _change_tool_context_variables_to_depends(agent, original_tool, context_variables)
