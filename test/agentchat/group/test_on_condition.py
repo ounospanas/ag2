@@ -50,6 +50,7 @@ class TestOnCondition:
 
         assert on_condition.target == target
         assert on_condition.condition == condition
+        assert isinstance(on_condition.condition, StringLLMCondition)
         assert on_condition.condition.prompt == "Is this a valid condition?"
 
     def test_init_with_context_str_llm_condition(self) -> None:
@@ -62,6 +63,7 @@ class TestOnCondition:
 
         assert on_condition.target == target
         assert on_condition.condition == condition
+        assert isinstance(on_condition.condition, ContextStrLLMCondition)
         assert on_condition.condition.context_str == context_str
 
     def test_init_with_agent_target(self) -> None:
@@ -74,6 +76,7 @@ class TestOnCondition:
         on_condition = OnCondition(target=target, condition=condition)
 
         assert on_condition.target == target
+        assert isinstance(on_condition.target, AgentTarget)
         assert on_condition.target.agent_name == "test_agent"
 
     def test_init_with_string_available_condition(self) -> None:
@@ -85,6 +88,7 @@ class TestOnCondition:
         on_condition = OnCondition(target=target, condition=condition, available=available)
 
         assert on_condition.available == available
+        assert isinstance(on_condition.available, StringAvailableCondition)
         assert on_condition.available.context_variable == "is_available"
 
     def test_init_with_context_expression_available(self) -> None:
@@ -98,7 +102,7 @@ class TestOnCondition:
         assert on_condition.available == available
 
     @patch("autogen.agentchat.group.on_condition.LLMCondition.__subclasshook__")
-    def test_condition_get_prompt(self, mock_subclasshook) -> None:
+    def test_condition_get_prompt(self, mock_subclasshook: MagicMock) -> None:
         """Test that condition.get_prompt is called correctly."""
         target = MagicMock(spec=TransitionTarget)
         condition = StringLLMCondition(prompt="Prompt text")
@@ -115,7 +119,7 @@ class TestOnCondition:
         assert result == "Prompt text"
 
     @patch("autogen.agentchat.group.on_condition.AvailableCondition.__subclasshook__")
-    def test_available_is_available(self, mock_subclasshook) -> None:
+    def test_available_is_available(self, mock_subclasshook: MagicMock) -> None:
         """Test that available.is_available is called correctly."""
         target = MagicMock(spec=TransitionTarget)
         condition = StringLLMCondition(prompt="Test Prompt")
@@ -128,12 +132,13 @@ class TestOnCondition:
         messages = [{"role": "user", "content": "Hello"}]
 
         # Call is_available through the available
+        assert on_condition.available is not None
         result = on_condition.available.is_available(mock_agent, messages)
 
         # Verify the mock was called correctly
         assert result is True
 
-    def test_has_target_type(self):
+    def test_has_target_type(self) -> None:
         """Test the has_target_type method with various target types."""
         # Test with AgentTarget
         mock_agent = MagicMock()
@@ -151,20 +156,20 @@ class TestOnCondition:
         assert on_condition.has_target_type(NestedChatTarget) is False
 
         # Test with AgentNameTarget
-        target = AgentNameTarget(agent_name="test_agent")
-        on_condition = OnCondition(target=target, condition=condition)
+        target_agent_name = AgentNameTarget(agent_name="test_agent")
+        on_condition = OnCondition(target=target_agent_name, condition=condition)
 
         assert on_condition.has_target_type(AgentNameTarget) is True
         assert on_condition.has_target_type(AgentTarget) is False
 
         # Test with NestedChatTarget
-        target = NestedChatTarget(nested_chat_config={"chat_queue": []})
-        on_condition = OnCondition(target=target, condition=condition)
+        target_nested_chat = NestedChatTarget(nested_chat_config={"chat_queue": []})
+        on_condition = OnCondition(target=target_nested_chat, condition=condition)
 
         assert on_condition.has_target_type(NestedChatTarget) is True
         assert on_condition.has_target_type(AgentTarget) is False
 
-    def test_target_requires_wrapping(self):
+    def test_target_requires_wrapping(self) -> None:
         """Test the target_requires_wrapping method with different target types."""
         condition = StringLLMCondition(prompt="Just a test condition")
 
@@ -177,12 +182,12 @@ class TestOnCondition:
         assert on_condition.target_requires_wrapping() is False
 
         # Test with NestedChatTarget (should require wrapping)
-        target = NestedChatTarget(nested_chat_config={"chat_queue": []})
+        target_nested_chat = NestedChatTarget(nested_chat_config={"chat_queue": []})
 
-        on_condition = OnCondition(target=target, condition=condition)
+        on_condition = OnCondition(target=target_nested_chat, condition=condition)
         assert on_condition.target_requires_wrapping() is True
 
-    def test_llm_function_name_handling(self):
+    def test_llm_function_name_handling(self) -> None:
         """Test setting and getting the llm_function_name."""
         target = MagicMock(spec=TransitionTarget)
         condition = StringLLMCondition(prompt="Test prompt")
@@ -196,7 +201,7 @@ class TestOnCondition:
         on_condition.llm_function_name = function_name
         assert on_condition.llm_function_name == function_name
 
-    def test_integration_with_real_components(self):
+    def test_integration_with_real_components(self) -> None:
         """Test integration of OnCondition with real components."""
         # Create a real agent target
         mock_agent = MagicMock()
@@ -221,8 +226,10 @@ class TestOnCondition:
         )
 
         # Test available condition
+        assert isinstance(on_condition.available, StringAvailableCondition)
         assert on_condition.available.is_available(mock_agent_for_eval, []) is True
 
         # Test getting the prompt
-        prompt = on_condition.condition.get_prompt(None, [])
+        mock_agent = MagicMock(spec="ConversableAgent")
+        prompt = on_condition.condition.get_prompt(mock_agent, [])
         assert prompt == "Should we transfer to {agent_name}?"

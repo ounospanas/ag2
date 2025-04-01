@@ -34,12 +34,12 @@ class OnContextCondition(BaseModel):  # noqa: N801
     condition: ContextCondition
     available: Optional[AvailableCondition] = None
 
-    def has_target_type(self, target_type: TransitionTarget) -> bool:
+    def has_target_type(self, target_type: type) -> bool:
         """
         Check if the target type matches the specified type.
 
         Args:
-            target_type (str): The target type to check against
+            target_type (type): The target type to check against. Should be a subclass of TransitionTarget.
 
         Returns:
             bool: True if the target type matches, False otherwise

@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional, Type, Union
 
 from pydantic import BaseModel, field_validator
 
@@ -48,18 +48,23 @@ class AfterWorkSelectionMessageContextStr(AfterWorkSelectionMessage):
     # We will replace {agentlist} with another term and return it later for use with the internal group chat auto speaker selection
     # Otherwise our format will fail
     @field_validator("context_str_template", mode="before")
-    def _replace_agentlist_placeholder(cls, v):  # noqa: N805
+    def _replace_agentlist_placeholder(cls: Type["AfterWorkSelectionMessageContextStr"], v: Any) -> Union[str, Any]:  # noqa: N805
         """Replace {agentlist} placeholder before validation/assignment."""
-        if isinstance(v, str) and "{agentlist}" in v:
-            # Perform the replacement
-            return v.replace("{agentlist}", "<<agent_list>>")
-        # Return original value if not a string or placeholder not found
-        return v
+        if isinstance(v, str):
+            if "{agentlist}" in v:
+                return v.replace("{agentlist}", "<<agent_list>>")  # Perform the replacement
+            else:
+                return v  # If no replacement is needed, return the original value
+        return ""
 
     def get_message(self, agent: "ConversableAgent") -> str:
         """Get the formatted message with context variables substituted."""
         context_str = ContextStr(template=self.context_str_template)
-        return context_str.format(agent.context_variables).replace(
+        format_result = context_str.format(agent.context_variables)
+        if format_result is None:
+            return ""
+
+        return format_result.replace(
             "<<agent_list>>", "{agentlist}"
         )  # Restore agentlist so it can be substituted by the internal group chat auto speaker selection
 
@@ -72,14 +77,3 @@ class AfterWork(BaseModel):
 
     target: TransitionTarget
     selection_message: Optional[AfterWorkSelectionMessage] = None
-
-    def __init__(
-        self,
-        target: TransitionTarget,
-        selection_message: Optional[AfterWorkSelectionMessage] = None,
-        **data,
-    ):
-        data["target"] = target
-        if selection_message is not None:
-            data["selection_message"] = selection_message
-        super().__init__(**data)

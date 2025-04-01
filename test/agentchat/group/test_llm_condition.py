@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -15,6 +16,10 @@ from autogen.agentchat.group.llm_condition import (
     StringLLMCondition,
 )
 
+if TYPE_CHECKING:
+    # Avoid circular import
+    from autogen import ConversableAgent
+
 
 class TestLLMCondition:
     def test_protocol_raise_not_implemented(self) -> None:
@@ -22,20 +27,22 @@ class TestLLMCondition:
 
         # Create a class that implements the protocol but doesn't override get_prompt
         class TestImpl(LLMCondition):
-            def get_prompt(self, agent, messages):
+            def get_prompt(self, agent: "ConversableAgent", messages: list[dict[str, Any]]) -> str:
                 raise NotImplementedError("Requires subclasses to implement.")
 
         impl = TestImpl()
+        mock_agent = MagicMock(spec="ConversableAgent")
         with pytest.raises(NotImplementedError) as excinfo:
-            impl.get_prompt(None, [])
+            impl.get_prompt(mock_agent, [])
         assert "Requires subclasses to implement" in str(excinfo.value)
 
     def test_initialisation_with_no_parameters(self) -> None:
         """Test initialisation of LLMCondition base class with no parameters."""
         condition = LLMCondition()
+        mock_agent = MagicMock(spec="ConversableAgent")
         assert isinstance(condition, LLMCondition)
         with pytest.raises(NotImplementedError):
-            condition.get_prompt(None, [])
+            condition.get_prompt(mock_agent, [])
 
 
 class TestStringLLMCondition:
@@ -51,7 +58,7 @@ class TestStringLLMCondition:
         condition = StringLLMCondition(prompt=prompt)
 
         # Agent and messages are not used
-        mock_agent = MagicMock()
+        mock_agent = MagicMock(spec="ConversableAgent")
         messages = [{"role": "user", "content": "Hello"}]
 
         result = condition.get_prompt(mock_agent, messages)
@@ -77,7 +84,8 @@ class TestStringLLMCondition:
         """Test initialisation with an empty prompt string."""
         condition = StringLLMCondition(prompt="")
         assert condition.prompt == ""
-        result = condition.get_prompt(None, [])
+        mock_agent = MagicMock(spec="ConversableAgent")
+        result = condition.get_prompt(mock_agent, [])
         assert result == ""
 
     def test_init_with_multiline_prompt(self) -> None:
@@ -87,7 +95,8 @@ class TestStringLLMCondition:
         Line three."""
         condition = StringLLMCondition(prompt=prompt)
         assert condition.prompt == prompt
-        result = condition.get_prompt(None, [])
+        mock_agent = MagicMock(spec="ConversableAgent")
+        result = condition.get_prompt(mock_agent, [])
         assert result == prompt
 
 
@@ -99,7 +108,7 @@ class TestContextStrLLMCondition:
         assert condition.context_str == context_str
 
     @patch.object(ContextStr, "format")
-    def test_get_prompt(self, mock_format) -> None:
+    def test_get_prompt(self, mock_format: MagicMock) -> None:
         """Test get_prompt calls format on the ContextStr with the agent's context variables."""
         # Mock ContextStr and its format method
         mock_context_str = MagicMock(spec=ContextStr)

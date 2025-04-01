@@ -66,6 +66,7 @@ class TestReplyResult:
 
         assert reply_result.message == message
         assert reply_result.target == target
+        assert isinstance(reply_result.target, AgentTarget)
         assert reply_result.target.agent_name == "test_agent"
 
     def test_with_after_work_option_target(self) -> None:
@@ -77,6 +78,7 @@ class TestReplyResult:
 
         assert reply_result.message == message
         assert reply_result.target == target
+        assert isinstance(reply_result.target, AfterWorkOptionTarget)
         assert reply_result.target.after_work_option == "terminate"
 
     def test_with_empty_context_variables(self) -> None:

@@ -151,7 +151,7 @@ class TestContextVariables:
 
     def test_dunder_iter(self) -> None:
         keys = set()
-        for key in self.context:
+        for key, _ in self.context:
             keys.add(key)
 
         assert keys == set(self.test_data.keys())
@@ -176,10 +176,13 @@ class TestContextVariables:
 
         # Get and modify the nested structure
         nested = self.context.get("nested")
+        assert isinstance(nested, dict)
         nested["level1"]["level2"] = "modified"
         self.context.set("nested", nested)
 
-        assert self.context.get("nested")["level1"]["level2"] == "modified"
+        final_nested = self.context.get("nested")
+        assert isinstance(final_nested, dict)
+        assert final_nested["level1"]["level2"] == "modified"
 
     def test_copy_semantics(self) -> None:
         # Test that to_dict returns a copy
@@ -193,14 +196,18 @@ class TestContextVariables:
         data_copy["nested"]["level1"]["level2"] = "modified_in_copy"
 
         # The modification affects the original (shallow copy)
-        assert self.context.get("nested")["level1"]["level2"] == "modified_in_copy"
+        nested_result = self.context.get("nested")
+        assert isinstance(nested_result, dict)
+        assert nested_result["level1"]["level2"] == "modified_in_copy"
 
         # Test with deep copy
         deep_copy = copy.deepcopy(self.context.to_dict())
         deep_copy["nested"]["level1"]["level2"] = "modified_in_deep_copy"
 
         # Original should be unchanged
-        assert self.context.get("nested")["level1"]["level2"] == "modified_in_copy"
+        another_nested = self.context.get("nested")
+        assert isinstance(another_nested, dict)
+        assert another_nested["level1"]["level2"] == "modified_in_copy"
 
     def test_sequential_operations(self) -> None:
         """Test sequential method calls (not chaining as methods don't return self)."""
@@ -248,8 +255,8 @@ class TestContextVariables:
         # Typically dictionaries only support strings as keys
         # but this can test the behavior or highlight limitations
         try:
-            self.context.set(None, "none_key")
-            assert self.context.get(None) == "none_key"
+            self.context.set(None, "none_key")  # type: ignore[arg-type]
+            assert self.context.get(None) == "none_key"  # type: ignore[arg-type]
         except (TypeError, ValueError):
             # This is an acceptable outcome if None keys are not supported
             pass
@@ -266,10 +273,10 @@ class TestContextVariables:
             def __init__(self, value: Any):
                 self.value = value
 
-            def __eq__(self, other):
+            def __eq__(self, other: object) -> bool:
                 if not isinstance(other, CustomClass):
                     return False
-                return self.value == other.value
+                return bool(self.value == other.value)
 
         custom_obj = CustomClass("test")
         self.context.set("custom", custom_obj)

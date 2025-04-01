@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -24,8 +24,9 @@ class TestContextCondition:
             pass
 
         impl = TestImpl()
+        mock_cv = MagicMock(spec=ContextVariables)
         with pytest.raises(NotImplementedError) as excinfo:
-            impl.evaluate(None)
+            impl.evaluate(mock_cv)
         assert "Requires subclasses to implement" in str(excinfo.value)
 
 
@@ -148,7 +149,7 @@ class TestExpressionContextCondition:
         assert condition.expression == expression
 
     @patch("autogen.agentchat.group.context_expression.ContextExpression.evaluate")
-    def test_evaluate_calls_expression_evaluate(self, mock_evaluate) -> None:
+    def test_evaluate_calls_expression_evaluate(self, mock_evaluate: MagicMock) -> None:
         """Test evaluate calls the expression's evaluate method with the context variables."""
         expression = ContextExpression("${var1} and ${var2}")
         condition = ExpressionContextCondition(expression=expression)

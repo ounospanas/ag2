@@ -21,7 +21,7 @@ __TOOL_EXECUTOR_NAME__ = "_Group_Tool_Executor"
 class GroupToolExecutor(ConversableAgent):
     """Tool executor for the group chat initiated with initiate_group_chat"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(
             name=__TOOL_EXECUTOR_NAME__,
             system_message="Tool Execution, do not use this agent directly.",
@@ -30,7 +30,7 @@ class GroupToolExecutor(ConversableAgent):
         )
 
         # Store the next target from a tool call
-        self._group_next_target = None
+        self._group_next_target: Optional[TransitionTarget] = None
 
         # Primary tool reply function for handling the tool reply and the ReplyResult and TransitionTarget returns
         self.register_reply([Agent, None], self._generate_group_tool_reply, remove_other_reply_funcs=True)
@@ -39,9 +39,13 @@ class GroupToolExecutor(ConversableAgent):
         """Sets the next target to transition to, used in the determine_next_agent function."""
         self._group_next_target = next_target
 
-    def get_next_target(self) -> Optional[TransitionTarget]:
+    def get_next_target(self) -> TransitionTarget:
         """Gets the next target to transition to."""
         """Returns the next target to transition to, if it exists."""
+        if self._group_next_target is None:
+            raise ValueError(
+                "No next target set. Please set a next target before calling this method. Use has_next_target() to check if a next target exists."
+            )
         return self._group_next_target
 
     def has_next_target(self) -> bool:
@@ -146,7 +150,7 @@ class GroupToolExecutor(ConversableAgent):
             tool_call_count = len(message["tool_calls"])
 
             # Loop through tool calls individually (so context can be updated after each function call)
-            next_agent: Optional[Agent] = None
+            next_target: Optional[TransitionTarget] = None
             tool_responses_inner = []
             contents = []
             for index in range(tool_call_count):
@@ -170,12 +174,12 @@ class GroupToolExecutor(ConversableAgent):
 
                     # Tool Call returns that are a target are either a ReplyResult or a TransitionTarget are the next agent
                     if isinstance(content, ReplyResult):
-                        if content.context_variables != {}:
-                            agent.context_variables.update(content.context_variables)
+                        if content.context_variables and content.context_variables.to_dict() != {}:
+                            agent.context_variables.update(content.context_variables.to_dict())
                         if content.target is not None:
-                            next_agent = content.target  # type: ignore[assignment]
+                            next_target = content.target
                     elif isinstance(content, TransitionTarget):
-                        next_agent = content
+                        next_target = content
 
                     # Serialize the content to a string
                     if content is not None:
@@ -184,7 +188,7 @@ class GroupToolExecutor(ConversableAgent):
                     tool_responses_inner.append(tool_response)
                     contents.append(str(tool_response["content"]))
 
-            self._group_next_target = next_agent  # type: ignore[attr-defined]
+            self._group_next_target = next_target  # type: ignore[attr-defined]
 
             # Put the tool responses and content strings back into the response message
             # Caters for multiple tool calls

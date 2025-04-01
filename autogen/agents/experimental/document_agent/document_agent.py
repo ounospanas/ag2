@@ -260,7 +260,7 @@ class DocAgent(ConversableAgent):
             functions=[initiate_tasks],
         )
 
-        self._triage_agent.handoffs.set_after_work(AfterWork(AgentTarget(agent=self._task_manager_agent)))
+        self._triage_agent.handoffs.set_after_work(AfterWork(target=AgentTarget(agent=self._task_manager_agent)))
 
         self._data_ingestion_agent = DoclingDocIngestAgent(
             llm_config=llm_config,
@@ -386,15 +386,21 @@ class DocAgent(ConversableAgent):
             AfterWork(target=AfterWorkOptionTarget(after_work_option="stay")),
         ])
 
-        self._data_ingestion_agent.handoffs.set_after_work(AfterWork(AgentTarget(agent=self._task_manager_agent)))
+        self._data_ingestion_agent.handoffs.set_after_work(
+            AfterWork(target=AgentTarget(agent=self._task_manager_agent))
+        )
 
-        self._query_agent.handoffs.set_after_work(AfterWork(AgentTarget(agent=self._task_manager_agent)))
+        self._query_agent.handoffs.set_after_work(AfterWork(target=AgentTarget(agent=self._task_manager_agent)))
 
         # Summary agent terminates the DocumentAgent
-        self._summary_agent.handoffs.set_after_work(AfterWork(AfterWorkOptionTarget(after_work_option="terminate")))
+        self._summary_agent.handoffs.set_after_work(
+            AfterWork(target=AfterWorkOptionTarget(after_work_option="terminate"))
+        )
 
         # The Error Agent always terminates the swarm
-        self._error_agent.handoffs.set_after_work(AfterWork(AfterWorkOptionTarget(after_work_option="terminate")))
+        self._error_agent.handoffs.set_after_work(
+            AfterWork(target=AfterWorkOptionTarget(after_work_option="terminate"))
+        )
 
         self.register_reply([Agent, None], DocAgent.generate_inner_swarm_reply)
 

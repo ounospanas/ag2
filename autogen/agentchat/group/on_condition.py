@@ -36,12 +36,12 @@ class OnCondition(BaseModel):  # noqa: N801
     available: Optional[AvailableCondition] = None
     llm_function_name: Optional[str] = None
 
-    def has_target_type(self, target_type: TransitionTarget) -> bool:
+    def has_target_type(self, target_type: type) -> bool:
         """
         Check if the target type matches the specified type.
 
         Args:
-            target_type (str): The target type to check against
+            target_type (type): The target type to check against, which should be a subclass of TransitionTarget
 
         Returns:
             bool: True if the target type matches, False otherwise

@@ -44,6 +44,8 @@ class TestOnContextCondition:
 
         assert on_context_condition.target == target
         assert on_context_condition.condition == condition
+        assert on_context_condition.condition is not None
+        assert isinstance(on_context_condition.condition, StringContextCondition)
         assert on_context_condition.condition.variable_name == "is_valid"
 
     def test_init_with_expression_context_condition(self) -> None:
@@ -56,6 +58,8 @@ class TestOnContextCondition:
 
         assert on_context_condition.target == target
         assert on_context_condition.condition == condition
+        assert on_context_condition.condition is not None
+        assert isinstance(on_context_condition.condition, ExpressionContextCondition)
         assert on_context_condition.condition.expression == expression
 
     def test_init_with_agent_target(self) -> None:
@@ -68,6 +72,8 @@ class TestOnContextCondition:
         on_context_condition = OnContextCondition(target=target, condition=condition)
 
         assert on_context_condition.target == target
+        assert on_context_condition.target is not None
+        assert isinstance(on_context_condition.target, AgentTarget)
         assert on_context_condition.target.agent_name == "test_agent"
 
     def test_init_with_string_available_condition(self) -> None:
@@ -79,6 +85,8 @@ class TestOnContextCondition:
         on_context_condition = OnContextCondition(target=target, condition=condition, available=available)
 
         assert on_context_condition.available == available
+        assert on_context_condition.available is not None
+        assert isinstance(on_context_condition.available, StringAvailableCondition)
         assert on_context_condition.available.context_variable == "is_available"
 
     def test_init_with_context_expression_available(self) -> None:
@@ -118,6 +126,7 @@ class TestOnContextCondition:
         messages = [{"role": "user", "content": "Hello"}]
 
         # Call is_available through the available
+        assert on_context_condition.available is not None
         result = on_context_condition.available.is_available(mock_agent, messages)
 
         assert result is True

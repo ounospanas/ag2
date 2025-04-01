@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, Optional
 
 from pydantic import BaseModel
 
@@ -31,7 +31,7 @@ class TransitionTarget(BaseModel):
     def resolve(
         self,
         current_agent: "ConversableAgent",
-        user_agent: "ConversableAgent",
+        user_agent: Optional["ConversableAgent"],
     ) -> SpeakerSelectionResult:
         """Resolve to a speaker selection result (Agent, None for termination, or str for speaker selection method)."""
         raise NotImplementedError("Requires subclasses to implement.")
@@ -58,7 +58,7 @@ class AgentTarget(TransitionTarget):
 
     agent_name: str
 
-    def __init__(self, agent: "ConversableAgent", **data):
+    def __init__(self, agent: "ConversableAgent", **data: Any) -> None:  # type: ignore[no-untyped-def]
         # Store the name from the agent for serialization
         super().__init__(agent_name=agent.name, **data)
 
@@ -69,7 +69,7 @@ class AgentTarget(TransitionTarget):
     def resolve(
         self,
         current_agent: "ConversableAgent",
-        user_agent: "ConversableAgent",
+        user_agent: Optional["ConversableAgent"],
     ) -> SpeakerSelectionResult:
         """Resolve to the actual agent object from the groupchat."""
         return SpeakerSelectionResult(agent_name=self.agent_name)
@@ -107,7 +107,7 @@ class AgentNameTarget(TransitionTarget):
     def resolve(
         self,
         current_agent: "ConversableAgent",
-        user_agent: "ConversableAgent",
+        user_agent: Optional["ConversableAgent"],
     ) -> SpeakerSelectionResult:
         """Resolve to the agent name string."""
         return SpeakerSelectionResult(agent_name=self.agent_name)
@@ -145,7 +145,7 @@ class NestedChatTarget(TransitionTarget):
     def resolve(
         self,
         current_agent: "ConversableAgent",
-        user_agent: "ConversableAgent",
+        user_agent: Optional["ConversableAgent"],
     ) -> SpeakerSelectionResult:
         """Resolve to the nested chat configuration."""
         raise NotImplementedError(
@@ -203,7 +203,7 @@ class AfterWorkOptionTarget(TransitionTarget):
     def resolve(
         self,
         current_agent: "ConversableAgent",
-        user_agent: "ConversableAgent",
+        user_agent: Optional["ConversableAgent"],
     ) -> SpeakerSelectionResult:
         """Resolve to the option value."""
         if self.after_work_option == "terminate":
@@ -211,6 +211,8 @@ class AfterWorkOptionTarget(TransitionTarget):
         elif self.after_work_option == "stay":
             return SpeakerSelectionResult(agent_name=current_agent.name)
         elif self.after_work_option == "revert_to_user":
+            if user_agent is None:
+                raise ValueError("User agent must be provided to the chat for the revert_to_user option.")
             return SpeakerSelectionResult(agent_name=user_agent.name)
         elif self.after_work_option == "group_manager":
             return SpeakerSelectionResult(speaker_selection_method="auto")

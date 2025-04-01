@@ -72,7 +72,7 @@ class DoclingDocIngestAgent(ConversableAgent):
             context_variables (ContextVariables): The context variables for the task.
 
             Returns:
-            SwarmResult: The result of the task.
+            ReplyResult: The result of the task.
             """
 
             try:

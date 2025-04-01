@@ -5,7 +5,7 @@
 import copy
 from functools import partial
 from types import MethodType
-from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 from ...doc_utils import export_module
 from ..agent import Agent
@@ -23,7 +23,6 @@ from .transition_target import (
     AfterWorkOptionTarget,
     AgentNameTarget,
     AgentTarget,
-    TransitionOption,
     TransitionTarget,
 )
 
@@ -36,7 +35,7 @@ __all__ = [
 ]
 
 
-def _update_conditional_functions(agent: "ConversableAgent", messages: Optional[list[dict[str, Any]]] = None) -> None:
+def _update_conditional_functions(agent: "ConversableAgent", messages: list[dict[str, Any]]) -> None:
     """Updates the agent's functions based on the OnCondition's available condition.
 
     All functions are removed and then added back if they are available
@@ -102,18 +101,14 @@ def _run_oncontextconditions(
     """Run OnContextConditions for an agent before any other reply function."""
     for on_condition in agent.handoffs.context_conditions:  # type: ignore[attr-defined]
         is_available = (
-            on_condition.available.is_available(
-                agent, next(iter(agent.chat_messages.values())) if on_condition.available else True
-            )
-            if on_condition.available
-            else True
+            on_condition.available.is_available(agent, messages if messages else []) if on_condition.available else True
         )
 
         if is_available and on_condition.condition.evaluate(agent.context_variables):
             # Condition has been met, we'll set the Tool Executor's next target
             # attribute and that will be picked up on the next iteration when
             # _determine_next_agent is called
-            for agent in agent._group_manager.groupchat.agents:
+            for agent in agent._group_manager.groupchat.agents:  # type: ignore[attr-defined]
                 if isinstance(agent, GroupToolExecutor):
                     agent.set_next_target(on_condition.target)
                     break
@@ -125,7 +120,7 @@ def _run_oncontextconditions(
     return False, None
 
 
-def _create_on_condition_handoff_function(target: TransitionTarget) -> Callable:
+def _create_on_condition_handoff_function(target: TransitionTarget) -> Callable[[], TransitionTarget]:
     """Creates a function that will be used by the tool call reply function when the condition is met.
 
     Args:
@@ -187,10 +182,13 @@ def _ensure_handoff_agents_in_group(agents: list["ConversableAgent"]) -> None:
 def _prepare_exclude_transit_messages(agents: list["ConversableAgent"]) -> None:
     """Preparation for excluding transit messages by getting all tool names and registering a hook on agents to remove those messages."""
     # get all transit functions names
-    to_be_removed = []
+    to_be_removed: list[str] = []
     for agent in agents:
         for on_condition in agent.handoffs.llm_conditions:
-            to_be_removed.append(on_condition.llm_function_name)
+            if on_condition.llm_function_name:
+                to_be_removed.append(on_condition.llm_function_name)
+            else:
+                raise ValueError("OnCondition must have a function name")
 
     remove_function = make_remove_function(to_be_removed)
 
@@ -200,15 +198,13 @@ def _prepare_exclude_transit_messages(agents: list["ConversableAgent"]) -> None:
 
 
 def _prepare_group_agents(
-    initial_agent: "ConversableAgent",
     agents: list["ConversableAgent"],
     context_variables: ContextVariables,
     exclude_transit_message: bool = True,
-) -> tuple["ConversableAgent", list["ConversableAgent"]]:
+) -> tuple[GroupToolExecutor, list["ConversableAgent"]]:
     """Validates agents, create the tool executor, wrap necessary targets in agents.
 
     Args:
-        initial_agent ("ConversableAgent"): The first agent in the conversation.
         agents (list["ConversableAgent"]): List of all agents in the conversation.
         context_variables (ContextVariables): Context variables to assign to all agents.
         exclude_transit_message (bool): Whether to exclude transit messages from the agents.
@@ -217,11 +213,6 @@ def _prepare_group_agents(
         "ConversableAgent": The tool executor agent.
         list["ConversableAgent"]: List of wrapped agents.
     """
-    # if not isinstance(initial_agent, "ConversableAgent"):
-    #     raise ValueError("initial_agent must be a ConversableAgent")
-    # if not all(isinstance(agent, "ConversableAgent") for agent in agents):
-    #     raise ValueError("Agents must be a list of "ConversableAgent"s")
-
     # Initialise all agents as group agents
     for agent in agents:
         if not hasattr(agent, "_group_is_established"):
@@ -263,21 +254,25 @@ def _wrap_agent_handoff_targets(agent: "ConversableAgent", wrapped_agent_list: l
         wrapped_agent_list (list["ConversableAgent"]): List of wrapped chat agents that will be appended to.
     """
     # Wrap OnCondition targets
-    for i, handoff_target_requiring_wrapping in enumerate(agent.handoffs.get_llm_conditions_requiring_wrapping()):
+    for i, handoff_oncondition_requiring_wrapping in enumerate(agent.handoffs.get_llm_conditions_requiring_wrapping()):
         # Create wrapper agent
-        wrapper_agent = handoff_target_requiring_wrapping.target.create_wrapper_agent(parent_agent=agent, index=i)
+        wrapper_agent = handoff_oncondition_requiring_wrapping.target.create_wrapper_agent(parent_agent=agent, index=i)
         wrapped_agent_list.append(wrapper_agent)
 
         # Change this handoff target to point to the newly created agent
-        handoff_target_requiring_wrapping.target = AgentTarget(wrapper_agent)
+        handoff_oncondition_requiring_wrapping.target = AgentTarget(wrapper_agent)
 
-    for i, handoff_target_requiring_wrapping in enumerate(agent.handoffs.get_context_conditions_requiring_wrapping()):
+    for i, handoff_oncontextcondition_requiring_wrapping in enumerate(
+        agent.handoffs.get_context_conditions_requiring_wrapping()
+    ):
         # Create wrapper agent
-        wrapper_agent = handoff_target_requiring_wrapping.target.create_wrapper_agent(parent_agent=agent, index=i)
+        wrapper_agent = handoff_oncontextcondition_requiring_wrapping.target.create_wrapper_agent(
+            parent_agent=agent, index=i
+        )
         wrapped_agent_list.append(wrapper_agent)
 
         # Change this handoff target to point to the newly created agent
-        handoff_target_requiring_wrapping.target = AgentTarget(wrapper_agent)
+        handoff_oncontextcondition_requiring_wrapping.target = AgentTarget(wrapper_agent)
 
 
 def _process_initial_messages(
@@ -396,13 +391,13 @@ def _prepare_groupchat_auto_speaker(
 
 def _get_last_agent_speaker(
     groupchat: GroupChat, group_agent_names: list[str], tool_executor: GroupToolExecutor
-) -> "ConversableAgent":
+) -> Agent:
     """Get the last group agent from the group chat messages. Not including the tool executor."""
     last_group_speaker = None
     for message in reversed(groupchat.messages):
         if "name" in message and message["name"] in group_agent_names and message["name"] != tool_executor.name:
             agent = groupchat.agent_by_name(name=message["name"])
-            if isinstance(agent, "ConversableAgent"):
+            if agent:
                 last_group_speaker = agent
                 break
     if last_group_speaker is None:
@@ -419,8 +414,8 @@ def _determine_next_agent(
     tool_executor: GroupToolExecutor,
     group_agent_names: list[str],
     user_agent: Optional[UserProxyAgent],
-    group_after_work: Optional[AfterWork],
-) -> Optional[Union[Agent, Literal["auto"]]]:
+    group_after_work: AfterWork,
+) -> Optional[Union[Agent, str]]:
     """Determine the next agent in the conversation.
 
     Args:
@@ -432,6 +427,9 @@ def _determine_next_agent(
         group_agent_names (list[str]): List of agent names.
         user_agent (UserProxyAgent): Optional user proxy agent.
         group_after_work (AfterWork): Group-level Transition option when an agent doesn't select the next agent.
+
+    Returns:
+        Optional[Union[Agent, str]]: The next agent or speaker selection method.
     """
 
     # Logic for determining the next target (anything based on Transition Target: an agent, wrapped agent, or AfterWork Option 'terminate'/'stay'/'revert_to_user'/'group_manager')
@@ -476,19 +474,20 @@ def _determine_next_agent(
 
     # Get the appropriate After Work condition (from the agent if they have one, otherwise the group level one)
     after_work_condition = (
-        last_agent_speaker.handoffs.after_work
-        if last_agent_speaker.handoffs.after_work is not None
+        last_agent_speaker.handoffs.after_work  # type: ignore[attr-defined]
+        if last_agent_speaker.handoffs.after_work is not None  # type: ignore[attr-defined]
         else group_after_work
     )
 
     # Resolve the next agent, termination, or speaker selection method
     resolved_speaker_selection_result = after_work_condition.target.resolve(
-        last_agent_speaker, user_agent
+        last_agent_speaker,  # type: ignore[arg-type]
+        user_agent,
     ).get_speaker_selection_result(groupchat)
 
     # If the resolved speaker selection result is "auto", meaning it's a speaker selection method of "auto", we need to prepare the group chat for auto speaker selection
     if resolved_speaker_selection_result == "auto":
-        _prepare_groupchat_auto_speaker(groupchat, last_agent_speaker, after_work_condition.selection_message)
+        _prepare_groupchat_auto_speaker(groupchat, last_agent_speaker, after_work_condition.selection_message)  # type: ignore[arg-type]
 
     return resolved_speaker_selection_result
 
@@ -498,8 +497,8 @@ def create_group_transition(
     tool_execution: GroupToolExecutor,
     group_agent_names: list[str],
     user_agent: Optional[UserProxyAgent],
-    group_after_work: Optional[TransitionOption],
-) -> Callable[["ConversableAgent", GroupChat], Optional[Union[Agent, Literal["auto"]]]]:
+    group_after_work: AfterWork,
+) -> Callable[["ConversableAgent", GroupChat], Optional[Union[Agent, str]]]:
     """Creates a transition function for group chat with enclosed state for the use_initial_agent.
 
     Args:
@@ -510,15 +509,13 @@ def create_group_transition(
         group_after_work (TransitionOption): Group-level after work
 
     Returns:
-        Callable transition function (for sync and async group chats)
+        Callable[["ConversableAgent", GroupChat], Optional[Union[Agent, str]]]: The transition function
     """
     # Create enclosed state, this will be set once per creation so will only be True on the first execution
     # of group_transition
     state = {"use_initial_agent": True}
 
-    def group_transition(
-        last_speaker: "ConversableAgent", groupchat: GroupChat
-    ) -> Optional[Union[Agent, Literal["auto"]]]:
+    def group_transition(last_speaker: "ConversableAgent", groupchat: GroupChat) -> Optional[Union[Agent, str]]:
         result = _determine_next_agent(
             last_speaker=last_speaker,
             groupchat=groupchat,
@@ -655,11 +652,11 @@ def initiate_group_chat(
     context_variables = context_variables or ContextVariables()
 
     # Default to terminate
-    group_after_work = after_work if after_work is not None else AfterWork(target=AfterWorkOptionTarget("terminate"))
-
-    tool_execution, wrapped_agents = _prepare_group_agents(
-        initial_agent, agents, context_variables, exclude_transit_message
+    group_after_work = (
+        after_work if after_work is not None else AfterWork(target=AfterWorkOptionTarget(after_work_option="terminate"))
     )
+
+    tool_execution, wrapped_agents = _prepare_group_agents(agents, context_variables, exclude_transit_message)
 
     processed_messages, last_agent, group_agent_names, temp_user_list = _process_initial_messages(
         messages, user_agent, agents, wrapped_agents

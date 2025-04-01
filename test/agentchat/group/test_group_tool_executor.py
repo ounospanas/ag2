@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from typing import Any, Optional, Tuple
 from unittest.mock import MagicMock, call, patch
 
 import pytest
@@ -16,7 +17,7 @@ from autogen.tools import Tool
 
 class TestGroupToolExecutor:
     @pytest.fixture
-    def mock_agent(self):
+    def mock_agent(self) -> "ConversableAgent":
         """Create a mock ConversableAgent for testing."""
         agent = MagicMock(spec=ConversableAgent)
         agent.name = "MockAgent"
@@ -26,11 +27,11 @@ class TestGroupToolExecutor:
         return agent
 
     @pytest.fixture
-    def executor(self):
+    def executor(self) -> GroupToolExecutor:
         """Create a GroupToolExecutor for testing."""
         return GroupToolExecutor()
 
-    def test_initialisation(self, executor):
+    def test_initialisation(self, executor: GroupToolExecutor) -> None:
         """Test that the executor initialises with the correct name and defaults."""
         assert executor.name == __TOOL_EXECUTOR_NAME__
         assert executor._group_next_target is None
@@ -38,10 +39,12 @@ class TestGroupToolExecutor:
         assert executor.human_input_mode == "NEVER"
         assert not executor._code_execution_config
 
-    def test_next_target_management(self, executor):
+    def test_next_target_management(self, executor: GroupToolExecutor) -> None:
         """Test setting, getting, checking and clearing the next target."""
         # Initially, there should be no next target
-        assert executor.get_next_target() is None
+        with pytest.raises(ValueError):
+            assert executor.get_next_target() is None # Raises an error if we try to get it without one
+
         assert not executor.has_next_target()
 
         # Set a next target
@@ -54,12 +57,15 @@ class TestGroupToolExecutor:
 
         # Clear the target
         executor.clear_next_target()
-        assert executor.get_next_target() is None
+        with pytest.raises(ValueError):
+            assert executor.get_next_target() is None
         assert not executor.has_next_target()
 
     @patch("autogen.tools.Depends")
     @patch("inspect.signature")
-    def test_modify_context_variables_param(self, mock_signature, mock_depends, executor):
+    def test_modify_context_variables_param(
+        self, mock_signature: MagicMock, mock_depends: MagicMock, executor: GroupToolExecutor
+    ) -> None:
         """Test modifying function parameters to use dependency injection."""
         # Create mock function and signature
         mock_func = MagicMock()
@@ -89,11 +95,13 @@ class TestGroupToolExecutor:
         assert mock_func.__signature__ == mock_new_sig
 
     @patch("autogen.agentchat.group.group_tool_executor.inject_params")
-    def test_change_tool_context_variables_to_depends(self, mock_inject_params, executor, mock_agent):
+    def test_change_tool_context_variables_to_depends(
+        self, mock_inject_params: MagicMock, executor: GroupToolExecutor, mock_agent: MagicMock
+    ) -> None:
         """Test changing a tool's context_variables parameter to use dependency injection."""
 
         # Define a real function for the tool to use
-        def test_tool_func(arg1, context_variables=None):
+        def test_tool_func(arg1: str, context_variables: Optional[ContextVariables] = None) -> str:
             return f"Result: {arg1}, {context_variables}"
 
         # Create a mock tool with context_variables in its schema
@@ -125,7 +133,7 @@ class TestGroupToolExecutor:
             mock_agent.remove_tool_for_llm.assert_called_once_with(mock_tool)
             mock_agent.register_for_llm.assert_called_once()
 
-    def test_register_agents_functions(self, executor):
+    def test_register_agents_functions(self, executor: GroupToolExecutor) -> None:
         """Test registering functions from multiple agents."""
         # Create mock agents with tools and function_map
         mock_agent1 = MagicMock(spec=ConversableAgent)
@@ -182,7 +190,7 @@ class TestGroupToolExecutor:
                 any_order=True,
             )
 
-    def test_generate_group_tool_reply_with_no_tool_calls(self, executor):
+    def test_generate_group_tool_reply_with_no_tool_calls(self, executor: GroupToolExecutor) -> None:
         """Test _generate_group_tool_reply with a message without tool_calls."""
         # Create message without tool_calls
         message = {"role": "user", "content": "Hello"}
@@ -195,11 +203,11 @@ class TestGroupToolExecutor:
         assert success is False
         assert result is None
 
-    def test_generate_group_tool_reply_with_tool_calls(self, executor):
+    def test_generate_group_tool_reply_with_tool_calls(self, executor: GroupToolExecutor) -> None:
         """Test _generate_group_tool_reply with a message with tool_calls."""
 
         # Create a mock function to execute
-        def mock_func(arg1, arg2):
+        def mock_func(arg1: str, arg2: str) -> str:
             return f"Result: {arg1}, {arg2}"
 
         # Add the function to the executor's function map
@@ -237,7 +245,7 @@ class TestGroupToolExecutor:
             assert success is True
             assert result == mock_tool_response
 
-    def test_generate_group_tool_reply_with_reply_result(self, executor):
+    def test_generate_group_tool_reply_with_reply_result(self, executor: GroupToolExecutor) -> None:
         """Test _generate_group_tool_reply handling a ReplyResult response."""
         # Create a ReplyResult to be returned by the tool
         result = ReplyResult(
@@ -274,10 +282,11 @@ class TestGroupToolExecutor:
 
             # Response content should be converted to string
             assert success is True
+            assert response is not None
             assert "content" in response
             assert response["content"] == str(result)
 
-    def test_generate_group_tool_reply_with_multiple_tools(self, executor):
+    def test_generate_group_tool_reply_with_multiple_tools(self, executor: GroupToolExecutor) -> None:
         """Test _generate_group_tool_reply with multiple tool calls."""
         # Create a ReplyResult to be returned by the first tool
         result1 = ReplyResult(
@@ -314,7 +323,7 @@ class TestGroupToolExecutor:
             "content": str(result2),
         }
 
-        def side_effect(messages):
+        def side_effect(messages: list[dict[str, Any]]) -> Tuple[bool, Optional[dict[str, Any]]]:
             if len(messages) == 0:
                 return False, None
 
@@ -336,11 +345,12 @@ class TestGroupToolExecutor:
 
             # Response should contain concatenated content
             assert success is True
+            assert response is not None  # Ensure response is not None before indexing
             assert "content" in response
             assert str(result1) in response["content"]
             assert str(result2) in response["content"]
 
-    def test_error_handling(self, executor):
+    def test_error_handling(self, executor: GroupToolExecutor) -> None:
         """Test error handling in _generate_group_tool_reply."""
         # Create message with tool_calls
         tool_call = {"id": "call1", "function": {"name": "test_function", "arguments": "{}"}}

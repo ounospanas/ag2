@@ -24,8 +24,9 @@ class TestAvailableCondition:
             pass
 
         impl = TestImpl()
+        mock_agent = MagicMock(spec="ConversableAgent")
         with pytest.raises(NotImplementedError) as excinfo:
-            impl.is_available(None, [])
+            impl.is_available(mock_agent, [])
         assert "Requires subclasses to implement" in str(excinfo.value)
 
 
@@ -181,7 +182,7 @@ class TestContextExpressionAvailableCondition:
         # This would have to be checked if using a custom method to store extra attributes
 
     @patch("autogen.agentchat.group.context_expression.ContextExpression.evaluate")
-    def test_is_available_calls_expression_evaluate(self, mock_evaluate) -> None:
+    def test_is_available_calls_expression_evaluate(self, mock_evaluate: MagicMock) -> None:
         """Test is_available calls the expression's evaluate method with the agent's context variables."""
         expression = ContextExpression("${var1} and ${var2}")
         condition = ExpressionAvailableCondition(expression=expression)

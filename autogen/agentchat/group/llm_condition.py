@@ -71,4 +71,5 @@ class ContextStrLLMCondition(LLMCondition):
         Returns:
             The prompt with context variables substituted
         """
-        return self.context_str.format(agent.context_variables)
+        result = self.context_str.format(agent.context_variables)
+        return result if result is not None else ""

@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Iterable, Optional
+from typing import Any, Generator, Iterable, Optional
 
 from pydantic import BaseModel, Field
 
@@ -150,9 +150,10 @@ class ContextVariables(BaseModel):
         """Get the number of items: len(context)"""
         return len(self.data)
 
-    def __iter__(self) -> Iterable[str]:
+    def __iter__(self) -> Generator[tuple[str, Any], None, None]:
         """Iterate over keys: for key in context"""
-        return iter(self.data)
+        for key in self.data:
+            yield (key, self.data[key])
 
     def __str__(self) -> str:
         """String representation of context variables."""

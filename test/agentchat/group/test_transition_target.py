@@ -28,8 +28,9 @@ class TestTransitionTarget:
     def test_base_target_resolve(self) -> None:
         """Test that the base TransitionTarget class raises NotImplementedError when resolve is called."""
         target = TransitionTarget()
+        mock_agent = MagicMock(spec=ConversableAgent)
         with pytest.raises(NotImplementedError) as excinfo:
-            target.resolve(None, None)
+            target.resolve(mock_agent, None)
         assert "Requires subclasses to implement" in str(excinfo.value)
 
     def test_base_target_display_name(self) -> None:
@@ -83,7 +84,8 @@ class TestAgentTarget:
         mock_agent.name = "test_agent"
 
         target = AgentTarget(agent=mock_agent)
-        result = target.resolve(None, None)
+        mock_agent = MagicMock(spec=ConversableAgent)
+        result = target.resolve(mock_agent, None)
 
         assert isinstance(result, SpeakerSelectionResult)
         assert result.agent_name == "test_agent"
@@ -143,7 +145,8 @@ class TestAgentNameTarget:
     def test_resolve(self) -> None:
         """Test that resolve returns a SpeakerSelectionResult with the agent name."""
         target = AgentNameTarget(agent_name="test_agent")
-        result = target.resolve(None, None)
+        mock_agent = MagicMock(spec=ConversableAgent)
+        result = target.resolve(mock_agent, None)
 
         assert isinstance(result, SpeakerSelectionResult)
         assert result.agent_name == "test_agent"
@@ -198,8 +201,9 @@ class TestNestedChatTarget:
         nested_chat_config = {"chat_queue": [{}], "use_async": True}
         target = NestedChatTarget(nested_chat_config=nested_chat_config)
 
+        mock_agent = MagicMock(spec=ConversableAgent)
         with pytest.raises(NotImplementedError) as excinfo:
-            target.resolve(None, None)
+            target.resolve(mock_agent, None)
         assert "NestedChatTarget does not support the resolve method" in str(excinfo.value)
 
     def test_display_name(self) -> None:
@@ -276,7 +280,8 @@ class TestAfterWorkOptionTarget:
     def test_resolve_terminate(self) -> None:
         """Test that resolve returns a SpeakerSelectionResult with terminate=True for 'terminate' option."""
         target = AfterWorkOptionTarget(after_work_option="terminate")
-        result = target.resolve(None, None)
+        mock_agent = MagicMock(spec=ConversableAgent)
+        result = target.resolve(mock_agent, None)
 
         assert isinstance(result, SpeakerSelectionResult)
         assert result.terminate is True
@@ -301,8 +306,9 @@ class TestAfterWorkOptionTarget:
         target = AfterWorkOptionTarget(after_work_option="revert_to_user")
         mock_user_agent = MagicMock(spec=ConversableAgent)
         mock_user_agent.name = "user_agent"
+        mock_agent = MagicMock(spec=ConversableAgent)
 
-        result = target.resolve(None, mock_user_agent)
+        result = target.resolve(mock_agent, mock_user_agent)
 
         assert isinstance(result, SpeakerSelectionResult)
         assert result.agent_name == "user_agent"
@@ -312,7 +318,8 @@ class TestAfterWorkOptionTarget:
     def test_resolve_group_manager(self) -> None:
         """Test that resolve returns a SpeakerSelectionResult with 'auto' for 'group_manager' option."""
         target = AfterWorkOptionTarget(after_work_option="group_manager")
-        result = target.resolve(None, None)
+        mock_agent = MagicMock(spec=ConversableAgent)
+        result = target.resolve(mock_agent, None)
 
         assert isinstance(result, SpeakerSelectionResult)
         assert result.speaker_selection_method == "auto"
@@ -324,9 +331,10 @@ class TestAfterWorkOptionTarget:
         # Set an invalid option via a private attribute to bypass any validation in the constructor
         target = AfterWorkOptionTarget(after_work_option="terminate")
         target.after_work_option = "unknown_option"  # type: ignore
+        mock_agent = MagicMock(spec=ConversableAgent)
 
         with pytest.raises(ValueError) as excinfo:
-            target.resolve(None, None)
+            target.resolve(mock_agent, None)
         assert "Unknown after work option: unknown_option" in str(excinfo.value)
 
     def test_display_name(self) -> None:

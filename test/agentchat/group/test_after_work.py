@@ -26,8 +26,9 @@ class TestAfterWorkSelectionMessage:
     def test_base_message_get_message(self) -> None:
         """Test that the base AfterWorkSelectionMessage class raises NotImplementedError when get_message is called."""
         message = AfterWorkSelectionMessage()
+        mock_agent = MagicMock(spec=ConversableAgent)
         with pytest.raises(NotImplementedError) as excinfo:
-            message.get_message(None)
+            message.get_message(mock_agent)
         assert "Requires subclasses to implement" in str(excinfo.value)
 
 
@@ -42,7 +43,8 @@ class TestAfterWorkSelectionMessageString:
         """Test that get_message returns the template string."""
         template = "This is a test template"
         message = AfterWorkSelectionMessageString(message=template)
-        result = message.get_message(None)
+        mock_agent = MagicMock(spec=ConversableAgent)
+        result = message.get_message(mock_agent)
         assert result == template
 
 
@@ -97,7 +99,7 @@ class TestAfterWork:
         assert after_work.selection_message == message
 
     @patch("autogen.agentchat.group.after_work.ContextStr")
-    def test_with_integrated_components(self, mock_context_str) -> None:
+    def test_with_integrated_components(self, mock_context_str: MagicMock) -> None:
         """Test AfterWork with integrated components."""
         # Configure mock
         mock_context_str_instance = MagicMock()
@@ -116,6 +118,7 @@ class TestAfterWork:
         mock_agent.context_variables = ContextVariables(data={"name": "Test Agent"})
 
         # Test get_message
+        assert after_work.selection_message is not None
         message_result = after_work.selection_message.get_message(mock_agent)
         mock_context_str_instance.format.assert_called_once_with(mock_agent.context_variables)
         assert message_result == "Hello, Test Agent!"
