@@ -43,7 +43,7 @@ class TestGroupToolExecutor:
         """Test setting, getting, checking and clearing the next target."""
         # Initially, there should be no next target
         with pytest.raises(ValueError):
-            assert executor.get_next_target() is None # Raises an error if we try to get it without one
+            assert executor.get_next_target() is None  # Raises an error if we try to get it without one
 
         assert not executor.has_next_target()
 

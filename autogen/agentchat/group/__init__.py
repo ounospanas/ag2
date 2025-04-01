@@ -15,6 +15,7 @@ from .context_condition import ExpressionContextCondition, StringContextConditio
 from .context_expression import ContextExpression
 from .context_str import ContextStr
 from .context_variables import ContextVariables
+from .group_chat_target import GroupChatConfig, GroupChatTarget
 from .handoffs import Handoffs
 from .llm_condition import ContextStrLLMCondition, StringLLMCondition
 
@@ -44,6 +45,8 @@ __all__ = [
     "ContextVariables",
     "ExpressionAvailableCondition",
     "ExpressionContextCondition",
+    "GroupChatConfig",
+    "GroupChatTarget",
     "Handoffs",
     "NestedChatTarget",
     "OnCondition",

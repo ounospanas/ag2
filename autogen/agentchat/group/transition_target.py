@@ -173,7 +173,7 @@ class NestedChatTarget(TransitionTarget):
         from ..conversable_agent import ConversableAgent  # to avoid circular import - NEED SOLUTION
         from .after_work import AfterWork
 
-        nested_chat_agent = ConversableAgent(name=f"{__AGENT_WRAPPER_PREFIX__}_nested_{parent_agent.name}_{index + 1}")
+        nested_chat_agent = ConversableAgent(name=f"{__AGENT_WRAPPER_PREFIX__}nested_{parent_agent.name}_{index + 1}")
 
         nested_chat_agent.register_nested_chats(
             self.nested_chat_config["chat_queue"],

@@ -261,7 +261,7 @@ class TestNestedChatTarget:
         index = 2
         result = target.create_wrapper_agent(parent_agent, index)
 
-        assert result.name == f"{__AGENT_WRAPPER_PREFIX__}_nested_{parent_agent.name}_{index + 1}"
+        assert result.name == f"{__AGENT_WRAPPER_PREFIX__}nested_{parent_agent.name}_{index + 1}"
 
 
 class TestAfterWorkOptionTarget:
