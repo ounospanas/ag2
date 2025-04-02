@@ -31,7 +31,9 @@ class GroupChatConfig(BaseModel):
     context_variables: Optional["ContextVariables"] = None
     after_work: Optional["AfterWork"] = None
     exclude_transit_message: bool = True
-    summary_method: Optional[Union[str, Callable[..., Any]]] = DEFAULT_SUMMARY_METHOD # Supporting Callable for legacy reasons
+    summary_method: Optional[Union[str, Callable[..., Any]]] = (
+        DEFAULT_SUMMARY_METHOD  # Supporting Callable for legacy reasons
+    )
 
     # Pydantic needs to know how to handle agents (non-serializable fields)
     class Config:
