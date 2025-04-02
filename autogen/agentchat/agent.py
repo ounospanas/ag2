@@ -10,6 +10,8 @@ from ..doc_utils import export_module
 
 __all__ = ["Agent", "LLMAgent"]
 
+DEFAULT_SUMMARY_METHOD = "last_msg"
+
 
 @runtime_checkable
 @export_module("autogen")

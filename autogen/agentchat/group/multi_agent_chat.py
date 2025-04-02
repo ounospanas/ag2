@@ -8,7 +8,7 @@ from types import MethodType
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 from ...doc_utils import export_module
-from ..agent import Agent
+from ..agent import DEFAULT_SUMMARY_METHOD, Agent
 from ..chat import ChatResult
 from ..groupchat import SELECT_SPEAKER_PROMPT_TEMPLATE, GroupChat, GroupChatManager
 from ..user_proxy_agent import UserProxyAgent
@@ -25,6 +25,9 @@ from .transition_target import (
     AgentTarget,
     TransitionTarget,
 )
+from .patterns.pattern import PatternProtocol
+from .patterns.auto import AutoPattern
+from .group_chat_utils import _wrap_agent_handoff_targets, _establish_group_agent, _setup_context_variables, _create_on_condition_handoff_functions, _get_last_agent_speaker
 
 if TYPE_CHECKING:
     from ..conversable_agent import ConversableAgent
@@ -33,53 +36,6 @@ __all__ = [
     "a_initiate_group_chat",
     "initiate_group_chat",
 ]
-
-
-def _update_conditional_functions(agent: "ConversableAgent", messages: list[dict[str, Any]]) -> None:
-    """Updates the agent's functions based on the OnCondition's available condition.
-
-    All functions are removed and then added back if they are available
-    """
-    for on_condition in agent.handoffs.llm_conditions:
-        is_available = on_condition.available.is_available(agent, messages) if on_condition.available else True
-
-        # Remove it from their tools
-        for tool in agent.tools:
-            if tool.name == on_condition.llm_function_name:
-                agent.remove_tool_for_llm(tool)
-                break
-
-        # then add the function if it is available, so that the function signature is updated
-        if is_available:
-            agent._add_single_function(
-                _create_on_condition_handoff_function(on_condition.target),
-                on_condition.llm_function_name,
-                on_condition.condition.get_prompt(agent, messages),
-            )
-
-
-def _establish_group_agent(agent: "ConversableAgent") -> None:
-    """Establish the group agent with the group-related attributes and hooks. Not for the tool executor.
-
-    Args:
-        agent ("ConversableAgent"): The agent to establish as a group agent.
-    """
-
-    def _group_agent_str(self: "ConversableAgent") -> str:
-        """Customise the __str__ method to show the agent name for transition messages."""
-        return f"Group agent --> {self.name}"
-
-    # Register the hook to update agent state (except tool executor)
-    agent.register_hook("update_agent_state", _update_conditional_functions)
-
-    # Register a reply function to run Python function-based OnContextConditions before any other reply function
-    agent.register_reply(trigger=([Agent, None]), reply_func=_run_oncontextconditions, position=0)
-
-    agent._get_display_name = MethodType(_group_agent_str, agent)  # type: ignore[method-assign]
-
-    # Mark this agent as established as a group agent
-    agent._group_is_established = True  # type: ignore[attr-defined]
-
 
 def _link_agents_to_group_manager(agents: list[Agent], group_chat_manager: Agent) -> None:
     """Link all agents to the GroupChatManager so they can access the underlying GroupChat and other agents.
@@ -90,69 +46,6 @@ def _link_agents_to_group_manager(agents: list[Agent], group_chat_manager: Agent
     """
     for agent in agents:
         agent._group_manager = group_chat_manager  # type: ignore[attr-defined]
-
-
-def _run_oncontextconditions(
-    agent: "ConversableAgent",
-    messages: Optional[list[dict[str, Any]]] = None,
-    sender: Optional[Agent] = None,
-    config: Optional[Any] = None,
-) -> tuple[bool, Optional[Union[str, dict[str, Any]]]]:
-    """Run OnContextConditions for an agent before any other reply function."""
-    for on_condition in agent.handoffs.context_conditions:  # type: ignore[attr-defined]
-        is_available = (
-            on_condition.available.is_available(agent, messages if messages else []) if on_condition.available else True
-        )
-
-        if is_available and on_condition.condition.evaluate(agent.context_variables):
-            # Condition has been met, we'll set the Tool Executor's next target
-            # attribute and that will be picked up on the next iteration when
-            # _determine_next_agent is called
-            for agent in agent._group_manager.groupchat.agents:  # type: ignore[attr-defined]
-                if isinstance(agent, GroupToolExecutor):
-                    agent.set_next_target(on_condition.target)
-                    break
-
-            transfer_name = on_condition.target.display_name()
-
-            return True, "[Handing off to " + transfer_name + "]"
-
-    return False, None
-
-
-def _create_on_condition_handoff_function(target: TransitionTarget) -> Callable[[], TransitionTarget]:
-    """Creates a function that will be used by the tool call reply function when the condition is met.
-
-    Args:
-        target (TransitionTarget): The target to transfer to.
-
-    Returns:
-        Callable: The transfer function.
-    """
-
-    def transfer_to_target() -> TransitionTarget:
-        return target
-
-    return transfer_to_target
-
-
-def _create_on_condition_handoff_functions(agent: "ConversableAgent") -> None:
-    """Creates the functions for the OnConditions so that the current tool handling works.
-
-    Args:
-        agent ("ConversableAgent"): The agent to create the functions for.
-    """
-    # Populate the function names for the handoffs
-    agent.handoffs.set_llm_function_names()
-
-    # Create a function for each OnCondition
-    for on_condition in agent.handoffs.llm_conditions:
-        # Create a function that will be called when the condition is met
-        agent._add_single_function(
-            _create_on_condition_handoff_function(on_condition.target),
-            on_condition.llm_function_name,
-            on_condition.condition.get_prompt(agent, []),
-        )
 
 
 def _ensure_handoff_agents_in_group(agents: list["ConversableAgent"]) -> None:
@@ -200,14 +93,12 @@ def _prepare_exclude_transit_messages(agents: list["ConversableAgent"]) -> None:
 def _prepare_group_agents(
     agents: list["ConversableAgent"],
     context_variables: ContextVariables,
-    exclude_transit_message: bool = True,
-) -> tuple[GroupToolExecutor, list["ConversableAgent"]]:
+) -> list["ConversableAgent"]:
     """Validates agents, create the tool executor, wrap necessary targets in agents.
 
     Args:
         agents (list["ConversableAgent"]): List of all agents in the conversation.
         context_variables (ContextVariables): Context variables to assign to all agents.
-        exclude_transit_message (bool): Whether to exclude transit messages from the agents.
 
     Returns:
         "ConversableAgent": The tool executor agent.
@@ -221,9 +112,6 @@ def _prepare_group_agents(
     # Ensure all agents in hand-off after-works are in the passed in agents list
     _ensure_handoff_agents_in_group(agents)
 
-    # Create Tool Executor for the group
-    tool_execution = GroupToolExecutor()
-
     # Wrap handoff targets in agents that need to be wrapped
     wrapped_chat_agents: list["ConversableAgent"] = []
     for agent in agents:
@@ -233,46 +121,7 @@ def _prepare_group_agents(
     for agent in agents:
         _create_on_condition_handoff_functions(agent)
 
-    # Register all the agents' functions with the tool executor and
-    # use dependency injection for the context variables parameter
-    # Update tool execution agent with all the functions from all the agents
-    tool_execution.register_agents_functions(agents + wrapped_chat_agents, context_variables)
-
-    if exclude_transit_message:
-        _prepare_exclude_transit_messages(agents)
-
-    return tool_execution, wrapped_chat_agents
-
-
-def _wrap_agent_handoff_targets(agent: "ConversableAgent", wrapped_agent_list: list["ConversableAgent"]) -> None:
-    """Wrap handoff targets in agents that need to be wrapped to be part of the group chat.
-
-    Example is NestedChatTarget.
-
-    Args:
-        agent ("ConversableAgent"): The agent to wrap the handoff targets for.
-        wrapped_agent_list (list["ConversableAgent"]): List of wrapped chat agents that will be appended to.
-    """
-    # Wrap OnCondition targets
-    for i, handoff_oncondition_requiring_wrapping in enumerate(agent.handoffs.get_llm_conditions_requiring_wrapping()):
-        # Create wrapper agent
-        wrapper_agent = handoff_oncondition_requiring_wrapping.target.create_wrapper_agent(parent_agent=agent, index=i)
-        wrapped_agent_list.append(wrapper_agent)
-
-        # Change this handoff target to point to the newly created agent
-        handoff_oncondition_requiring_wrapping.target = AgentTarget(wrapper_agent)
-
-    for i, handoff_oncontextcondition_requiring_wrapping in enumerate(
-        agent.handoffs.get_context_conditions_requiring_wrapping()
-    ):
-        # Create wrapper agent
-        wrapper_agent = handoff_oncontextcondition_requiring_wrapping.target.create_wrapper_agent(
-            parent_agent=agent, index=i
-        )
-        wrapped_agent_list.append(wrapper_agent)
-
-        # Change this handoff target to point to the newly created agent
-        handoff_oncontextcondition_requiring_wrapping.target = AgentTarget(wrapper_agent)
+    return wrapped_chat_agents
 
 
 def _process_initial_messages(
@@ -324,24 +173,6 @@ def _process_initial_messages(
     return messages, last_agent, group_agent_names, temp_user_list
 
 
-def _setup_context_variables(
-    tool_execution: "ConversableAgent",
-    agents: list["ConversableAgent"],
-    manager: GroupChatManager,
-    context_variables: ContextVariables,
-) -> None:
-    """Assign a common context_variables reference to all agents in the group, including the tool executor and group chat manager.
-
-    Args:
-        tool_execution: The tool execution agent.
-        agents: List of all agents in the conversation.
-        manager: GroupChatManager instance.
-        context_variables: Context variables to assign to all agents.
-    """
-    for agent in agents + [tool_execution] + [manager]:
-        agent.context_variables = context_variables
-
-
 def _cleanup_temp_user_messages(chat_result: ChatResult) -> None:
     """Remove temporary user proxy agent name from messages before returning.
 
@@ -389,21 +220,7 @@ def _prepare_groupchat_auto_speaker(
     )
 
 
-def _get_last_agent_speaker(
-    groupchat: GroupChat, group_agent_names: list[str], tool_executor: GroupToolExecutor
-) -> Agent:
-    """Get the last group agent from the group chat messages. Not including the tool executor."""
-    last_group_speaker = None
-    for message in reversed(groupchat.messages):
-        if "name" in message and message["name"] in group_agent_names and message["name"] != tool_executor.name:
-            agent = groupchat.agent_by_name(name=message["name"])
-            if agent:
-                last_group_speaker = agent
-                break
-    if last_group_speaker is None:
-        raise ValueError("No group agent found in the message history")
 
-    return last_group_speaker
 
 
 def _determine_next_agent(
@@ -615,15 +432,16 @@ def make_remove_function(tool_msgs_to_remove: list[str]) -> Callable[[list[dict[
 
 @export_module("autogen")
 def initiate_group_chat(
-    initial_agent: "ConversableAgent",
+    # initial_agent: "ConversableAgent",
     messages: Union[list[dict[str, Any]], str],
-    agents: list["ConversableAgent"],
-    user_agent: Optional[UserProxyAgent] = None,
+    pattern: PatternProtocol,
+    # agents: list["ConversableAgent"],
+    # user_agent: Optional[UserProxyAgent] = None,
     group_manager_args: Optional[dict[str, Any]] = None,
     max_rounds: int = 20,
-    context_variables: Optional[ContextVariables] = None,
-    after_work: Optional[AfterWork] = None,
+    # context_variables: Optional[ContextVariables] = None,
     exclude_transit_message: bool = True,
+    summary_method: Optional[Union[str, Callable[..., Any]]] = DEFAULT_SUMMARY_METHOD,
 ) -> tuple[ChatResult, ContextVariables, "ConversableAgent"]:
     """Initialize and run a group chat
 
@@ -639,28 +457,73 @@ def initiate_group_chat(
             Must be a AfterWork instance.
         exclude_transit_message:  all registered handoff function call and responses messages will be removed from message list before calling an LLM.
             Note: only with transition functions added with `register_handoff` will be removed. If you pass in a function to manage workflow, it will not be removed. You may register a cumstomized hook to `process_all_messages_before_reply` to remove that.
+        pattern: Optional pattern to use for agent orchestration. If not specified, the auto pattern will be used
+        summary_method (str or callable): a method to get a summary from the chat. Default is DEFAULT_SUMMARY_METHOD, i.e., "last_msg".
+                Supported strings are "last_msg" and "reflection_with_llm":
+                    - when set to "last_msg", it returns the last message of the dialog as the summary.
+                    - when set to "reflection_with_llm", it returns a summary extracted using an llm client.
+                        `llm_config` must be set in either the recipient or sender.
+                A callable summary_method should take the recipient and sender agent in a chat as input and return a string of summary. E.g.,
+                ```python
+                def my_summary_method(
+                    sender: ConversableAgent,
+                    recipient: ConversableAgent,
+                    summary_args: dict,
+                ):
+                    return recipient.last_message(sender)["content"]
+                ```
     Returns:
         ChatResult:         Conversations chat history.
         ContextVariables:   Updated Context variables.
         "ConversableAgent":   Last speaker.
     """
-    if context_variables and not isinstance(context_variables, ContextVariables):
-        raise ValueError(
-            "context_variables must be a ContextVariables instance. Use `my_context = ContextVariables(data={'key': 'value'})` to create one."
-        )
+    # context_variables = context_variables or ContextVariables()
 
-    context_variables = context_variables or ContextVariables()
+    agents, wrapped_agents, user_agent, context_variables, initial_agent, group_after_work = pattern.prepare_group_chat(agents=agents, user_agent=user_agent, context_variables=context_variables, groupchat=None)
 
     # Default to terminate
+    '''
     group_after_work = (
         after_work if after_work is not None else AfterWork(target=AfterWorkOptionTarget(after_work_option="terminate"))
     )
+    '''
 
-    tool_execution, wrapped_agents = _prepare_group_agents(agents, context_variables, exclude_transit_message)
+    # wrapped_agents = _prepare_group_agents(agents, context_variables, exclude_transit_message)
+
+    # Initialise all agents as group agents
+    '''
+    for agent in agents:
+        if not hasattr(agent, "_group_is_established"):
+            _establish_group_agent(agent)
+
+    # Ensure all agents in hand-off after-works are in the passed in agents list
+    _ensure_handoff_agents_in_group(agents)
+
+    # Wrap handoff targets in agents that need to be wrapped
+    wrapped_chat_agents: list["ConversableAgent"] = []
+    for agent in agents:
+        _wrap_agent_handoff_targets(agent, wrapped_chat_agents)
+
+    # Create the functions for the OnConditions so that the current tool handling works
+    for agent in agents:
+        _create_on_condition_handoff_functions(agent)
+    '''
+    
+    if exclude_transit_message:
+        _prepare_exclude_transit_messages(agents)
 
     processed_messages, last_agent, group_agent_names, temp_user_list = _process_initial_messages(
         messages, user_agent, agents, wrapped_agents
     )
+
+
+    # Create Tool Executor for the group
+    tool_execution = GroupToolExecutor()
+
+    # Register all the agents' functions with the tool executor and
+    # use dependency injection for the context variables parameter
+    # Update tool execution agent with all the functions from all the agents
+    tool_execution.register_agents_functions(agents + wrapped_agents, context_variables)
 
     # Create transition function (has enclosed state for initial agent)
     group_transition = create_group_transition(
@@ -700,6 +563,7 @@ def initiate_group_chat(
         manager,
         message=last_message,
         clear_history=clear_history,
+        summary_method=summary_method,
     )
 
     _cleanup_temp_user_messages(chat_result)
@@ -718,6 +582,7 @@ async def a_initiate_group_chat(
     context_variables: Optional[ContextVariables] = None,
     after_work: Optional[AfterWork] = None,
     exclude_transit_message: bool = True,
+    summary_method: Optional[Union[str, Callable[..., Any]]] = DEFAULT_SUMMARY_METHOD,
 ) -> tuple[ChatResult, ContextVariables, "ConversableAgent"]:
     """Initialize and run a group chat
 
@@ -733,6 +598,20 @@ async def a_initiate_group_chat(
             Must be a AfterWork instance.
         exclude_transit_message:  all registered handoff function call and responses messages will be removed from message list before calling an LLM.
             Note: only with transition functions added with `register_handoff` will be removed. If you pass in a function to manage workflow, it will not be removed. You may register a cumstomized hook to `process_all_messages_before_reply` to remove that.
+        summary_method (str or callable): a method to get a summary from the chat. Default is DEFAULT_SUMMARY_METHOD, i.e., "last_msg".
+                Supported strings are "last_msg" and "reflection_with_llm":
+                    - when set to "last_msg", it returns the last message of the dialog as the summary.
+                    - when set to "reflection_with_llm", it returns a summary extracted using an llm client.
+                        `llm_config` must be set in either the recipient or sender.
+                A callable summary_method should take the recipient and sender agent in a chat as input and return a string of summary. E.g.,
+                ```python
+                def my_summary_method(
+                    sender: ConversableAgent,
+                    recipient: ConversableAgent,
+                    summary_args: dict,
+                ):
+                    return recipient.last_message(sender)["content"]
+                ```
     Returns:
         ChatResult:         Conversations chat history.
         ContextVariables:   Updated Context variables.

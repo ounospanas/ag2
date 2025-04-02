@@ -2,15 +2,15 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 from pydantic import BaseModel
 
+from ..agent import DEFAULT_SUMMARY_METHOD, Agent
 from .speaker_selection_result import SpeakerSelectionResult
 from .transition_target import __AGENT_WRAPPER_PREFIX__, AgentTarget, TransitionTarget
 
 if TYPE_CHECKING:
-    from ..agent import Agent
     from ..conversable_agent import ConversableAgent
     from .after_work import AfterWork
     from .context_variables import ContextVariables
@@ -31,6 +31,7 @@ class GroupChatConfig(BaseModel):
     context_variables: Optional["ContextVariables"] = None
     after_work: Optional["AfterWork"] = None
     exclude_transit_message: bool = True
+    summary_method: Optional[Union[str, Callable[..., Any]]] = DEFAULT_SUMMARY_METHOD # Supporting Callable for legacy reasons
 
     # Pydantic needs to know how to handle agents (non-serializable fields)
     class Config:
@@ -124,6 +125,7 @@ class GroupChatTarget(TransitionTarget):
                     context_variables=group_config.context_variables,
                     after_work=group_config.after_work,
                     exclude_transit_message=group_config.exclude_transit_message,
+                    summary_method=group_config.summary_method,
                 )
 
                 # Return the summary from the chat result summary

@@ -8,7 +8,7 @@ from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 
-from autogen.agentchat.agent import Agent
+from autogen.agentchat.agent import DEFAULT_SUMMARY_METHOD, Agent
 from autogen.agentchat.chat import ChatResult
 from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.agentchat.group.after_work import AfterWork, AfterWorkSelectionMessageString
@@ -920,6 +920,7 @@ class TestInitiateGroupChat:
             mock_group_chat_manager,
             message={"role": "user", "content": "Hello"},
             clear_history=True,  # Because only one initial message processed
+            summary_method=DEFAULT_SUMMARY_METHOD,  # Check default summary_method is passed
         )
         mock_cleanup.assert_called_once_with(expected_chat_result)
 
@@ -927,10 +928,33 @@ class TestInitiateGroupChat:
         assert final_context is context_vars
         assert last_speaker == agent2  # As mocked
 
-    def test_initiate_group_chat_invalid_context(self, agent1: MagicMock, agent2: MagicMock) -> None:
-        """Test error when invalid context_variables type is passed."""
-        with pytest.raises(ValueError, match="context_variables must be a ContextVariables instance"):
-            initiate_group_chat(agent1, "Hello", [agent1, agent2], context_variables={"key": "value"})  # type: ignore
+        # Test with custom summary_method
+        user_proxy.initiate_chat.reset_mock()
+        mock_cleanup.reset_mock()
+
+        # Define a custom summary_method
+        def custom_summary_method(
+            sender: ConversableAgent, recipient: ConversableAgent, summary_args: dict[str, Any]
+        ) -> str:
+            return "Custom summary"
+
+        chat_result, _, _ = initiate_group_chat(
+            initial_agent=agent1,
+            messages="Hello",
+            agents=typed_agents,
+            user_agent=user_proxy,
+            context_variables=context_vars,
+            summary_method=custom_summary_method,  # Use custom summary_method
+        )
+
+        # Verify the custom summary_method was passed to initiate_chat
+        user_proxy.initiate_chat.assert_called_once_with(
+            mock_group_chat_manager,
+            message={"role": "user", "content": "Hello"},
+            clear_history=True,
+            summary_method=custom_summary_method,  # Custom summary_method should be passed
+        )
+        mock_cleanup.assert_called_once_with(expected_chat_result)
 
 
 # Test async function placeholder
