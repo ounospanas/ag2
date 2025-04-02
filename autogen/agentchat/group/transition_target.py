@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import random
 from typing import TYPE_CHECKING, Any, Literal, Optional
 
 from pydantic import BaseModel
@@ -18,7 +19,12 @@ __all__ = ["AfterWorkOptionTarget", "AgentNameTarget", "AgentTarget", "NestedCha
 __AGENT_WRAPPER_PREFIX__ = "wrapped_"
 
 # Common options for transitions
-TransitionOption = Literal["terminate", "revert_to_user", "stay", "group_manager"]
+# terminate: Terminate the conversation
+# revert_to_user: Revert to the user agent
+# stay: Stay with the current agent
+# group_manager: Use the group manager (auto speaker selection)
+# ask_user: Use the user manager (ask the user, aka manual)
+TransitionOption = Literal["terminate", "revert_to_user", "stay", "group_manager", "ask_user"]
 
 
 class TransitionTarget(BaseModel):
@@ -194,6 +200,9 @@ class NestedChatTarget(TransitionTarget):
 class AfterWorkOptionTarget(TransitionTarget):
     """Target that represents an AfterWorkOption."""
 
+    # NOTE: LOOKING TO BREAK THIS DOWN INTO SEPARATE TARGET CLASSES, E.g. TerminateTarget, RevertToUserTarget, StayTarget, GroupManagerTarget, AskUserTarget
+    # GroupManagerTarget will take the AfterWork's selection_message as a parameter and AfterWork will disappear
+
     after_work_option: TransitionOption
 
     def can_resolve_for_speaker_selection(self) -> bool:
@@ -216,6 +225,8 @@ class AfterWorkOptionTarget(TransitionTarget):
             return SpeakerSelectionResult(agent_name=user_agent.name)
         elif self.after_work_option == "group_manager":
             return SpeakerSelectionResult(speaker_selection_method="auto")
+        elif self.after_work_option == "ask_user":
+            return SpeakerSelectionResult(speaker_selection_method="manual")
         else:
             raise ValueError(f"Unknown after work option: {self.after_work_option}")
 
@@ -238,6 +249,52 @@ class AfterWorkOptionTarget(TransitionTarget):
     def create_wrapper_agent(self, parent_agent: "ConversableAgent", index: int) -> "ConversableAgent":
         """Create a wrapper agent for the target if needed."""
         raise NotImplementedError("AfterWorkOptionTarget does not require wrapping in an agent.")
+
+
+class RandomAgentTarget(TransitionTarget):
+    """Target that represents a random selection from a list of agents."""
+
+    agent_names: list[str]
+    nominated_name: str = "<Not Randomly Selected Yet>"
+
+    def __init__(self, agents: list["ConversableAgent"], **data: Any) -> None:  # type: ignore[no-untyped-def]
+        # Store the name from the agent for serialization
+        super().__init__(agent_names=[agent.name for agent in agents], **data)
+
+    def can_resolve_for_speaker_selection(self) -> bool:
+        """Check if the target can resolve for speaker selection."""
+        return True
+
+    def resolve(
+        self,
+        current_agent: "ConversableAgent",
+        user_agent: Optional["ConversableAgent"],
+    ) -> SpeakerSelectionResult:
+        """Resolve to the actual agent object from the groupchat, choosing a random agent (except the current one)"""
+        # Randomly select the next agent
+        self.nominated_name = random.choice([name for name in self.agent_names if name != current_agent.name])
+
+        return SpeakerSelectionResult(agent_name=self.nominated_name)
+
+    def display_name(self) -> str:
+        """Get the display name for the target."""
+        return self.nominated_name
+
+    def normalized_name(self) -> str:
+        """Get a normalized name for the target that has no spaces, used for function calling"""
+        return self.display_name()
+
+    def __str__(self) -> str:
+        """String representation for RandomAgentTarget, can be shown as a function call message."""
+        return f"Transfer to {self.nominated_name}"
+
+    def needs_agent_wrapper(self) -> bool:
+        """Check if the target needs to be wrapped in an agent."""
+        return False
+
+    def create_wrapper_agent(self, parent_agent: "ConversableAgent", index: int) -> "ConversableAgent":
+        """Create a wrapper agent for the target if needed."""
+        raise NotImplementedError("RandomAgentTarget does not require wrapping in an agent.")
 
 
 # TODO: Consider adding a SequentialChatTarget class

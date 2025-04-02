@@ -13,6 +13,8 @@ if TYPE_CHECKING:
     # Avoid circular import
     from ..conversable_agent import ConversableAgent
 
+# NOTE: THIS WILL BE REMOVED AND REPLACED BY A TRANSITIONTARGET
+
 __all__ = [
     "AfterWork",
     "AfterWorkSelectionMessage",
@@ -70,6 +72,8 @@ class AfterWorkSelectionMessageContextStr(AfterWorkSelectionMessage):
 
 
 # AfterWork
+
+# NOTE: This class will be removed and TransitionTargets will be used instead of AfterWork
 
 
 class AfterWork(BaseModel):

@@ -2,18 +2,17 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 from pydantic import BaseModel
 
-from ..agent import DEFAULT_SUMMARY_METHOD, Agent
+from ..agent import Agent
 from .speaker_selection_result import SpeakerSelectionResult
 from .transition_target import __AGENT_WRAPPER_PREFIX__, AgentTarget, TransitionTarget
 
 if TYPE_CHECKING:
     from ..conversable_agent import ConversableAgent
-    from .after_work import AfterWork
-    from .context_variables import ContextVariables
+    from .patterns.pattern import Pattern
 
 
 class GroupChatConfig(BaseModel):
@@ -21,33 +20,15 @@ class GroupChatConfig(BaseModel):
 
     Note: If context_variables are not passed in, the outer context variables will be passed in"""
 
-    # Store direct references to agent objects
-    initial_agent: "ConversableAgent"
-    # messages: Union[list[dict[str, Any]], str] # We'll take the message from the outer chat
-    agents: list["ConversableAgent"]
-    user_agent: Optional["ConversableAgent"] = None
-    group_manager_args: Optional[dict[str, Any]] = None
+    pattern: "Pattern"
+    messages: Union[list[dict[str, Any]], str]
     max_rounds: int = 20
-    context_variables: Optional["ContextVariables"] = None
-    after_work: Optional["AfterWork"] = None
-    exclude_transit_message: bool = True
-    summary_method: Optional[Union[str, Callable[..., Any]]] = (
-        DEFAULT_SUMMARY_METHOD  # Supporting Callable for legacy reasons
-    )
-
-    # Pydantic needs to know how to handle agents (non-serializable fields)
-    class Config:
-        arbitrary_types_allowed = True
 
 
 class GroupChatTarget(TransitionTarget):
     """Target that represents a group chat."""
 
     group_chat_config: GroupChatConfig
-
-    # Pydantic needs to know how to handle agents (non-serializable fields)
-    class Config:
-        arbitrary_types_allowed = True
 
     def can_resolve_for_speaker_selection(self) -> bool:
         """Check if the target can resolve for speaker selection. For GroupChatTarget the chat must be encapsulated into an agent."""
@@ -118,16 +99,9 @@ class GroupChatTarget(TransitionTarget):
             try:
                 # Run the group chat with direct agent references from the config
                 result, _, _ = initiate_group_chat(
-                    initial_agent=group_config.initial_agent,
+                    pattern=group_config.pattern,
                     messages=message,
-                    agents=group_config.agents,
-                    user_agent=group_config.user_agent,
-                    group_manager_args=group_config.group_manager_args,
                     max_rounds=group_config.max_rounds,
-                    context_variables=group_config.context_variables,
-                    after_work=group_config.after_work,
-                    exclude_transit_message=group_config.exclude_transit_message,
-                    summary_method=group_config.summary_method,
                 )
 
                 # Return the summary from the chat result summary
