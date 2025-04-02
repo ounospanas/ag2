@@ -13,7 +13,7 @@ from ..agent import Agent
 from ..conversable_agent import ConversableAgent
 from .context_variables import __CONTEXT_VARIABLES_PARAM_NAME__, ContextVariables
 from .reply_result import ReplyResult
-from .transition_target import TransitionTarget
+from .targets.transition_target import TransitionTarget
 
 __TOOL_EXECUTOR_NAME__ = "_Group_Tool_Executor"
 

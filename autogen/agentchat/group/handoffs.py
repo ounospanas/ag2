@@ -6,9 +6,9 @@ from typing import Optional, Union, overload
 
 from pydantic import BaseModel, Field
 
-from .after_work import AfterWork
 from .on_condition import OnCondition
 from .on_context_condition import OnContextCondition
+from .targets.transition_target import TransitionTarget
 
 __all__ = ["Handoffs"]
 
@@ -20,7 +20,7 @@ class Handoffs(BaseModel):
     Three types of conditions can be added, each with a different order and time of use:
     1. OnContextConditions (evaluated without an LLM)
     2. OnConditions (evaluated with an LLM)
-    3. AfterWork (if no other transition is triggered)
+    3. After work TransitionTarget (if no other transition is triggered)
 
     Supports method chaining:
     agent.handoffs.add_context_conditions([condition1]) \
@@ -30,7 +30,7 @@ class Handoffs(BaseModel):
 
     context_conditions: list[OnContextCondition] = Field(default_factory=list)
     llm_conditions: list[OnCondition] = Field(default_factory=list)
-    after_work: Optional[AfterWork] = None
+    after_work: Optional[TransitionTarget] = None
 
     def add_context_condition(self, condition: OnContextCondition) -> "Handoffs":
         """
@@ -100,20 +100,20 @@ class Handoffs(BaseModel):
         self.llm_conditions.extend(conditions)
         return self
 
-    def set_after_work(self, after_work: AfterWork) -> "Handoffs":
+    def set_after_work(self, target: TransitionTarget) -> "Handoffs":
         """
-        Set the after work condition (only one allowed).
+        Set the after work target (only one allowed).
 
         Args:
-            after_work: The AfterWork condition to set
+            target: The after work TransitionTarget to set
 
         Returns:
             Self for method chaining
         """
-        if not isinstance(after_work, AfterWork):
-            raise TypeError(f"Expected an AfterWork instance, got {type(after_work).__name__}")
+        if not isinstance(target, TransitionTarget):
+            raise TypeError(f"Expected a TranitionTarget instance, got {type(target).__name__}")
 
-        self.after_work = after_work
+        self.after_work = target
         return self
 
     @overload
@@ -122,18 +122,14 @@ class Handoffs(BaseModel):
     @overload
     def add(self, condition: OnCondition) -> "Handoffs": ...
 
-    @overload
-    def add(self, condition: AfterWork) -> "Handoffs": ...
-
-    def add(self, condition: Union[OnContextCondition, OnCondition, AfterWork]) -> "Handoffs":
+    def add(self, condition: Union[OnContextCondition, OnCondition]) -> "Handoffs":
         """
-        Add a single condition of any supported type.
+        Add a single condition (OnContextCondition or OnCondition).
 
         Args:
-            condition: The condition to add (OnContextCondition, OnCondition, or AfterWork)
+            condition: The condition to add (OnContextCondition or OnCondition)
 
         Raises:
-            ValueError: If an AfterWork is added when one already exists
             TypeError: If the condition type is not supported
 
         Returns:
@@ -145,22 +141,17 @@ class Handoffs(BaseModel):
             return self.add_context_condition(condition)
         elif isinstance(condition, OnCondition):
             return self.add_llm_condition(condition)
-        elif isinstance(condition, AfterWork):
-            if self.after_work is not None:
-                raise ValueError("An AfterWork condition has already been added. Only one is allowed.")
-            return self.set_after_work(condition)
         else:
             raise TypeError(f"Unsupported condition type: {type(condition).__name__}")
 
-    def add_many(self, conditions: list[Union[OnContextCondition, OnCondition, AfterWork]]) -> "Handoffs":
+    def add_many(self, conditions: list[Union[OnContextCondition, OnCondition]]) -> "Handoffs":
         """
-        Add multiple conditions of any supported types.
+        Add multiple conditions of any supported types (OnContextCondition and OnCondition).
 
         Args:
             conditions: List of conditions to add
 
         Raises:
-            ValueError: If multiple AfterWork conditions are provided
             TypeError: If an unsupported condition type is provided
 
         Returns:
@@ -170,17 +161,12 @@ class Handoffs(BaseModel):
         # adding handoffs without worrying about the specific type.
         context_conditions = []
         llm_conditions = []
-        after_work_to_set = None
 
         for condition in conditions:
             if isinstance(condition, OnContextCondition):
                 context_conditions.append(condition)
             elif isinstance(condition, OnCondition):
                 llm_conditions.append(condition)
-            elif isinstance(condition, AfterWork):
-                if self.after_work is not None or after_work_to_set is not None:
-                    raise ValueError("Multiple AfterWork conditions provided. Only one is allowed.")
-                after_work_to_set = condition
             else:
                 raise TypeError(f"Unsupported condition type: {type(condition).__name__}")
 
@@ -188,8 +174,6 @@ class Handoffs(BaseModel):
             self.add_context_conditions(context_conditions)
         if llm_conditions:
             self.add_llm_conditions(llm_conditions)
-        if after_work_to_set:
-            self.set_after_work(after_work_to_set)
 
         return self
 

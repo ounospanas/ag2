@@ -11,7 +11,6 @@ from pydantic import BaseModel, Field
 
 from .... import Agent, ConversableAgent, UpdateSystemMessage
 from ....agentchat.contrib.rag.query_engine import RAGQueryEngine
-from ....agentchat.group.after_work import AfterWork
 from ....agentchat.group.context_condition import ExpressionContextCondition
 from ....agentchat.group.context_expression import ContextExpression
 from ....agentchat.group.context_variables import ContextVariables
@@ -19,8 +18,9 @@ from ....agentchat.group.llm_condition import StringLLMCondition
 from ....agentchat.group.multi_agent_chat import initiate_group_chat
 from ....agentchat.group.on_condition import OnCondition
 from ....agentchat.group.on_context_condition import OnContextCondition
+from ....agentchat.group.patterns.generic import GenericPattern
 from ....agentchat.group.reply_result import ReplyResult
-from ....agentchat.group.transition_target import AfterWorkOptionTarget, AgentNameTarget, AgentTarget
+from ....agentchat.group.targets.transition_target import AgentNameTarget, AgentTarget, StayTarget, TerminateTarget
 from ....doc_utils import export_module
 from ....llm_config import LLMConfig
 from ....oai.client import OpenAIWrapper
@@ -260,7 +260,7 @@ class DocAgent(ConversableAgent):
             functions=[initiate_tasks],
         )
 
-        self._triage_agent.handoffs.set_after_work(AfterWork(target=AgentTarget(agent=self._task_manager_agent)))
+        self._triage_agent.handoffs.set_after_work(target=AgentTarget(agent=self._task_manager_agent))
 
         self._data_ingestion_agent = DoclingDocIngestAgent(
             llm_config=llm_config,
@@ -383,24 +383,18 @@ class DocAgent(ConversableAgent):
                 ),
                 available=SummaryTaskAvailableCondition(),  # Custom AvailableCondition class
             ),
-            AfterWork(target=AfterWorkOptionTarget(after_work_option="stay")),
         ])
+        self._task_manager_agent.handoffs.set_after_work(target=StayTarget())
 
-        self._data_ingestion_agent.handoffs.set_after_work(
-            AfterWork(target=AgentTarget(agent=self._task_manager_agent))
-        )
+        self._data_ingestion_agent.handoffs.set_after_work(target=AgentTarget(agent=self._task_manager_agent))
 
-        self._query_agent.handoffs.set_after_work(AfterWork(target=AgentTarget(agent=self._task_manager_agent)))
+        self._query_agent.handoffs.set_after_work(target=AgentTarget(agent=self._task_manager_agent))
 
         # Summary agent terminates the DocumentAgent
-        self._summary_agent.handoffs.set_after_work(
-            AfterWork(target=AfterWorkOptionTarget(after_work_option="terminate"))
-        )
+        self._summary_agent.handoffs.set_after_work(target=TerminateTarget())
 
-        # The Error Agent always terminates the swarm
-        self._error_agent.handoffs.set_after_work(
-            AfterWork(target=AfterWorkOptionTarget(after_work_option="terminate"))
-        )
+        # The Error Agent always terminates the DocumentAgent
+        self._error_agent.handoffs.set_after_work(target=TerminateTarget())
 
         self.register_reply([Agent, None], DocAgent.generate_inner_swarm_reply)
 
@@ -431,12 +425,17 @@ class DocAgent(ConversableAgent):
             self._summary_agent,
             self._error_agent,
         ]
-        chat_result, context_variables, last_speaker = initiate_group_chat(
+
+        agent_pattern = GenericPattern(
             initial_agent=self._triage_agent,
             agents=swarm_agents,
-            messages=self._get_document_input_message(messages),
             context_variables=context_variables,
-            after_work=AfterWork(target=AfterWorkOptionTarget(after_work_option="terminate")),
+            group_after_work=TerminateTarget(),
+        )
+
+        chat_result, context_variables, last_speaker = initiate_group_chat(
+            pattern=agent_pattern,
+            messages=self._get_document_input_message(messages),
         )
         if last_speaker == self._error_agent:
             # If we finish with the error agent, we return their message which contains the error

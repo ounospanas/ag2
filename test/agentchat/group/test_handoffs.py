@@ -13,7 +13,7 @@ from autogen.agentchat.group.handoffs import Handoffs
 from autogen.agentchat.group.llm_condition import StringLLMCondition
 from autogen.agentchat.group.on_condition import OnCondition
 from autogen.agentchat.group.on_context_condition import OnContextCondition
-from autogen.agentchat.group.transition_target import (
+from autogen.agentchat.group.targets.transition_target import (
     AgentNameTarget,
     AgentTarget,
     NestedChatTarget,

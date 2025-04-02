@@ -11,7 +11,7 @@ from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.agentchat.group.context_variables import ContextVariables
 from autogen.agentchat.group.group_tool_executor import __TOOL_EXECUTOR_NAME__, GroupToolExecutor
 from autogen.agentchat.group.reply_result import ReplyResult
-from autogen.agentchat.group.transition_target import TransitionTarget
+from autogen.agentchat.group.targets.transition_target import TransitionTarget
 from autogen.tools import Tool
 
 

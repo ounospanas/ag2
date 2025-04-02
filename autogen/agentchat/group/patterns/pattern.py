@@ -7,8 +7,6 @@
 
 from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple, Union
 
-from ...groupchat import GroupChat, GroupChatManager
-from ..after_work import AfterWork
 from ..context_variables import ContextVariables
 from ..group_utils import (
     create_group_manager,
@@ -18,11 +16,12 @@ from ..group_utils import (
     process_initial_messages,
     setup_context_variables,
 )
-from ..transition_target import AfterWorkOptionTarget
+from ..targets.transition_target import TerminateTarget, TransitionTarget
 
 if TYPE_CHECKING:
     from ...agent import Agent
     from ...conversable_agent import ConversableAgent
+    from ...groupchat import GroupChat, GroupChatManager
     from ..group_tool_executor import GroupToolExecutor
 
 
@@ -41,7 +40,7 @@ class Pattern:
         user_agent: Optional["ConversableAgent"] = None,
         group_manager_args: Optional[dict[str, Any]] = None,
         context_variables: Optional[ContextVariables] = None,
-        after_work: Optional[AfterWork] = None,
+        group_after_work: Optional[TransitionTarget] = None,
         exclude_transit_message: bool = True,
         summary_method: Optional[Union[str, Callable[..., Any]]] = "last_msg",
     ):
@@ -53,7 +52,7 @@ class Pattern:
             user_agent: Optional user proxy agent.
             group_manager_args: Optional arguments for the GroupChatManager.
             context_variables: Initial context variables for the chat.
-            after_work: Default after work behavior when no specific next agent is determined.
+            group_after_work: Default after work transition behavior when no specific next agent is determined.
             exclude_transit_message: Whether to exclude transit messages from the conversation.
             summary_method: Method for summarizing the conversation.
         """
@@ -62,11 +61,7 @@ class Pattern:
         self.user_agent = user_agent
         self.group_manager_args = group_manager_args or {}
         self.context_variables = context_variables or ContextVariables()
-        self.after_work = (
-            after_work
-            if after_work is not None
-            else AfterWork(target=AfterWorkOptionTarget(after_work_option="terminate"))
-        )
+        self.group_after_work = group_after_work if group_after_work is not None else TerminateTarget()
         self.exclude_transit_message = exclude_transit_message
         self.summary_method = summary_method
 
@@ -80,7 +75,7 @@ class Pattern:
         Optional["ConversableAgent"],
         ContextVariables,
         "ConversableAgent",
-        AfterWork,
+        TransitionTarget,
         "GroupToolExecutor",
         "GroupChat",
         "GroupChatManager",
@@ -105,7 +100,7 @@ class Pattern:
             - User agent, if applicable
             - Context variables for the group chat
             - Initial agent for the group chat
-            - After work for the group chat
+            - Group-level after work transition for the group chat
             - Tool executor for the group chat
             - GroupChat instance
             - GroupChatManager instance
@@ -114,6 +109,8 @@ class Pattern:
             - List of group agent names
             - List of temporary user agents
         """
+        from ...groupchat import GroupChat
+
         # Prepare the agents using the existing helper function
         tool_executor, wrapped_agents = prepare_group_agents(
             self.agents, self.context_variables, self.exclude_transit_message
@@ -131,7 +128,7 @@ class Pattern:
             tool_execution=tool_executor,
             group_agent_names=group_agent_names,
             user_agent=self.user_agent,
-            group_after_work=self.after_work,
+            group_after_work=self.group_after_work,
         )
 
         # Create the group chat - now we use temp_user_list if no user_agent
@@ -160,7 +157,7 @@ class Pattern:
             self.user_agent,
             self.context_variables,
             self.initial_agent,
-            self.after_work,
+            self.group_after_work,
             tool_executor,
             groupchat,
             manager,
@@ -168,4 +165,4 @@ class Pattern:
             last_agent,
             group_agent_names,
             temp_user_list,
-        )
+        )  # type: ignore[return-value]

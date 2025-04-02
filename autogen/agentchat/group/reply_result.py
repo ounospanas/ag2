@@ -11,7 +11,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 from .context_variables import ContextVariables
-from .transition_target import TransitionTarget
+from .targets.transition_target import TransitionTarget
 
 
 class ReplyResult(BaseModel):

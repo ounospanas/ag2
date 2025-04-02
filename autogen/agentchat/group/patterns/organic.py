@@ -4,9 +4,9 @@
 
 from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple, Union
 
-from ..after_work import AfterWork, AfterWorkSelectionMessage
 from ..context_variables import ContextVariables
-from ..transition_target import AfterWorkOptionTarget
+from ..targets.group_manager_target import GroupManagerSelectionMessage, GroupManagerTarget
+from ..targets.transition_target import TransitionTarget
 from .pattern import Pattern
 
 if TYPE_CHECKING:
@@ -30,7 +30,7 @@ class OrganicPattern(Pattern):
         user_agent: Optional["ConversableAgent"] = None,
         group_manager_args: Optional[dict[str, Any]] = None,
         context_variables: Optional[ContextVariables] = None,
-        selection_message: Optional[AfterWorkSelectionMessage] = None,
+        selection_message: Optional[GroupManagerSelectionMessage] = None,
         exclude_transit_message: bool = True,
         summary_method: Optional[Union[str, Callable[..., Any]]] = "last_msg",
     ):
@@ -51,9 +51,7 @@ class OrganicPattern(Pattern):
             summary_method: Method for summarizing the conversation.
         """
         # Create the group_manager after_work with the provided selection message
-        after_work = AfterWork(
-            target=AfterWorkOptionTarget(after_work_option="group_manager"), selection_message=selection_message
-        )
+        group_manager_after_work = GroupManagerTarget(selection_message=selection_message)
 
         super().__init__(
             initial_agent=initial_agent,
@@ -61,7 +59,7 @@ class OrganicPattern(Pattern):
             user_agent=user_agent,
             group_manager_args=group_manager_args,
             context_variables=context_variables,
-            after_work=after_work,
+            group_after_work=group_manager_after_work,
             exclude_transit_message=exclude_transit_message,
             summary_method=summary_method,
         )
@@ -79,7 +77,7 @@ class OrganicPattern(Pattern):
         Optional["ConversableAgent"],
         ContextVariables,
         "ConversableAgent",
-        AfterWork,
+        TransitionTarget,
         "GroupToolExecutor",
         "GroupChat",
         "GroupChatManager",
@@ -141,7 +139,7 @@ class OrganicPattern(Pattern):
         ) = components
 
         # Ensure we're using the group_manager after_work
-        group_after_work = self.after_work
+        group_after_work = self.group_after_work
 
         # Return all components with our group_after_work
         return (

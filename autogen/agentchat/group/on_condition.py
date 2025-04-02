@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from ...doc_utils import export_module
 from .available_condition import AvailableCondition
 from .llm_condition import LLMCondition
-from .transition_target import TransitionTarget
+from .targets.transition_target import TransitionTarget
 
 __all__ = [
     "OnCondition",
@@ -22,7 +22,7 @@ class OnCondition(BaseModel):  # noqa: N801
 
     This is for LLM-based condition evaluation where these conditions are translated into tools and attached to the agent.
 
-    These are evaluated after the OnCondition conditions but before the AfterWork conditions.
+    These are evaluated after the OnCondition conditions but before the after work condition.
 
     Args:
         target (TransitionTarget): The transition (essentially an agent) to hand off to.

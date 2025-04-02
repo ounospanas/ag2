@@ -69,7 +69,6 @@ from .group.handoffs import Handoffs
 from .utils import consolidate_chat_info, gather_usage_summary
 
 if TYPE_CHECKING:
-    from .group.after_work import AfterWork
     from .group.on_condition import OnCondition
     from .group.on_context_condition import OnContextCondition
 
@@ -3537,18 +3536,18 @@ class ConversableAgent(LLMAgent):
                     summary_method=summary_method,
                 )
 
-    def register_handoff(self, condition: Union["OnContextCondition", "OnCondition", "AfterWork"]) -> None:
+    def register_handoff(self, condition: Union["OnContextCondition", "OnCondition"]) -> None:
         """
-        Register a single handoff condition.
+        Register a single handoff condition (OnContextCondition or OnCondition).
 
         Args:
-            condition: The condition to add (OnContextCondition, OnCondition, or AfterWork)
+            condition: The condition to add (OnContextCondition, OnCondition)
         """
         self.handoffs.add(condition)
 
-    def register_handoffs(self, conditions: list[Union["OnContextCondition", "OnCondition", "AfterWork"]]) -> None:
+    def register_handoffs(self, conditions: list[Union["OnContextCondition", "OnCondition"]]) -> None:
         """
-        Register multiple handoff conditions.
+        Register multiple handoff conditions (OnContextCondition or OnCondition).
 
         Args:
             conditions: List of conditions to add

@@ -10,7 +10,7 @@ from .... import ConversableAgent
 from ....agentchat.contrib.rag.query_engine import RAGQueryEngine
 from ....agentchat.group.context_variables import ContextVariables
 from ....agentchat.group.reply_result import ReplyResult
-from ....agentchat.group.transition_target import AgentNameTarget
+from ....agentchat.group.targets.transition_target import AgentNameTarget
 from ....doc_utils import export_module
 from ....llm_config import LLMConfig
 from ..document_agent.parser_utils import docling_parse_docs

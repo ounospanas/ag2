@@ -9,12 +9,10 @@ from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 from ..agent import Agent
 from ..groupchat import GroupChat, GroupChatManager
-from .after_work import AfterWork
 from .context_variables import ContextVariables
 from .group_tool_executor import GroupToolExecutor
-from .transition_target import (
-    __AGENT_WRAPPER_PREFIX__,
-    AfterWorkOptionTarget,
+from .targets.group_manager_target import GroupManagerTarget
+from .targets.transition_target import (
     AgentNameTarget,
     AgentTarget,
     TransitionTarget,
@@ -165,10 +163,10 @@ def ensure_handoff_agents_in_group(agents: list["ConversableAgent"]) -> None:
                 raise ValueError("Agent in OnContextCondition Hand-offs must be in the agents list")
         if (
             agent.handoffs.after_work is not None
-            and isinstance(agent.handoffs.after_work.target, (AgentTarget, AgentNameTarget))
-            and agent.handoffs.after_work.target.agent_name not in agent_names
+            and isinstance(agent.handoffs.after_work, (AgentTarget, AgentNameTarget))
+            and agent.handoffs.after_work.agent_name not in agent_names
         ):
-            raise ValueError("Agent in AfterWork Hand-offs must be in the agents list")
+            raise ValueError("Agent in after work target Hand-offs must be in the agents list")
 
 
 def prepare_exclude_transit_messages(agents: list["ConversableAgent"]) -> None:
@@ -346,43 +344,6 @@ def cleanup_temp_user_messages(chat_result: Any) -> None:
             del message["name"]
 
 
-def prepare_groupchat_auto_speaker(
-    groupchat: GroupChat,
-    last_group_agent: "ConversableAgent",
-    after_work_next_agent_selection_msg: Optional[Any],
-) -> None:
-    """Prepare the group chat for auto speaker selection, includes updating or restore the groupchat speaker selection message.
-
-    Tool Executor and wrapped agents will be removed from the available agents list.
-
-    Args:
-        groupchat (GroupChat): GroupChat instance.
-        last_group_agent ("ConversableAgent"): The last group agent for which the LLM config is used
-        after_work_next_agent_selection_msg (AfterWorkSelectionMessage): Optional message to use for the agent selection (in internal group chat).
-    """
-    from ..groupchat import SELECT_SPEAKER_PROMPT_TEMPLATE
-
-    def substitute_agentlist(template: str) -> str:
-        # Run through group chat's string substitution first for {agentlist}
-        # We need to do this so that the next substitution doesn't fail with agentlist
-        # and we can remove the tool executor and wrapped chats from the available agents list
-        agent_list = [
-            agent
-            for agent in groupchat.agents
-            if not isinstance(agent, GroupToolExecutor) and not agent.name.startswith(__AGENT_WRAPPER_PREFIX__)
-        ]
-
-        groupchat.select_speaker_prompt_template = template
-        return groupchat.select_speaker_prompt(agent_list)
-
-    # Use the default speaker selection prompt if one is not specified, otherwise use the specified one
-    groupchat.select_speaker_prompt_template = substitute_agentlist(
-        SELECT_SPEAKER_PROMPT_TEMPLATE
-        if after_work_next_agent_selection_msg is None
-        else after_work_next_agent_selection_msg.get_message(last_group_agent)
-    )
-
-
 def get_last_agent_speaker(
     groupchat: GroupChat, group_agent_names: list[str], tool_executor: GroupToolExecutor
 ) -> Agent:
@@ -408,7 +369,7 @@ def determine_next_agent(
     tool_executor: GroupToolExecutor,
     group_agent_names: list[str],
     user_agent: Optional["ConversableAgent"],
-    group_after_work: AfterWork,
+    group_after_work: TransitionTarget,
 ) -> Optional[Union[Agent, str]]:
     """Determine the next agent in the conversation.
 
@@ -420,20 +381,20 @@ def determine_next_agent(
         tool_executor ("ConversableAgent"): The tool execution agent.
         group_agent_names (list[str]): List of agent names.
         user_agent (UserProxyAgent): Optional user proxy agent.
-        group_after_work (AfterWork): Group-level Transition option when an agent doesn't select the next agent.
+        group_after_work (TransitionTarget): Group-level Transition option when an agent doesn't select the next agent.
 
     Returns:
         Optional[Union[Agent, str]]: The next agent or speaker selection method.
     """
 
-    # Logic for determining the next target (anything based on Transition Target: an agent, wrapped agent, or AfterWork Option 'terminate'/'stay'/'revert_to_user'/'group_manager')
+    # Logic for determining the next target (anything based on Transition Target: an agent, wrapped agent, TerminateTarget, StayTarget, RevertToUserTarget, GroupManagerTarget, etc.
     # 1. If it's the first response -> initial agent
     # 2. If the last message is a tool call -> tool execution agent
     # 3. If the Tool Executor has determined a next target (e.g. ReplyResult specified target) -> transition to tool reply target
     # 4. If the user last spoke -> return to the previous agent
     # NOW "AFTER WORK":
     # 5. Get the After Work condition (if the agent doesn't have one, get the group-level one)
-    # 6. Resolve and return the After Work condition -> agent / wrapped agent / AfterWork Option 'terminate'/'stay'/'revert_to_user'/'group_manager'
+    # 6. Resolve and return the After Work condition -> agent / wrapped agent / TerminateTarget / StayTarget / RevertToUserTarget / GroupManagerTarget / etc.
 
     # 1. If it's the first response, return the initial agent
     if use_initial_agent:
@@ -449,7 +410,7 @@ def determine_next_agent(
         tool_executor.clear_next_target()
 
         if next_agent.can_resolve_for_speaker_selection():
-            return next_agent.resolve(last_speaker, user_agent).get_speaker_selection_result(groupchat)
+            return next_agent.resolve(groupchat, last_speaker, user_agent).get_speaker_selection_result(groupchat)
         else:
             raise ValueError(
                 "Tool Executor next target must be a valid TransitionTarget that can resolve for speaker selection."
@@ -479,14 +440,11 @@ def determine_next_agent(
     )
 
     # Resolve the next agent, termination, or speaker selection method
-    resolved_speaker_selection_result = after_work_condition.target.resolve(
+    resolved_speaker_selection_result = after_work_condition.resolve(
+        groupchat,
         last_agent_speaker,  # type: ignore[arg-type]
         user_agent,
     ).get_speaker_selection_result(groupchat)
-
-    # If the resolved speaker selection result is "auto", meaning it's a speaker selection method of "auto", we need to prepare the group chat for auto speaker selection
-    if resolved_speaker_selection_result == "auto":
-        prepare_groupchat_auto_speaker(groupchat, last_agent_speaker, after_work_condition.selection_message)  # type: ignore[arg-type]
 
     return resolved_speaker_selection_result
 
@@ -496,7 +454,7 @@ def create_group_transition(
     tool_execution: GroupToolExecutor,
     group_agent_names: list[str],
     user_agent: Optional["ConversableAgent"],
-    group_after_work: AfterWork,
+    group_after_work: TransitionTarget,
 ) -> Callable[["ConversableAgent", GroupChat], Optional[Union[Agent, str]]]:
     """Creates a transition function for group chat with enclosed state for the use_initial_agent.
 
@@ -505,7 +463,7 @@ def create_group_transition(
         tool_execution (GroupToolExecutor): The tool execution agent
         group_agent_names (list[str]): List of all agent names
         user_agent (UserProxyAgent): Optional user proxy agent
-        group_after_work (TransitionOption): Group-level after work
+        group_after_work (TransitionTarget): Group-level after work
 
     Returns:
         Callable[["ConversableAgent", GroupChat], Optional[Union[Agent, str]]]: The transition function
@@ -549,14 +507,16 @@ def create_group_manager(
         raise ValueError("'groupchat' cannot be specified in group_manager_args as it is set by initiate_group_chat")
     manager = GroupChatManager(groupchat, **manager_args)
 
-    # Ensure that our manager has an LLM Config if we have any AfterWorkOptionTarget of "group_manager" after works
+    # Ensure that our manager has an LLM Config if we have any GroupManagerTarget targets used
     if manager.llm_config is False:
         for agent in agents:
-            if agent.handoffs.after_work is not None and agent.handoffs.after_work.target == AfterWorkOptionTarget(
-                after_work_option="group_manager"
+            if (
+                len(agent.handoffs.get_context_conditions_by_target_type(GroupManagerTarget)) > 0
+                or len(agent.handoffs.get_llm_conditions_by_target_type(GroupManagerTarget)) > 0
+                or (agent.handoffs.after_work is not None and isinstance(agent.handoffs.after_work, GroupManagerTarget))
             ):
                 raise ValueError(
-                    "The group manager doesn't have an LLM Config and it is required for AfterWorkOptionTarget('group_manager'). Use the group_manager_args to specify the LLM Config for the group manager."
+                    "The group manager doesn't have an LLM Config and it is required for any targets using GroupManagerTarget. Use the group_manager_args to specify the LLM Config for the group manager."
                 )
 
     return manager

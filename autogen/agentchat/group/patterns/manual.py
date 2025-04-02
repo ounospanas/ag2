@@ -4,10 +4,9 @@
 
 from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple, Union
 
-from ..after_work import AfterWork
 from ..context_variables import ContextVariables
 from ..group_tool_executor import GroupToolExecutor
-from ..transition_target import AfterWorkOptionTarget
+from ..targets.transition_target import AskUserTarget, TransitionTarget
 from .pattern import Pattern
 
 if TYPE_CHECKING:
@@ -42,7 +41,7 @@ class ManualPattern(Pattern):
             summary_method: Method for summarizing the conversation.
         """
         # The group after work will be to ask the user
-        after_work = AfterWork(target=AfterWorkOptionTarget(after_work_option="ask_user"))
+        group_after_work = AskUserTarget()
 
         super().__init__(
             initial_agent=initial_agent,
@@ -50,7 +49,7 @@ class ManualPattern(Pattern):
             user_agent=user_agent,
             group_manager_args=group_manager_args,
             context_variables=context_variables,
-            after_work=after_work,
+            group_after_work=group_after_work,
             exclude_transit_message=exclude_transit_message,
             summary_method=summary_method,
         )
@@ -65,7 +64,7 @@ class ManualPattern(Pattern):
         Optional["ConversableAgent"],
         ContextVariables,
         "ConversableAgent",
-        AfterWork,
+        TransitionTarget,
         "GroupToolExecutor",
         "GroupChat",
         "GroupChatManager",
@@ -111,7 +110,7 @@ class ManualPattern(Pattern):
         ) = components
 
         # Ensure we're using the group_manager after_work
-        group_after_work = self.after_work
+        group_after_work = self.group_after_work
 
         # Set up the allowed speaker transitions to exclude user_agent and GroupToolExecutor
         self._setup_allowed_transitions(groupchat, user_agent, tool_executor)

@@ -40,19 +40,19 @@ def initiate_group_chat(
     # Let the pattern prepare the group chat and all its components
     # Only passing the necessary parameters that aren't already in the pattern
     (
-        agents,
-        wrapped_agents,
-        user_agent,
+        _,  # agents,
+        _,  # wrapped_agents,
+        _,  # user_agent,
         context_variables,
-        initial_agent,
-        group_after_work,
-        tool_execution,
-        groupchat,
+        _,  # initial_agent,
+        _,  # group_after_work,
+        _,  # tool_execution,
+        _,  # groupchat,
         manager,
         processed_messages,
         last_agent,
-        group_agent_names,
-        temp_user_list,
+        _,  # group_agent_names,
+        _,  # temp_user_list,
     ) = pattern.prepare_group_chat(
         max_rounds=max_rounds,
         messages=messages,

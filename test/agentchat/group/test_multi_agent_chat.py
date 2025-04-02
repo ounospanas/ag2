@@ -41,7 +41,7 @@ from autogen.agentchat.group.multi_agent_chat import (
 )
 from autogen.agentchat.group.on_condition import OnCondition
 from autogen.agentchat.group.on_context_condition import OnContextCondition
-from autogen.agentchat.group.transition_target import (
+from autogen.agentchat.group.targets.transition_target import (
     AfterWorkOptionTarget,
     AgentNameTarget,
     AgentTarget,

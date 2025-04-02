@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 from autogen.agentchat.group.context_variables import ContextVariables
 from autogen.agentchat.group.reply_result import ReplyResult
-from autogen.agentchat.group.transition_target import AfterWorkOptionTarget, AgentTarget, TransitionTarget
+from autogen.agentchat.group.targets.transition_target import AfterWorkOptionTarget, AgentTarget, TransitionTarget
 
 
 class TestReplyResult:

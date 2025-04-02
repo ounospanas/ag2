@@ -4,41 +4,40 @@
 #
 __all__: list[str] = []
 
-from .after_work import (
-    AfterWork,
-    AfterWorkSelectionMessage,
-    AfterWorkSelectionMessageContextStr,
-    AfterWorkSelectionMessageString,
-)
 from .available_condition import ExpressionAvailableCondition, StringAvailableCondition
 from .context_condition import ExpressionContextCondition, StringContextCondition
 from .context_expression import ContextExpression
 from .context_str import ContextStr
 from .context_variables import ContextVariables
-from .group_chat_target import GroupChatConfig, GroupChatTarget
 from .handoffs import Handoffs
 from .llm_condition import ContextStrLLMCondition, StringLLMCondition
-
-# from .multi_agent_chat import a_initiate_group_chat, initiate_group_chat
 from .on_condition import OnCondition
 from .on_context_condition import OnContextCondition
 from .reply_result import ReplyResult
 from .speaker_selection_result import SpeakerSelectionResult
-from .transition_target import (
-    AfterWorkOptionTarget,
+from .targets.group_chat_target import GroupChatConfig, GroupChatTarget
+
+"""
+from .targets.group_manager_target import (
+    GroupManagerSelectionMessageContextStr,
+    GroupManagerSelectionMessageString,
+    GroupManagerTarget,
+)
+"""
+from .targets.transition_target import (
     AgentNameTarget,
     AgentTarget,
+    AskUserTarget,
     NestedChatTarget,
+    RevertToUserTarget,
+    StayTarget,
+    TerminateTarget,
 )
 
 __all__ = [
-    "AfterWork",
-    "AfterWorkOptionTarget",
-    "AfterWorkSelectionMessage",
-    "AfterWorkSelectionMessageContextStr",
-    "AfterWorkSelectionMessageString",
     "AgentNameTarget",
     "AgentTarget",
+    "AskUserTarget",
     "ContextExpression",
     "ContextStr",
     "ContextStrLLMCondition",
@@ -47,15 +46,19 @@ __all__ = [
     "ExpressionContextCondition",
     "GroupChatConfig",
     "GroupChatTarget",
+    # "GroupManagerSelectionMessageContextStr",
+    # "GroupManagerSelectionMessageString",
+    # "GroupManagerTarget",
     "Handoffs",
     "NestedChatTarget",
     "OnCondition",
     "OnContextCondition",
     "ReplyResult",
+    "RevertToUserTarget",
     "SpeakerSelectionResult",
+    "StayTarget",
     "StringAvailableCondition",
     "StringContextCondition",
     "StringLLMCondition",
-    # "a_initiate_group_chat",
-    # "initiate_group_chat",
+    "TerminateTarget",
 ]

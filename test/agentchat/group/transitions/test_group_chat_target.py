@@ -9,7 +9,7 @@ import pytest
 
 from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.agentchat.group.context_variables import ContextVariables
-from autogen.agentchat.group.transition_target import (
+from autogen.agentchat.group.targets.transition_target import (
     __AGENT_WRAPPER_PREFIX__,
 )
 from autogen.agentchat.user_proxy_agent import UserProxyAgent

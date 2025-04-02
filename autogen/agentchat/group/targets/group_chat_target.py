@@ -6,13 +6,15 @@ from typing import TYPE_CHECKING, Any, Optional, Union
 
 from pydantic import BaseModel
 
-from ..agent import Agent
-from .speaker_selection_result import SpeakerSelectionResult
-from .transition_target import __AGENT_WRAPPER_PREFIX__, AgentTarget, TransitionTarget
+from ...agent import Agent
+from ..speaker_selection_result import SpeakerSelectionResult
+from .transition_target import AgentTarget, TransitionTarget
+from .transition_utils import __AGENT_WRAPPER_PREFIX__
 
 if TYPE_CHECKING:
-    from ..conversable_agent import ConversableAgent
-    from .patterns.pattern import Pattern
+    from ...conversable_agent import ConversableAgent
+    from ...groupchat import GroupChat
+    from ..patterns.pattern import Pattern
 
 
 class GroupChatConfig(BaseModel):
@@ -36,6 +38,7 @@ class GroupChatTarget(TransitionTarget):
 
     def resolve(
         self,
+        groupchat: "GroupChat",
         current_agent: "ConversableAgent",
         user_agent: Optional["ConversableAgent"],
     ) -> SpeakerSelectionResult:
@@ -64,8 +67,7 @@ class GroupChatTarget(TransitionTarget):
         """Create a wrapper agent for the group chat."""
         from autogen.agentchat import initiate_group_chat
 
-        from ..conversable_agent import ConversableAgent  # to avoid circular import
-        from .after_work import AfterWork
+        from ...conversable_agent import ConversableAgent  # to avoid circular import
 
         # Create the wrapper agent with a name that identifies it as a wrapped group chat
         group_chat_agent = ConversableAgent(
@@ -119,6 +121,6 @@ class GroupChatTarget(TransitionTarget):
         )
 
         # After the group chat completes, transition back to the parent agent
-        group_chat_agent.handoffs.set_after_work(AfterWork(target=AgentTarget(parent_agent)))
+        group_chat_agent.handoffs.set_after_work(AgentTarget(parent_agent))
 
         return group_chat_agent

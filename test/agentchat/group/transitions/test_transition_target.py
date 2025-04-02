@@ -9,7 +9,7 @@ import pytest
 from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.agentchat.group.handoffs import Handoffs
 from autogen.agentchat.group.speaker_selection_result import SpeakerSelectionResult
-from autogen.agentchat.group.transition_target import (
+from autogen.agentchat.group.targets.transition_target import (
     __AGENT_WRAPPER_PREFIX__,
     AfterWorkOptionTarget,
     AgentNameTarget,

@@ -4,8 +4,8 @@
 
 from typing import TYPE_CHECKING, Any, Optional, Tuple, Union
 
-from ..after_work import AfterWork
 from ..context_variables import ContextVariables
+from ..targets.transition_target import TransitionTarget
 from .pattern import Pattern
 
 if TYPE_CHECKING:
@@ -27,7 +27,7 @@ class GenericPattern(Pattern):
         Optional["ConversableAgent"],
         ContextVariables,
         "ConversableAgent",
-        AfterWork,
+        TransitionTarget,
         "GroupToolExecutor",
         "GroupChat",
         "GroupChatManager",
@@ -76,7 +76,7 @@ class GenericPattern(Pattern):
             user_agent,
             context_variables,
             initial_agent,
-            self.after_work,
+            self.group_after_work,
             tool_executor,
             groupchat,
             manager,

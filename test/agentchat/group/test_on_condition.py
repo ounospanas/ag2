@@ -9,7 +9,7 @@ from autogen.agentchat.group.context_str import ContextStr
 from autogen.agentchat.group.context_variables import ContextVariables
 from autogen.agentchat.group.llm_condition import ContextStrLLMCondition, StringLLMCondition
 from autogen.agentchat.group.on_condition import OnCondition
-from autogen.agentchat.group.transition_target import (
+from autogen.agentchat.group.targets.transition_target import (
     AgentNameTarget,
     AgentTarget,
     NestedChatTarget,

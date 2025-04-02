@@ -4,9 +4,8 @@
 
 from typing import TYPE_CHECKING, Any, Optional, Tuple, Union
 
-from ..after_work import AfterWork
 from ..context_variables import ContextVariables
-from ..transition_target import AgentTarget
+from ..targets.transition_target import AgentTarget, TransitionTarget
 from .pattern import Pattern
 
 if TYPE_CHECKING:
@@ -43,7 +42,7 @@ class RoundRobinPattern(Pattern):
             # Otherwise agent hands off to the next one
             handoff_target = agent_list[0] if i == len(agent_list) - 1 else agent_list[i + 1]
 
-            agent.handoffs.set_after_work(after_work=AfterWork(target=AgentTarget(agent=handoff_target)))
+            agent.handoffs.set_after_work(target=AgentTarget(agent=handoff_target))
 
     def prepare_group_chat(
         self,
@@ -55,7 +54,7 @@ class RoundRobinPattern(Pattern):
         Optional["ConversableAgent"],
         ContextVariables,
         "ConversableAgent",
-        AfterWork,
+        TransitionTarget,
         "GroupToolExecutor",
         "GroupChat",
         "GroupChatManager",
@@ -84,7 +83,7 @@ class RoundRobinPattern(Pattern):
             user_agent,
             context_variables,
             initial_agent,
-            _,
+            group_after_work,
             tool_executor,
             groupchat,
             manager,
@@ -107,7 +106,7 @@ class RoundRobinPattern(Pattern):
             user_agent,
             context_variables,
             initial_agent,
-            self.after_work,
+            group_after_work,
             tool_executor,
             groupchat,
             manager,

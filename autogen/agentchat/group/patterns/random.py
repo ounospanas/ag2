@@ -4,9 +4,8 @@
 
 from typing import TYPE_CHECKING, Any, Optional, Tuple, Union
 
-from ..after_work import AfterWork
 from ..context_variables import ContextVariables
-from ..transition_target import RandomAgentTarget
+from ..targets.transition_target import RandomAgentTarget, TransitionTarget
 from .pattern import Pattern
 
 if TYPE_CHECKING:
@@ -32,7 +31,7 @@ class RandomPattern(Pattern):
             other_agents = [a for a in agent_list if a != agent]
 
             # Create a random after work
-            agent.handoffs.set_after_work(after_work=AfterWork(target=RandomAgentTarget(agents=other_agents)))
+            agent.handoffs.set_after_work(target=RandomAgentTarget(agents=other_agents))
 
     def prepare_group_chat(
         self,
@@ -44,7 +43,7 @@ class RandomPattern(Pattern):
         Optional["ConversableAgent"],
         ContextVariables,
         "ConversableAgent",
-        AfterWork,
+        TransitionTarget,
         "GroupToolExecutor",
         "GroupChat",
         "GroupChatManager",
@@ -73,7 +72,7 @@ class RandomPattern(Pattern):
             user_agent,
             context_variables,
             initial_agent,
-            _,
+            group_after_work,
             tool_executor,
             groupchat,
             manager,
@@ -96,7 +95,7 @@ class RandomPattern(Pattern):
             user_agent,
             context_variables,
             initial_agent,
-            self.after_work,
+            group_after_work,
             tool_executor,
             groupchat,
             manager,
