@@ -184,7 +184,7 @@ def test_receiving_agent() -> None:
         messages=messages_one_w_name,
         agents=[test_initial_agent, test_second_agent],
     )
-    assert context_vars is None
+    assert context_vars is not None
     assert last_speaker
 
     assert chat_result.chat_history[0].get("name") == "MyUser"  # Should persist
@@ -220,7 +220,7 @@ def test_resume_speaker() -> None:
             initial_agent=test_initial_agent, messages=multiple_messages, agents=[test_initial_agent, test_second_agent]
         )
         assert chat_result
-        assert context_vars is None
+        assert context_vars is not None
         assert last_speaker is None
 
         # Ensure the second agent initiated the chat
@@ -251,10 +251,10 @@ def test_after_work_options() -> None:
         initial_agent=agent1, messages=TEST_MESSAGES, agents=[agent1, agent2]
     )
     assert last_speaker == agent1
-    assert context_vars is None
+    assert context_vars is not None
 
     # 2. Test REVERT_TO_USER
-    agent1._swarm_after_work = AfterWork(AfterWorkOption.REVERT_TO_USER)
+    agent1._swarm_after_work = AfterWork(AfterWorkOption.REVERT_TO_USER)  # type: ignore[attr-defined]
 
     test_messages = [
         {"role": "user", "content": "Initial message"},
@@ -265,18 +265,18 @@ def test_after_work_options() -> None:
         chat_result, context_vars, last_speaker = initiate_swarm_chat(
             initial_agent=agent1, messages=test_messages, agents=[agent1, agent2], user_agent=user_agent, max_rounds=4
         )
-        assert context_vars is None
+        assert context_vars is not None
         assert last_speaker
 
     # Ensure that after agent1 is finished, it goes to user (4th message)
     assert chat_result.chat_history[3]["name"] == "test_user"
 
     # 3. Test STAY
-    agent1._swarm_after_work = AfterWork(AfterWorkOption.STAY)
+    agent1._swarm_after_work = AfterWork(AfterWorkOption.STAY)  # type: ignore[attr-defined]
     chat_result, context_vars, last_speaker = initiate_swarm_chat(
         initial_agent=agent1, messages=test_messages, agents=[agent1, agent2], max_rounds=4
     )
-    assert context_vars is None
+    assert context_vars is not None
     assert last_speaker
 
     # Stay on agent1
@@ -285,15 +285,15 @@ def test_after_work_options() -> None:
     # 4. Test Callable
 
     # Transfer to agent2
-    def test_callable(last_speaker, messages, groupchat):
+    def test_callable(last_speaker: ConversableAgent, messages: list[dict[str, Any]], groupchat: GroupChat) -> ConversableAgent:
         return agent2
 
-    agent1._swarm_after_work = AfterWork(test_callable)
+    agent1._swarm_after_work = AfterWork(test_callable)  # type: ignore[attr-defined]
 
     chat_result, context_vars, last_speaker = initiate_swarm_chat(
         initial_agent=agent1, messages=test_messages, agents=[agent1, agent2], max_rounds=4
     )
-    assert context_vars is None
+    assert context_vars is not None
     assert last_speaker
 
     # We should have transferred to agent2 after agent1 has finished
@@ -342,7 +342,7 @@ def test_on_condition_handoff() -> None:
         max_rounds=5,
         exclude_transit_message=False,
     )
-    assert context_vars is None
+    assert context_vars is not None
     assert last_speaker
 
     # We should have transferred to agent2 after agent1 has finished
@@ -357,7 +357,7 @@ def test_temporary_user_proxy() -> None:
     chat_result, context_vars, last_speaker = initiate_swarm_chat(
         initial_agent=agent1, messages=TEST_MESSAGES, agents=[agent1, agent2]
     )
-    assert context_vars is None
+    assert context_vars is not None
     assert last_speaker
 
     # Verify no message has name "_User"
@@ -382,12 +382,12 @@ def test_context_variables_updating_multi_tools() -> None:
     test_context_variables = ContextVariables(data={"my_key": 0})
 
     # Increment the context variable
-    def test_func_1(context_variables: dict[str, Any], param1: str) -> SwarmResult:
+    def test_func_1(context_variables: ContextVariables, param1: str) -> SwarmResult:
         context_variables["my_key"] += 1
         return SwarmResult(values=f"Test 1 {param1}", context_variables=context_variables, agent=agent1)
 
     # Increment the context variable
-    def test_func_2(context_variables: dict[str, Any], param2: str) -> SwarmResult:
+    def test_func_2(context_variables: ContextVariables, param2: str) -> SwarmResult:
         context_variables["my_key"] += 100
         return SwarmResult(values=f"Test 2 {param2}", context_variables=context_variables, agent=agent1)
 
@@ -449,12 +449,12 @@ def test_context_variables_updating_multi_tools_including_pydantic_object() -> N
     test_context_variables = ContextVariables(data={"my_key": MyKey(key=0)})
 
     # Increment the pydantic context variable
-    def test_func_1(context_variables: dict[str, Any], param1: str) -> SwarmResult:
+    def test_func_1(context_variables: ContextVariables, param1: str) -> SwarmResult:
         context_variables["my_key"].key += 1
         return SwarmResult(values=f"Test 1 {param1}", context_variables=context_variables, agent=agent1)
 
     # Increment the pydantic context variable
-    def test_func_2(context_variables: dict[str, Any], param2: str) -> SwarmResult:
+    def test_func_2(context_variables: ContextVariables, param2: str) -> SwarmResult:
         context_variables["my_key"].key += 100
         return SwarmResult(values=f"Test 2 {param2}", context_variables=context_variables, agent=agent1)
 
@@ -513,7 +513,7 @@ def test_function_transfer() -> None:
     test_context_variables = ContextVariables(data={"my_key": 0})
 
     # Increment the context variable
-    def test_func_1(context_variables: dict[str, Any], param1: str) -> SwarmResult:
+    def test_func_1(context_variables: ContextVariables, param1: str) -> SwarmResult:
         context_variables["my_key"] += 1
         return SwarmResult(values=f"Test 1 {param1}", context_variables=context_variables, agent=agent1)
 
@@ -690,7 +690,7 @@ def test_update_system_message() -> None:
     assert message_container.captured_sys_message == "Template message with test_value"
 
     # Test multiple update functions
-    def another_update_function(context_variables: dict[str, Any], messages: list[dict[str, Any]]) -> str:
+    def another_update_function(context_variables: ContextVariables, messages: list[dict[str, Any]]) -> str:
         return "Another update"
 
     agent6 = ConversableAgent(
@@ -729,7 +729,7 @@ def test_string_agent_params_for_transfer() -> None:
     }
 
     # Define a simple function for testing
-    def hello_world(context_variables: dict[str, Any]) -> SwarmResult:
+    def hello_world(context_variables: ContextVariables) -> SwarmResult:
         value = "Hello, World!"
         return SwarmResult(values=value, context_variables=context_variables, agent="agent_2")
 
@@ -782,7 +782,7 @@ def test_string_agent_params_for_transfer() -> None:
     assert last_active_agent.name == "agent_2"
 
     # Define a simple function for testing
-    def hello_world(context_variables: dict[str, Any]) -> SwarmResult:  # type: ignore[no-redef]
+    def hello_world(context_variables: ContextVariables) -> SwarmResult:  # type: ignore[no-redef]
         value = "Hello, World!"
         return SwarmResult(values=value, context_variables=context_variables, agent="agent_unknown")
 
@@ -887,7 +887,7 @@ def test_after_work_callable() -> None:
         max_rounds=5,
     )
 
-    assert context_vars is None
+    assert context_vars is not None
     assert last_speaker
 
     # Confirm transitions and it terminated with 4 messages
@@ -947,7 +947,7 @@ def test_on_condition_unique_function_names() -> None:
         exclude_transit_message=False,
     )
     assert chat_result
-    assert context_vars is None
+    assert context_vars is not None
     assert last_speaker
 
     # Check that agent1 has 3 functions and they have unique names
@@ -1181,6 +1181,8 @@ async def test_a_initiate_swarm_chat() -> None:
 
     assert context_vars == test_context.to_dict()
     assert last_speaker is None
+    assert context_vars == test_context
+    assert isinstance(last_speaker, ConversableAgent)
 
 
 def test_swarmresult_afterworkoption() -> None:
@@ -1792,7 +1794,7 @@ def test_change_tool_context_variables_to_depends() -> None:
     agent = ConversableAgent(name="test_agent", llm_config=testing_llm_config)
 
     # Create a test function that has a context_variables parameter
-    def test_func_with_context_vars(param1: str, context_variables: dict[str, Any]) -> str:
+    def test_func_with_context_vars(param1: str, context_variables: ContextVariables) -> str:
         """Test function with context variables."""
         return f"param1: {param1}, context_var: {context_variables.get('test_key', 'not_found')}"
 
@@ -1878,7 +1880,7 @@ def test_change_tool_context_variables_dependency_injection() -> None:
     agent.context_variables = context_variables
 
     # Create a test function that has a context_variables parameter
-    def test_func_with_context_vars(param1: str, context_variables: dict[str, Any]) -> str:
+    def test_func_with_context_vars(param1: str, context_variables: ContextVariables) -> str:
         """Test function with context variables."""
         return f"param1: {param1}, context_var: {context_variables.get('test_key', 'not_found')}"
 
@@ -1936,7 +1938,7 @@ def test_change_tool_context_variables_function_signature() -> None:
     agent = ConversableAgent(name="test_agent", llm_config=testing_llm_config)
 
     # Create a test function that has a context_variables parameter
-    def test_func_with_context_vars(param1: str, context_variables: dict[str, Any]) -> str:
+    def test_func_with_context_vars(param1: str, context_variables: ContextVariables) -> str:
         """Test function with context variables."""
         return f"param1: {param1}, context_var: {context_variables.get('test_key', 'not_found')}"
 

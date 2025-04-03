@@ -7,6 +7,14 @@
 from .agent import Agent, LLMAgent
 from .assistant_agent import AssistantAgent
 from .chat import ChatResult, a_initiate_chats, initiate_chats
+
+# Imported last to avoid circular imports
+from .contrib.swarm_agent import (
+    a_initiate_swarm_chat,
+    a_run_swarm,
+    register_hand_off,
+    run_swarm,
+)
 from .conversable_agent import ConversableAgent, UpdateSystemMessage, register_function
 from .group.multi_agent_chat import a_initiate_group_chat, initiate_group_chat
 from .groupchat import GroupChat, GroupChatManager
@@ -25,8 +33,12 @@ __all__ = [
     "UserProxyAgent",
     "a_initiate_chats",
     "a_initiate_group_chat",
+    "a_initiate_swarm_chat",
+    "a_run_swarm",
     "gather_usage_summary",
     "initiate_chats",
     "initiate_group_chat",
     "register_function",
+    "register_hand_off",
+    "run_swarm",
 ]
