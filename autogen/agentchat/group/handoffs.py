@@ -111,7 +111,7 @@ class Handoffs(BaseModel):
             Self for method chaining
         """
         if not isinstance(target, TransitionTarget):
-            raise TypeError(f"Expected a TranitionTarget instance, got {type(target).__name__}")
+            raise TypeError(f"Expected a TransitionTarget instance, got {type(target).__name__}")
 
         self.after_work = target
         return self

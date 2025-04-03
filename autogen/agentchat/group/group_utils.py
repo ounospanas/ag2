@@ -285,6 +285,7 @@ def process_initial_messages(
         list[str]: List of agent names.
         list[Agent]: List of temporary user proxy agents to add to GroupChat.
     """
+    from ..conversable_agent import ConversableAgent  # NEED SOLUTION
 
     if isinstance(messages, str):
         messages = [{"role": "user", "content": messages}]

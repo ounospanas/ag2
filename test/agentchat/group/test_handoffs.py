@@ -7,7 +7,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from autogen.agentchat.group.after_work import AfterWork
 from autogen.agentchat.group.context_condition import StringContextCondition
 from autogen.agentchat.group.handoffs import Handoffs
 from autogen.agentchat.group.llm_condition import StringLLMCondition
@@ -67,9 +66,9 @@ class TestHandoffs:
         return OnCondition(target=NestedChatTarget(nested_chat_config=nested_chat_config), condition=condition)
 
     @pytest.fixture
-    def mock_after_work(self, mock_agent_target: AgentTarget) -> AfterWork:
+    def mock_after_work(self, mock_agent_target: AgentTarget) -> TransitionTarget:
         """Create a mock AfterWork for testing."""
-        return AfterWork(target=mock_agent_target)
+        return mock_agent_target
 
     def test_init_empty(self) -> None:
         """Test initialization with no conditions."""
@@ -79,7 +78,10 @@ class TestHandoffs:
         assert handoffs.after_work is None
 
     def test_init_with_conditions(
-        self, mock_on_context_condition: OnContextCondition, mock_on_condition: OnCondition, mock_after_work: AfterWork
+        self,
+        mock_on_context_condition: OnContextCondition,
+        mock_on_condition: OnCondition,
+        mock_after_work: TransitionTarget,
     ) -> None:
         """Test initialization with conditions."""
         handoffs = Handoffs(
@@ -133,7 +135,7 @@ class TestHandoffs:
         assert handoffs.llm_conditions == [condition1, condition2]
         assert result == handoffs  # Method should return self for chaining
 
-    def test_set_after_work(self, mock_after_work: AfterWork) -> None:
+    def test_set_after_work(self, mock_after_work: TransitionTarget) -> None:
         """Test setting an AfterWork condition."""
         handoffs = Handoffs()
         result = handoffs.set_after_work(mock_after_work)
@@ -157,23 +159,6 @@ class TestHandoffs:
         assert handoffs.llm_conditions == [mock_on_condition]
         assert result == handoffs  # Method should return self for chaining
 
-    def test_add_after_work(self, mock_after_work: AfterWork) -> None:
-        """Test adding an AfterWork using the generic add method."""
-        handoffs = Handoffs()
-        result = handoffs.add(mock_after_work)
-
-        assert handoffs.after_work == mock_after_work
-        assert result == handoffs  # Method should return self for chaining
-
-    def test_add_after_work_already_exists(self, mock_after_work: AfterWork) -> None:
-        """Test adding an AfterWork when one already exists raises ValueError."""
-        handoffs = Handoffs(after_work=mock_after_work)
-
-        with pytest.raises(ValueError) as excinfo:
-            handoffs.add(mock_after_work)
-
-        assert "An AfterWork condition has already been added" in str(excinfo.value)
-
     def test_add_invalid_type(self) -> None:
         """Test adding an invalid type raises TypeError."""
         handoffs = Handoffs()
@@ -183,27 +168,14 @@ class TestHandoffs:
 
         assert "Unsupported condition type" in str(excinfo.value)
 
-    def test_add_many(
-        self, mock_on_context_condition: OnContextCondition, mock_on_condition: OnCondition, mock_after_work: AfterWork
-    ) -> None:
+    def test_add_many(self, mock_on_context_condition: OnContextCondition, mock_on_condition: OnCondition) -> None:
         """Test adding multiple conditions using the add_many method."""
         handoffs = Handoffs()
-        result = handoffs.add_many([mock_on_context_condition, mock_on_condition, mock_after_work])
+        result = handoffs.add_many([mock_on_context_condition, mock_on_condition])
 
         assert handoffs.context_conditions == [mock_on_context_condition]
         assert handoffs.llm_conditions == [mock_on_condition]
-        assert handoffs.after_work == mock_after_work
         assert result == handoffs  # Method should return self for chaining
-
-    def test_add_many_multiple_after_work(self, mock_after_work: AfterWork) -> None:
-        """Test adding multiple AfterWork conditions raises ValueError."""
-        handoffs = Handoffs()
-        after_work2 = MagicMock(spec=AfterWork)
-
-        with pytest.raises(ValueError) as excinfo:
-            handoffs.add_many([mock_after_work, after_work2])
-
-        assert "Multiple AfterWork conditions provided" in str(excinfo.value)
 
     def test_add_many_invalid_type(self) -> None:
         """Test adding an invalid type using add_many raises TypeError."""
@@ -215,7 +187,10 @@ class TestHandoffs:
         assert "Unsupported condition type" in str(excinfo.value)
 
     def test_clear(
-        self, mock_on_context_condition: OnContextCondition, mock_on_condition: OnCondition, mock_after_work: AfterWork
+        self,
+        mock_on_context_condition: OnContextCondition,
+        mock_on_condition: OnCondition,
+        mock_after_work: TransitionTarget,
     ) -> None:
         """Test clearing all conditions."""
         handoffs = Handoffs(
@@ -315,7 +290,10 @@ class TestHandoffs:
         assert mock_on_condition_two.llm_function_name == "transfer_to_test_target_2"
 
     def test_method_chaining(
-        self, mock_on_context_condition: OnContextCondition, mock_on_condition: OnCondition, mock_after_work: AfterWork
+        self,
+        mock_on_context_condition: OnContextCondition,
+        mock_on_condition: OnCondition,
+        mock_after_work: TransitionTarget,
     ) -> None:
         """Test method chaining with multiple operations."""
         handoffs = Handoffs()

@@ -9,7 +9,7 @@ import pytest
 
 from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.agentchat.group.context_variables import ContextVariables
-from autogen.agentchat.group.targets.transition_target import (
+from autogen.agentchat.group.targets.transition_utils import (
     __AGENT_WRAPPER_PREFIX__,
 )
 from autogen.agentchat.user_proxy_agent import UserProxyAgent
@@ -34,7 +34,7 @@ class TestGroupChatConfig:
     @pytest.fixture
     def mock_group_chat_config_cls(self) -> Generator[MagicMock, None, None]:
         """Create a mock GroupChatConfig class."""
-        with patch("autogen.agentchat.group.group_chat_target.GroupChatConfig") as mock_cls:
+        with patch("autogen.agentchat.group.targets.group_chat_target.GroupChatConfig") as mock_cls:
             # Create a mock instance
             mock_instance = MagicMock()
             mock_cls.return_value = mock_instance
@@ -129,7 +129,7 @@ class TestGroupChatTarget:
     @pytest.fixture
     def mock_group_chat_target_cls(self) -> Generator[MagicMock, None, None]:
         """Create a mock GroupChatTarget class."""
-        with patch("autogen.agentchat.group.group_chat_target.GroupChatTarget") as mock_cls:
+        with patch("autogen.agentchat.group.targets.group_chat_target.GroupChatTarget") as mock_cls:
             mock_instance = MagicMock()
             mock_cls.return_value = mock_instance
 
@@ -213,10 +213,9 @@ class TestGroupChatTarget:
         """Test creating a wrapper agent for a group chat target with direct patching."""
         # Directly patch the GroupChatTarget class
         with (
-            patch("autogen.agentchat.group.group_chat_target.GroupChatTarget"),
+            patch("autogen.agentchat.group.targets.group_chat_target.GroupChatTarget"),
             patch("autogen.agentchat.initiate_group_chat"),
-            patch("autogen.agentchat.group.after_work.AfterWork"),
-            patch("autogen.agentchat.group.transition_target.AgentTarget"),
+            patch("autogen.agentchat.group.targets.transition_target.AgentTarget"),
         ):
             # Setup parent agent
             parent_agent = MagicMock(spec=ConversableAgent)
@@ -230,7 +229,7 @@ class TestGroupChatTarget:
 
             # Create the real GroupChatTarget instance and use its method
             # Import GroupChatTarget inside the patch block
-            from autogen.agentchat.group.group_chat_target import GroupChatTarget
+            from autogen.agentchat.group.targets.group_chat_target import GroupChatTarget
 
             _ = GroupChatTarget(group_chat_config=mock_group_chat_config)
 

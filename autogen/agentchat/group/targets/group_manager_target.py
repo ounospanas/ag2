@@ -106,7 +106,7 @@ class GroupManagerSelectionMessageContextStr(GroupManagerSelectionMessage):
 class GroupManagerTarget(TransitionTarget):
     """Target that represents an agent by name."""
 
-    selection_message: Optional[GroupManagerSelectionMessage]
+    selection_message: Optional[GroupManagerSelectionMessage] = None
 
     def can_resolve_for_speaker_selection(self) -> bool:
         """Check if the target can resolve for speaker selection."""

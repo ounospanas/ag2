@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 from autogen.agentchat.group.context_variables import ContextVariables
 from autogen.agentchat.group.reply_result import ReplyResult
-from autogen.agentchat.group.targets.transition_target import AfterWorkOptionTarget, AgentTarget, TransitionTarget
+from autogen.agentchat.group.targets.transition_target import AgentTarget, TerminateTarget, TransitionTarget
 
 
 class TestReplyResult:
@@ -72,14 +72,13 @@ class TestReplyResult:
     def test_with_after_work_option_target(self) -> None:
         """Test with AfterWorkOptionTarget."""
         message = "This is a test message"
-        target = AfterWorkOptionTarget(after_work_option="terminate")
+        target = TerminateTarget()
 
         reply_result = ReplyResult(message=message, target=target)
 
         assert reply_result.message == message
         assert reply_result.target == target
-        assert isinstance(reply_result.target, AfterWorkOptionTarget)
-        assert reply_result.target.after_work_option == "terminate"
+        assert isinstance(reply_result.target, TerminateTarget)
 
     def test_with_empty_context_variables(self) -> None:
         """Test with empty ContextVariables."""
