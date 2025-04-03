@@ -64,12 +64,14 @@ def test_swarm_result() -> None:
     # Valid initialization
     result = SwarmResult(values="test result")
     assert str(result) == "test result"
-    assert result.context_variables == {}
+    assert result.context_variables is not None
+    assert result.context_variables.to_dict() == {}
 
     # Test with context variables
-    context = {"key": "value"}
+    context = ContextVariables(data={"key": "value"})
     result = SwarmResult(values="test", context_variables=context)
-    assert result.context_variables == context
+    assert result.context_variables is not None
+    assert result.context_variables.to_dict() == context.to_dict()
 
     # Test with agent
     agent = ConversableAgent("test")
@@ -86,24 +88,24 @@ def test_swarm_result_serialization() -> None:
     result = SwarmResult(
         values="test",
         agent=agent,
-        context_variables={"key": "value"},
+        context_variables=ContextVariables(data={"key": "value"}),
     )
 
     serialized = json.loads(result.model_dump_json())
     assert serialized["agent"] == "test_agent"
     assert serialized["values"] == "test"
-    assert serialized["context_variables"] == {"key": "value"}
+    assert serialized["context_variables"] == {"data": {"key": "value"}}
 
     result = SwarmResult(
         values="test",
         agent="test_agent",
-        context_variables={"key": "value"},
+        context_variables=ContextVariables(data={"key": "value"}),
     )
 
     serialized = json.loads(result.model_dump_json())
     assert serialized["agent"] == "test_agent"
     assert serialized["values"] == "test"
-    assert serialized["context_variables"] == {"key": "value"}
+    assert serialized["context_variables"]["data"] == {"key": "value"}
 
 
 def test_after_work_initialization() -> None:
@@ -1181,9 +1183,8 @@ async def test_a_initiate_swarm_chat() -> None:
         initial_agent=agent1, messages="Test", agents=[agent1, agent2], context_variables=test_context, max_rounds=3
     )
 
-    assert context_vars == test_context.to_dict()
-    assert last_speaker is None
-    assert context_vars == test_context
+    assert context_vars.to_dict() == test_context.to_dict()
+    assert last_speaker is not None
     assert isinstance(last_speaker, ConversableAgent)
 
 
@@ -1543,7 +1544,10 @@ def test_on_condition_available() -> None:
     _update_conditional_functions(agent=agent1, messages=[{"role": "user", "content": "Test"}])
 
     assert agent1.llm_config is not False and isinstance(agent1.llm_config, (dict, LLMConfig))
-    assert "tools" not in agent1.llm_config  # Is not available
+    if isinstance(agent1.llm_config, dict):
+        assert "tools" not in agent1.llm_config  # Is not available
+    else:
+        assert len(agent1.llm_config["tools"]) == 0
 
     # 4. Test with an available parameter that equates to True using NOT operator "!"
     agent1 = ConversableAgent("agent1", llm_config=testing_llm_config)

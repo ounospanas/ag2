@@ -330,7 +330,7 @@ def _modify_context_variables_param(f: Callable[..., Any], context_variables: Co
         for name, param in sig.parameters.items():
             if name == __CONTEXT_VARIABLES_PARAM_NAME__:
                 # Replace with new annotation using Depends
-                new_param = param.replace(annotation=Annotated[dict[str, Any], Depends(on(context_variables))])
+                new_param = param.replace(annotation=Annotated[ContextVariables, Depends(on(context_variables))])
                 new_params.append(new_param)
             else:
                 new_params.append(param)
@@ -886,7 +886,7 @@ def initiate_swarm_chat(
         ]
     ] = AfterWorkOption.TERMINATE,
     exclude_transit_message: bool = True,
-) -> tuple[ChatResult, dict[str, Any], ConversableAgent]:
+) -> tuple[ChatResult, ContextVariables, ConversableAgent]:
     """Initialize and run a swarm chat
 
     Args:
@@ -912,7 +912,7 @@ def initiate_swarm_chat(
             Note: only with transition functions added with `register_handoff` will be removed. If you pass in a function to manage workflow, it will not be removed. You may register a cumstomized hook to `process_all_messages_before_reply` to remove that.
     Returns:
         ChatResult:     Conversations chat history.
-        dict[str, Any]: Updated Context variables.
+        ContextVariables: Updated Context variables.
         ConversableAgent:     Last speaker.
     """
     context_variables = context_variables or ContextVariables()
@@ -1043,7 +1043,7 @@ async def a_initiate_swarm_chat(
         ]
     ] = AfterWorkOption.TERMINATE,
     exclude_transit_message: bool = True,
-) -> tuple[ChatResult, dict[str, Any], ConversableAgent]:
+) -> tuple[ChatResult, ContextVariables, ConversableAgent]:
     """Initialize and run a swarm chat asynchronously
 
     Args:
@@ -1069,7 +1069,7 @@ async def a_initiate_swarm_chat(
             Note: only with transition functions added with `register_handoff` will be removed. If you pass in a function to manage workflow, it will not be removed. You may register a cumstomized hook to `process_all_messages_before_reply` to remove that.
     Returns:
         ChatResult:     Conversations chat history.
-        dict[str, Any]: Updated Context variables.
+        ContextVariables: Updated Context variables.
         ConversableAgent:     Last speaker.
     """
     context_variables = context_variables or ContextVariables()
@@ -1181,13 +1181,18 @@ class SwarmResult(BaseModel):
 
     values: str = ""
     agent: Optional[Union[ConversableAgent, AfterWorkOption, str]] = None
-    context_variables: dict[str, Any] = {}
+    context_variables: Optional[ContextVariables] = None
 
     @field_serializer("agent", when_used="json")
     def serialize_agent(self, agent: Union[ConversableAgent, str]) -> str:
         if isinstance(agent, ConversableAgent):
             return agent.name
         return agent
+
+    def model_post_init(self, __context: Any) -> None:
+        # Initialise with a new ContextVariables object if not provided
+        if self.context_variables is None:
+            self.context_variables = ContextVariables()
 
     class Config:  # Add this inner class
         arbitrary_types_allowed = True
@@ -1359,8 +1364,8 @@ def _generate_swarm_tool_reply(
                 content = tool_response.get("content")
 
                 if isinstance(content, SwarmResult):
-                    if content.context_variables != {}:
-                        agent.context_variables.update(content.context_variables)
+                    if content.context_variables is not None and content.context_variables.to_dict() != {}:
+                        agent.context_variables.update(content.context_variables.to_dict())
                     if content.agent is not None:
                         next_agent = content.agent  # type: ignore[assignment]
                 elif isinstance(content, Agent):
