@@ -285,7 +285,9 @@ def test_after_work_options() -> None:
     # 4. Test Callable
 
     # Transfer to agent2
-    def test_callable(last_speaker: ConversableAgent, messages: list[dict[str, Any]], groupchat: GroupChat) -> ConversableAgent:
+    def test_callable(
+        last_speaker: ConversableAgent, messages: list[dict[str, Any]], groupchat: GroupChat
+    ) -> ConversableAgent:
         return agent2
 
     agent1._swarm_after_work = AfterWork(test_callable)  # type: ignore[attr-defined]
