@@ -8,14 +8,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from autogen.agentchat.conversable_agent import ConversableAgent
-from autogen.agentchat.group.context_variables import ContextVariables
+from autogen.agentchat.group.patterns.pattern import Pattern
 from autogen.agentchat.group.targets.transition_utils import (
     __AGENT_WRAPPER_PREFIX__,
 )
 from autogen.agentchat.user_proxy_agent import UserProxyAgent
 
 
-# Using @patch to mock the actual GroupChatConfig and GroupChatTarget classes to avoid Pydantic forward reference issues
 class TestGroupChatConfig:
     @pytest.fixture
     def mock_agent(self) -> MagicMock:
@@ -32,67 +31,92 @@ class TestGroupChatConfig:
         return agent
 
     @pytest.fixture
+    def mock_pattern(self) -> MagicMock:
+        """Create a mock Pattern for testing."""
+        pattern = MagicMock(spec=Pattern)
+        pattern.name = "MockPattern"
+        return pattern
+
+    @pytest.fixture
     def mock_group_chat_config_cls(self) -> Generator[MagicMock, None, None]:
-        """Create a mock GroupChatConfig class."""
+        """Create a mock GroupChatConfig class for testing."""
         with patch("autogen.agentchat.group.targets.group_chat_target.GroupChatConfig") as mock_cls:
             # Create a mock instance
             mock_instance = MagicMock()
             mock_cls.return_value = mock_instance
             yield mock_cls
 
-    def test_init(self, mock_agent: MagicMock, mock_group_chat_config_cls: MagicMock) -> None:
-        """Test initialization with required parameters."""
-        agents = [mock_agent]
+    def test_init_with_required_params(self, mock_pattern: MagicMock, mock_group_chat_config_cls: MagicMock) -> None:
+        """Test initialization with only required parameters."""
         messages = "Hello"
+        max_rounds = 15
 
         # Create the config using our mocked class
         _ = mock_group_chat_config_cls(
-            initial_agent=mock_agent,
+            pattern=mock_pattern,
             messages=messages,
-            agents=agents,
+            max_rounds=max_rounds,
         )
 
         # Check that the constructor was called with the right arguments
         mock_group_chat_config_cls.assert_called_once_with(
-            initial_agent=mock_agent,
+            pattern=mock_pattern,
             messages=messages,
-            agents=agents,
+            max_rounds=max_rounds,
         )
 
-    def test_init_with_all_params(
-        self, mock_agent: MagicMock, mock_user_agent: MagicMock, mock_group_chat_config_cls: MagicMock
-    ) -> None:
-        """Test initialization with all parameters."""
-        agents = [mock_agent]
-        messages = [{"role": "user", "content": "Hello"}]
-        group_manager_args = {"llm_config": {"model": "gpt-4"}}
-        context_variables = ContextVariables(data={"key": "value"})
-        after_work = MagicMock(name="after_work")
+    def test_init_with_string_message(self, mock_pattern: MagicMock, mock_group_chat_config_cls: MagicMock) -> None:
+        """Test initialization with a string message."""
+        messages = "Hello, how are you?"
 
         # Create the config using our mocked class
         _ = mock_group_chat_config_cls(
-            initial_agent=mock_agent,
+            pattern=mock_pattern,
             messages=messages,
-            agents=agents,
-            user_agent=mock_user_agent,
-            group_manager_args=group_manager_args,
-            max_rounds=10,
-            context_variables=context_variables,
-            after_work=after_work,
-            exclude_transit_message=False,
         )
 
         # Check that the constructor was called with the right arguments
         mock_group_chat_config_cls.assert_called_once_with(
-            initial_agent=mock_agent,
+            pattern=mock_pattern,
             messages=messages,
-            agents=agents,
-            user_agent=mock_user_agent,
-            group_manager_args=group_manager_args,
-            max_rounds=10,
-            context_variables=context_variables,
-            after_work=after_work,
-            exclude_transit_message=False,
+        )
+
+    def test_init_with_list_message(self, mock_pattern: MagicMock, mock_group_chat_config_cls: MagicMock) -> None:
+        """Test initialization with a list of message dicts."""
+        messages = [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi there!"},
+        ]
+
+        # Create the config using our mocked class
+        _ = mock_group_chat_config_cls(
+            pattern=mock_pattern,
+            messages=messages,
+        )
+
+        # Check that the constructor was called with the right arguments
+        mock_group_chat_config_cls.assert_called_once_with(
+            pattern=mock_pattern,
+            messages=messages,
+        )
+
+    def test_init_with_custom_max_rounds(self, mock_pattern: MagicMock, mock_group_chat_config_cls: MagicMock) -> None:
+        """Test initialization with a custom max_rounds value."""
+        messages = "Hello"
+        max_rounds = 10
+
+        # Create the config using our mocked class
+        _ = mock_group_chat_config_cls(
+            pattern=mock_pattern,
+            messages=messages,
+            max_rounds=max_rounds,
+        )
+
+        # Check that the constructor was called with the right arguments
+        mock_group_chat_config_cls.assert_called_once_with(
+            pattern=mock_pattern,
+            messages=messages,
+            max_rounds=max_rounds,
         )
 
 
@@ -112,18 +136,19 @@ class TestGroupChatTarget:
         return agent
 
     @pytest.fixture
-    def mock_group_chat_config(self, mock_agent: MagicMock) -> MagicMock:
+    def mock_pattern(self) -> MagicMock:
+        """Create a mock Pattern for testing."""
+        pattern = MagicMock(spec=Pattern)
+        pattern.name = "MockPattern"
+        return pattern
+
+    @pytest.fixture
+    def mock_group_chat_config(self) -> MagicMock:
         """Create a mock GroupChatConfig for testing."""
         config = MagicMock(name="GroupChatConfig")
-        config.initial_agent = mock_agent
+        config.pattern = MagicMock(name="Pattern")
         config.messages = "Hello"
-        config.agents = [mock_agent]
-        config.user_agent = None
-        config.group_manager_args = None
         config.max_rounds = 20
-        config.context_variables = None
-        config.after_work = None
-        config.exclude_transit_message = True
         return config
 
     @pytest.fixture
