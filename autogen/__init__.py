@@ -20,7 +20,6 @@ from .agentchat import (
     gather_usage_summary,
     initiate_chats,
     register_function,
-    register_hand_off,
     run_swarm,
 )
 from .agentchat.group.context_expression import ContextExpression
@@ -85,7 +84,6 @@ __all__ = [
     "gather_usage_summary",
     "get_config_list",
     "initiate_chats",
-    "register_function",
     "register_hand_off",
     "run_swarm",
 ]

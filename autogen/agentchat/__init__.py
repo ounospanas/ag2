@@ -12,7 +12,6 @@ from .chat import ChatResult, a_initiate_chats, initiate_chats
 from .contrib.swarm_agent import (
     a_initiate_swarm_chat,
     a_run_swarm,
-    register_hand_off,
     run_swarm,
 )
 from .conversable_agent import ConversableAgent, UpdateSystemMessage, register_function
@@ -39,6 +38,5 @@ __all__ = [
     "initiate_chats",
     "initiate_group_chat",
     "register_function",
-    "register_hand_off",
     "run_swarm",
 ]
