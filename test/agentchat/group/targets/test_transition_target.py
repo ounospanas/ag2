@@ -531,10 +531,9 @@ class TestRandomAgentTarget:
         mock_current_agent.name = "current_agent"  # Different from the available agents
         mock_groupchat = MagicMock(spec=GroupChat)
 
-        # Mock random.choice to return a predictable result
-        original_choice = random.choice
-        # Always choose agent2
+        # Mock random.choice to return a predictable result, always choose agent2
         with patch("random.choice", return_value="agent2"):
+            original_choice = random.choice
             result = target.resolve(mock_groupchat, mock_current_agent, None)
 
         try:
