@@ -84,6 +84,6 @@ __all__ = [
     "gather_usage_summary",
     "get_config_list",
     "initiate_chats",
-    "register_hand_off",
+    "register_function",
     "run_swarm",
 ]
