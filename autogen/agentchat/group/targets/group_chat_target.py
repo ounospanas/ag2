@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, Optional, Union
 
 from pydantic import BaseModel
 
+from ....doc_utils import export_module
 from ...agent import Agent
 from ..speaker_selection_result import SpeakerSelectionResult
 from .transition_target import AgentTarget, TransitionTarget
@@ -17,6 +18,10 @@ if TYPE_CHECKING:
     from ..patterns.pattern import Pattern
 
 
+__all__ = ["GroupChatConfig", "GroupChatTarget"]
+
+
+@export_module("autogen.agentchat.group")
 class GroupChatConfig(BaseModel):
     """Configuration for a group chat transition target.
 
@@ -27,6 +32,7 @@ class GroupChatConfig(BaseModel):
     max_rounds: int = 20
 
 
+@export_module("autogen.agentchat.group")
 class GroupChatTarget(TransitionTarget):
     """Target that represents a group chat."""
 

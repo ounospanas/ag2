@@ -15,12 +15,9 @@ class ContextStr(BaseModel):
     """A string that requires context variable substitution.
 
     Use the format method to substitute context variables into the string.
-
-    Args:
-        template (str): The string to be substituted with context variables. It is expected that the string will contain `{var}` placeholders
-            and that string format will be able to replace all values.
     """
 
+    """The string to be substituted with context variables. It is expected that the string will contain `{var}` placeholders and that string format will be able to replace all values."""
     template: str
 
     def format(self, context_variables: ContextVariables) -> Optional[str]:

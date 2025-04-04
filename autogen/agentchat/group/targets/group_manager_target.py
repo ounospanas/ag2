@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, Optional, Type, Union
 
 from pydantic import BaseModel, field_validator
 
+from ....doc_utils import export_module
 from ..context_str import ContextStr
 from ..group_tool_executor import GroupToolExecutor
 from ..speaker_selection_result import SpeakerSelectionResult
@@ -56,6 +57,7 @@ def prepare_groupchat_auto_speaker(
 
 
 # GroupManagerSelectionMessage protocol and implementations
+@export_module("autogen.agentchat.group")
 class GroupManagerSelectionMessage(BaseModel):
     """Base class for all GroupManager selection message types."""
 
@@ -64,6 +66,7 @@ class GroupManagerSelectionMessage(BaseModel):
         raise NotImplementedError("Requires subclasses to implement.")
 
 
+@export_module("autogen.agentchat.group")
 class GroupManagerSelectionMessageString(GroupManagerSelectionMessage):
     """Selection message that uses a plain string template."""
 
@@ -74,6 +77,7 @@ class GroupManagerSelectionMessageString(GroupManagerSelectionMessage):
         return self.message
 
 
+@export_module("autogen.agentchat.group")
 class GroupManagerSelectionMessageContextStr(GroupManagerSelectionMessage):
     """Selection message that uses a ContextStr template."""
 
@@ -103,6 +107,7 @@ class GroupManagerSelectionMessageContextStr(GroupManagerSelectionMessage):
         )  # Restore agentlist so it can be substituted by the internal group chat auto speaker selection
 
 
+@export_module("autogen.agentchat.group")
 class GroupManagerTarget(TransitionTarget):
     """Target that represents an agent by name."""
 
