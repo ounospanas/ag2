@@ -23,17 +23,11 @@ class SummaryTaskAvailableCondition(AvailableCondition):
     3. The completed task count is truthy
 
     If all conditions are met, the agent is ready for a summary task.
-
-    Args:
-        documents_var: Context variable name for documents to ingest list
-        queries_var: Context variable name for queries to run list
-        completed_var: Context variable name for completed task count
-
     """
 
-    documents_var: str = "DocumentsToIngest"
-    queries_var: str = "QueriesToRun"
-    completed_var: str = "CompletedTaskCount"
+    documents_var: str = "DocumentsToIngest"  # Context variable name for documents to ingest list
+    queries_var: str = "QueriesToRun"  # Context variable name for queries to run list
+    completed_var: str = "CompletedTaskCount"  # Context variable name for completed task count
 
     def is_available(self, agent: "ConversableAgent", messages: list[dict[str, Any]]) -> bool:
         """Check if all task conditions are met.
