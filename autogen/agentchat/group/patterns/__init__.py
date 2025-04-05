@@ -3,16 +3,16 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-from .generic import GenericPattern
+from .auto import AutoPattern
 from .manual import ManualPattern
-from .organic import OrganicPattern
+from .pattern import DefaultPattern
 from .random import RandomPattern
 from .round_robin import RoundRobinPattern
 
 __all__ = [
-    "GenericPattern",
+    "AutoPattern",
+    "DefaultPattern",
     "ManualPattern",
-    "OrganicPattern",
     "RandomPattern",
     "RoundRobinPattern",
 ]

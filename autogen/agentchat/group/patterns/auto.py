@@ -15,8 +15,8 @@ if TYPE_CHECKING:
     from ..group_tool_executor import GroupToolExecutor
 
 
-class OrganicPattern(Pattern):
-    """OrganicPattern implements a flexible pattern where agents are selected based on their expertise.
+class AutoPattern(Pattern):
+    """AutoPattern implements a flexible pattern where agents are selected based on their expertise.
 
     In this pattern, a group manager automatically selects the next agent to speak based on the context
     of the conversation and agent descriptions. The after_work is always set to "group_manager" as
@@ -34,7 +34,7 @@ class OrganicPattern(Pattern):
         exclude_transit_message: bool = True,
         summary_method: Optional[Union[str, Callable[..., Any]]] = "last_msg",
     ):
-        """Initialize the OrganicPattern.
+        """Initialize the AutoPattern.
 
         The after_work is always set to group_manager selection, which is the defining
         characteristic of this pattern. You can customize the selection message used
@@ -106,7 +106,7 @@ class OrganicPattern(Pattern):
 
             if not has_llm_config:
                 raise ValueError(
-                    "OrganicPattern requires the group_manager_args to include an llm_config, "
+                    "AutoPattern requires the group_manager_args to include an llm_config, "
                     "or at least one agent to have an llm_config"
                 )
 

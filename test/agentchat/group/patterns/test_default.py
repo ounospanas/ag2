@@ -9,11 +9,11 @@ import pytest
 
 from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.agentchat.group.context_variables import ContextVariables
-from autogen.agentchat.group.patterns.generic import GenericPattern
-from autogen.agentchat.group.targets.transition_target import TerminateTarget, TransitionTarget
+from autogen.agentchat.group.patterns.pattern import DefaultPattern
+from autogen.agentchat.group.targets.transition_target import TerminateTarget
 
 
-class TestGenericPattern:
+class TestDefaultPattern:
     @pytest.fixture
     def mock_agent(self) -> MagicMock:
         """Create a mock ConversableAgent for testing."""
@@ -62,9 +62,9 @@ class TestGenericPattern:
         agents = [mock_agent]
 
         # Create pattern with minimal parameters
-        pattern = GenericPattern(initial_agent=mock_initial_agent, agents=cast(list[ConversableAgent], agents))
+        pattern = DefaultPattern(initial_agent=mock_initial_agent, agents=cast(list[ConversableAgent], agents))
 
-        # Check base class parameters
+        # Check default's class parameters
         assert pattern.initial_agent is mock_initial_agent
         assert pattern.agents == agents
         assert pattern.user_agent is None
@@ -74,7 +74,7 @@ class TestGenericPattern:
         assert pattern.exclude_transit_message is True
         assert pattern.summary_method == "last_msg"
 
-    @patch("autogen.agentchat.group.patterns.generic.Pattern.prepare_group_chat")
+    @patch("autogen.agentchat.group.patterns.pattern.Pattern.prepare_group_chat")
     def test_prepare_group_chat(
         self,
         mock_super_prepare: MagicMock,
@@ -82,7 +82,7 @@ class TestGenericPattern:
         mock_agent: MagicMock,
         context_variables: ContextVariables,
     ) -> None:
-        """Test the prepare_group_chat method of GenericPattern."""
+        """Test the prepare_group_chat method of DefaultPattern."""
         # Setup
         agents = [mock_agent]
 
@@ -93,7 +93,7 @@ class TestGenericPattern:
             MagicMock(name="user_agent"),  # user_agent
             context_variables,  # context_variables
             mock_initial_agent,  # initial_agent
-            MagicMock(spec=TransitionTarget),  # group_after_work (ignored by GenericPattern)
+            MagicMock(spec=TerminateTarget),  # group_after_work (ignored by DefaultPattern)
             MagicMock(name="tool_executor"),  # tool_executor
             MagicMock(name="groupchat"),  # groupchat
             MagicMock(name="manager"),  # manager
@@ -104,7 +104,7 @@ class TestGenericPattern:
         )
 
         # Create pattern
-        pattern = GenericPattern(initial_agent=mock_initial_agent, agents=cast(list[ConversableAgent], agents))
+        pattern = DefaultPattern(initial_agent=mock_initial_agent, agents=cast(list[ConversableAgent], agents))
 
         # Call the method
         result = pattern.prepare_group_chat(max_rounds=10, messages="Hello")

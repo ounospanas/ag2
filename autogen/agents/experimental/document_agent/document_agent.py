@@ -18,7 +18,7 @@ from ....agentchat.group.llm_condition import StringLLMCondition
 from ....agentchat.group.multi_agent_chat import initiate_group_chat
 from ....agentchat.group.on_condition import OnCondition
 from ....agentchat.group.on_context_condition import OnContextCondition
-from ....agentchat.group.patterns.generic import GenericPattern
+from ....agentchat.group.patterns.pattern import DefaultPattern
 from ....agentchat.group.reply_result import ReplyResult
 from ....agentchat.group.targets.transition_target import AgentNameTarget, AgentTarget, StayTarget, TerminateTarget
 from ....doc_utils import export_module
@@ -426,7 +426,7 @@ class DocAgent(ConversableAgent):
             self._error_agent,
         ]
 
-        agent_pattern = GenericPattern(
+        agent_pattern = DefaultPattern(
             initial_agent=self._triage_agent,
             agents=swarm_agents,
             context_variables=context_variables,

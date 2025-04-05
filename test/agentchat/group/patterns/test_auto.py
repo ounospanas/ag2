@@ -9,11 +9,11 @@ import pytest
 
 from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.agentchat.group.context_variables import ContextVariables
-from autogen.agentchat.group.patterns.organic import OrganicPattern
+from autogen.agentchat.group.patterns.auto import AutoPattern
 from autogen.agentchat.group.targets.group_manager_target import GroupManagerSelectionMessage, GroupManagerTarget
 
 
-class TestOrganicPattern:
+class TestAutoPattern:
     @pytest.fixture
     def mock_agent(self) -> MagicMock:
         """Create a mock ConversableAgent for testing."""
@@ -71,7 +71,7 @@ class TestOrganicPattern:
         agents = [mock_agent]
 
         # Create pattern
-        pattern = OrganicPattern(initial_agent=mock_initial_agent, agents=cast(list[ConversableAgent], agents))
+        pattern = AutoPattern(initial_agent=mock_initial_agent, agents=cast(list[ConversableAgent], agents))
 
         # Check that group_after_work is a GroupManagerTarget
         assert isinstance(pattern.group_after_work, GroupManagerTarget)
@@ -96,7 +96,7 @@ class TestOrganicPattern:
         agents = [mock_agent]
 
         # Create pattern
-        pattern = OrganicPattern(
+        pattern = AutoPattern(
             initial_agent=mock_initial_agent,
             agents=cast(list[ConversableAgent], agents),
             selection_message=mock_selection_message,
@@ -123,7 +123,7 @@ class TestOrganicPattern:
         summary_method = "reflection"
 
         # Create pattern
-        pattern = OrganicPattern(
+        pattern = AutoPattern(
             initial_agent=mock_initial_agent,
             agents=cast(list[ConversableAgent], agents),
             user_agent=mock_user_agent,
@@ -150,7 +150,7 @@ class TestOrganicPattern:
         assert pattern.exclude_transit_message is False
         assert pattern.summary_method == summary_method
 
-    @patch("autogen.agentchat.group.patterns.organic.Pattern.prepare_group_chat")
+    @patch("autogen.agentchat.group.patterns.auto.Pattern.prepare_group_chat")
     def test_prepare_group_chat(
         self,
         mock_super_prepare: MagicMock,
@@ -180,7 +180,7 @@ class TestOrganicPattern:
         )
 
         # Create pattern
-        pattern = OrganicPattern(initial_agent=mock_initial_agent, agents=cast(list[ConversableAgent], agents))
+        pattern = AutoPattern(initial_agent=mock_initial_agent, agents=cast(list[ConversableAgent], agents))
 
         # Call the method
         result = pattern.prepare_group_chat(max_rounds=10, messages="Hello")
@@ -203,7 +203,7 @@ class TestOrganicPattern:
         agents = [mock_agent]
 
         # Create pattern with empty group_manager_args
-        pattern = OrganicPattern(
+        pattern = AutoPattern(
             initial_agent=mock_initial_agent, agents=cast(list[ConversableAgent], agents), group_manager_args={}
         )
 
@@ -211,7 +211,7 @@ class TestOrganicPattern:
         with pytest.raises(ValueError) as excinfo:
             pattern.prepare_group_chat(max_rounds=10, messages="Hello")
 
-        assert "OrganicPattern requires the group_manager_args to include an llm_config" in str(excinfo.value)
+        assert "AutoPattern requires the group_manager_args to include an llm_config" in str(excinfo.value)
 
     def test_prepare_group_chat_with_llm_config_in_group_manager_args(
         self, mock_initial_agent: MagicMock, mock_agent: MagicMock
@@ -223,14 +223,14 @@ class TestOrganicPattern:
         agents = [mock_agent]
 
         # Create pattern with LLM config in group_manager_args
-        pattern = OrganicPattern(
+        pattern = AutoPattern(
             initial_agent=mock_initial_agent,
             agents=cast(list[ConversableAgent], agents),
             group_manager_args={"llm_config": {"model": "gpt-4"}},
         )
 
         # Mock super().prepare_group_chat to avoid actually calling it
-        with patch("autogen.agentchat.group.patterns.organic.Pattern.prepare_group_chat") as mock_super:
+        with patch("autogen.agentchat.group.patterns.auto.Pattern.prepare_group_chat") as mock_super:
             mock_super.return_value = (agents, [], None, None, None, None, None, None, None, [], None, [], [])
 
             # Call the method - should not raise ValueError
@@ -255,14 +255,14 @@ class TestOrganicPattern:
         agents = [agent1, agent2]
 
         # Create pattern
-        pattern = OrganicPattern(
+        pattern = AutoPattern(
             initial_agent=mock_initial_agent,
             agents=cast(list[ConversableAgent], agents),
             # Could also set group_manager_args={"llm_config": {"model": "test-model"}} instead
         )
 
         # Mock super().prepare_group_chat to avoid actually calling it
-        with patch("autogen.agentchat.group.patterns.organic.Pattern.prepare_group_chat") as mock_super:
+        with patch("autogen.agentchat.group.patterns.auto.Pattern.prepare_group_chat") as mock_super:
             mock_super.return_value = (agents, [], None, None, None, None, None, None, None, [], None, [], [])
 
             # Call the method

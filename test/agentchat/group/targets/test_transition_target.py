@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import random
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -531,12 +530,8 @@ class TestRandomAgentTarget:
         mock_current_agent.name = "current_agent"  # Different from the available agents
         mock_groupchat = MagicMock(spec=GroupChat)
 
-        # Mock random.choice to return a predictable result, always choose agent2
+        # Test with mocked random selection to ensure deterministic behavior
         with patch("random.choice", return_value="agent2"):
-            original_choice = random.choice
-            result = target.resolve(mock_groupchat, mock_current_agent, None)
-
-        try:
             result = target.resolve(mock_groupchat, mock_current_agent, None)
 
             # Assert the result is correct
@@ -548,9 +543,28 @@ class TestRandomAgentTarget:
             # Assert the nominated name was updated
             assert target.nominated_name == "agent2"
 
-        finally:
-            # Restore original random.choice
-            random.choice = original_choice
+    def test_resolve_with_randomness(self) -> None:
+        """Test that resolve randomly selects an agent name from the available options."""
+        # Setup
+        mock_agent1 = MagicMock(spec=ConversableAgent)
+        mock_agent1.name = "agent1"
+        mock_agent2 = MagicMock(spec=ConversableAgent)
+        mock_agent2.name = "agent2"
+
+        target = RandomAgentTarget(agents=[mock_agent1, mock_agent2])
+        mock_current_agent = MagicMock(spec=ConversableAgent)
+        mock_current_agent.name = "current_agent"  # Different from the available agents
+        mock_groupchat = MagicMock(spec=GroupChat)
+
+        # Call resolve with real randomness
+        result = target.resolve(mock_groupchat, mock_current_agent, None)
+
+        # Verify the result is one of the expected agent names
+        assert isinstance(result, SpeakerSelectionResult)
+        assert result.agent_name in ["agent1", "agent2"]
+        assert result.terminate is None
+        assert result.speaker_selection_method is None
+        assert target.nominated_name in ["agent1", "agent2"]
 
     def test_resolve_excludes_current_agent(self) -> None:
         """Test that resolve excludes the current agent from selection."""

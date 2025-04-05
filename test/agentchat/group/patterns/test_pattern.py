@@ -2,15 +2,46 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import cast
+from typing import TYPE_CHECKING, Any, Optional, Tuple, Union, cast
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.agentchat.group.context_variables import ContextVariables
-from autogen.agentchat.group.patterns.pattern import Pattern
-from autogen.agentchat.group.targets.transition_target import StayTarget, TerminateTarget
+from autogen.agentchat.group.patterns.pattern import DefaultPattern, Pattern
+from autogen.agentchat.group.targets.transition_target import StayTarget, TerminateTarget, TransitionTarget
+
+if TYPE_CHECKING:
+    from autogen.agentchat.group.group_tool_executor import GroupToolExecutor
+    from autogen.agentchat.groupchat import GroupChat, GroupChatManager
+
+
+# Create a concrete test subclass for testing Pattern's base functionality
+class TestPatternImpl(Pattern):
+    """Concrete implementation of Pattern for testing purposes."""
+
+    def prepare_group_chat(
+        self,
+        max_rounds: int,
+        messages: Union[list[dict[str, Any]], str],
+    ) -> Tuple[
+        list["ConversableAgent"],
+        list["ConversableAgent"],
+        Optional["ConversableAgent"],
+        ContextVariables,
+        "ConversableAgent",
+        TransitionTarget,
+        "GroupToolExecutor",
+        "GroupChat",
+        "GroupChatManager",
+        list[dict[str, Any]],
+        Any,
+        list[str],
+        list[Any],
+    ]:
+        """Concrete implementation that just calls the parent method."""
+        return super().prepare_group_chat(max_rounds, messages)
 
 
 class TestPattern:
@@ -60,7 +91,7 @@ class TestPattern:
     def test_init_with_minimal_params(self, mock_initial_agent: MagicMock, mock_agent: MagicMock) -> None:
         """Test initialization with minimal parameters."""
         agents = [mock_agent]
-        pattern = Pattern(initial_agent=mock_initial_agent, agents=cast(list[ConversableAgent], agents))
+        pattern = TestPatternImpl(initial_agent=mock_initial_agent, agents=cast(list[ConversableAgent], agents))
 
         # Check required parameters
         assert pattern.initial_agent is mock_initial_agent
@@ -87,7 +118,7 @@ class TestPattern:
         group_after_work = StayTarget()
         summary_method = "reflection"
 
-        pattern = Pattern(
+        pattern = TestPatternImpl(
             initial_agent=mock_initial_agent,
             agents=cast(list[ConversableAgent], agents),
             user_agent=mock_user_agent,
@@ -160,7 +191,7 @@ class TestPattern:
         mock_create_manager.return_value = mock_manager
 
         # Create pattern
-        pattern = Pattern(
+        pattern = TestPatternImpl(
             initial_agent=mock_initial_agent,
             agents=cast(list[ConversableAgent], agents),
             user_agent=mock_user_agent,
@@ -195,3 +226,36 @@ class TestPattern:
         assert result[10] == mock_last_agent  # last_agent
         assert result[11] == mock_group_agent_names  # group_agent_names
         assert result[12] == mock_temp_user_list  # temp_user_list
+
+
+class TestDefaultPatternIntegration:
+    """Test the integration between Pattern ABC and DefaultPattern."""
+
+    @pytest.fixture
+    def mock_agent(self) -> MagicMock:
+        agent = MagicMock(spec=ConversableAgent)
+        agent.name = "mock_agent"
+        return agent
+
+    @pytest.fixture
+    def mock_initial_agent(self) -> MagicMock:
+        agent = MagicMock(spec=ConversableAgent)
+        agent.name = "initial_agent"
+        return agent
+
+    def test_default_pattern_is_pattern_subclass(self) -> None:
+        """Test that DefaultPattern is a subclass of Pattern."""
+        assert issubclass(DefaultPattern, Pattern)
+
+    def test_can_instantiate_default_pattern(self, mock_initial_agent: MagicMock, mock_agent: MagicMock) -> None:
+        """Test that we can instantiate DefaultPattern but not Pattern."""
+        agents = [mock_agent]
+
+        # Should be able to instantiate DefaultPattern
+        pattern = DefaultPattern(initial_agent=mock_initial_agent, agents=cast(list[ConversableAgent], agents))
+        assert isinstance(pattern, DefaultPattern)
+        assert isinstance(pattern, Pattern)
+
+        # Should NOT be able to instantiate Pattern directly
+        with pytest.raises(TypeError):
+            Pattern(initial_agent=mock_initial_agent, agents=cast(list[ConversableAgent], agents))  # type: ignore[abstract]
