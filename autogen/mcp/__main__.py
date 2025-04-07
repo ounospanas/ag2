@@ -32,7 +32,7 @@ def callback(
     Generate mcp proxy for your [bold]AG2[/bold] projects.
 
     Read more in the docs: ...
-    """  # noqa: D415e
+    """  # noqa: D415
 
 
 @app.command()
