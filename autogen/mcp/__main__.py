@@ -49,7 +49,7 @@ def create(
         Optional[str],
         "Path to the generated proxy client source code.",
     ] = None,
-    servers: Annotated[
+    server_url: Annotated[
         Optional[str],
         "Comma-separated list of server URLs to use for the proxy generation.",
     ] = None,
@@ -59,7 +59,7 @@ def create(
         openapi_json=openapi_json,
         openapi_url=openapi_url,
         client_source_path=client_source_path,
-        servers=servers,
+        servers=[{"url": server_url}],
     )
 
 
