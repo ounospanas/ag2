@@ -2,11 +2,11 @@
 
 from typing import *
 
-from autogen.mcp.openapi import OpenAPI
-from autogen.mcp.openapi.security import {% for i in security_classes %}{{i}}{% if not loop.last %}, {% endif %}{% endfor %}
+from autogen.mcp.mcp_proxy import MCPProxy
+from autogen.mcp.mcp_proxy.security import {% for i in security_classes %}{{i}}{% if not loop.last %}, {% endif %}{% endfor %}
 
 
-app = OpenAPI(
+app = MCPProxy(
     {% if info %}
     {% for key,value in info.items() %}
     {% set info_value= value.__repr__() %}
@@ -54,3 +54,12 @@ def {{operation.function_name}}({{operation.snake_case_arguments}}
     {%- endif %}
     pass
 {% endfor %}
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Math Server")
+    parser.add_argument("transport", choices=["stdio", "sse"], help="Transport mode (stdio or sse)")
+    args = parser.parse_args()
+
+    # todo: add security parameters from env variables
+
+    app._mcp.run(transport=args.transport)

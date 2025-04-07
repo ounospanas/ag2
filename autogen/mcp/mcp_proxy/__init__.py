@@ -13,6 +13,6 @@ patch_function_name_parsing()
 patch_generate_code()
 patch_apply_discriminator_type()
 
-from .openapi import OpenAPI  # noqa: E402
+from .mcp_proxy import MCPProxy  # noqa: E402
 
-__all__ = ["OpenAPI"]
+__all__ = ["MCPProxy"]

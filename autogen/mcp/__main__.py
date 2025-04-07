@@ -7,7 +7,7 @@ from typing import Annotated, Optional
 import typer
 
 from .. import __version__
-from .openapi import OpenAPI
+from .mcp_proxy import MCPProxy
 
 app = typer.Typer(rich_markup_mode="rich")
 
@@ -55,7 +55,7 @@ def create(
     ] = None,
 ) -> None:
     """Generate mcp proxy for your AG2 projects."""
-    OpenAPI.create(
+    MCPProxy.create(
         openapi_json=openapi_json,
         openapi_url=openapi_url,
         client_source_path=client_source_path,

@@ -28,6 +28,7 @@ import fastapi
 import requests
 from datamodel_code_generator import DataModelType
 from fastapi_code_generator.__main__ import generate_code
+from mcp.server.fastmcp import FastMCP
 from pydantic_core import PydanticUndefined
 
 from .fastapi_code_generator_helpers import patch_get_parameter_type
@@ -36,7 +37,7 @@ from .security import BaseSecurity, BaseSecurityParameters
 if TYPE_CHECKING:
     from autogen.agentchat import ConversableAgent
 
-__all__ = ["OpenAPI"]
+__all__ = ["MCPProxy"]
 
 logger = getLogger(__name__)
 
@@ -66,17 +67,20 @@ def add_to_builtins(new_globals: dict[str, Any]) -> Iterator[None]:
                 setattr(builtins, key, value)  # Restore original value
 
 
-class OpenAPI:
+class MCPProxy:
     def __init__(self, servers: list[dict[str, Any]], title: Optional[str] = None, **kwargs: Any) -> None:
         """Proxy class to generate client from OpenAPI schema."""
         self._servers = servers
-        self._title = title
+        self._title = title or "MCP Proxy"
         self._kwargs = kwargs
         self._registered_funcs: list[Callable[..., Any]] = []
         self._globals: dict[str, Any] = {}
 
         self._security: dict[str, list[BaseSecurity]] = {}
         self._security_params: dict[Optional[str], BaseSecurityParameters] = {}
+
+        self._mcp = FastMCP(title=self._title)
+
 
     @staticmethod
     def _convert_camel_case_within_braces_to_snake(text: str) -> str:
@@ -110,8 +114,8 @@ class OpenAPI:
     def _process_params(
         self, path: str, func: Callable[[Any], Any], **kwargs: Any
     ) -> tuple[str, dict[str, Any], dict[str, Any]]:
-        path = OpenAPI._convert_camel_case_within_braces_to_snake(path)
-        q_params, path_params, body, security = OpenAPI._get_params(path, func)
+        path = MCPProxy._convert_camel_case_within_braces_to_snake(path)
+        q_params, path_params, body, security = MCPProxy._get_params(path, func)
 
         expanded_path = path.format(**{p: kwargs[p] for p in path_params})
 
@@ -192,6 +196,7 @@ class OpenAPI:
             if security is not None:
                 self._security[name] = security
 
+            @self._mcp.tool()
             @wraps(func)
             def wrapper(*args: Any, **kwargs: Any) -> dict[str, Any]:
                 url, params, body_dict = self._process_params(path, func, **kwargs)
@@ -299,7 +304,7 @@ class OpenAPI:
         openapi_url: Optional[str] = None,
         client_source_path: Optional[str] = None,
         servers: Optional[list[dict[str, Any]]] = None,
-    ) -> "OpenAPI":
+    ) -> "MCPProxy":
         if (openapi_json is None) == (openapi_url is None):
             raise ValueError("Either openapi_json or openapi_url should be provided")
 
@@ -327,7 +332,7 @@ class OpenAPI:
             finally:
                 sys.path.remove(str(td))
 
-            client: OpenAPI = main.app  # type: ignore [attr-defined]
+            client: MCPProxy = main.app  # type: ignore [attr-defined]
             client.set_globals(main, suffix=suffix)
 
             return client
@@ -414,7 +419,7 @@ class OpenAPI:
             for f, v in funcs_to_register.items():
                 agent.register_for_llm(name=v["name"], description=v["description"])(f)
 
-            agent.llm_config["tools"] = OpenAPI._remove_pydantic_undefined_from_tools(agent.llm_config["tools"])
+            agent.llm_config["tools"] = MCPProxy._remove_pydantic_undefined_from_tools(agent.llm_config["tools"])
 
     def _register_for_execution(
         self,
