@@ -81,7 +81,6 @@ class MCPProxy:
 
         self._mcp = FastMCP(title=self._title)
 
-
     @staticmethod
     def _convert_camel_case_within_braces_to_snake(text: str) -> str:
         # Function to convert camel case to snake case
