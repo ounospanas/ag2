@@ -1,10 +1,12 @@
 {{imports}}
 
+import argparse
+import os
 from typing import *
 
 from autogen.mcp.mcp_proxy import MCPProxy
+from autogen.mcp.mcp_proxy.security import BaseSecurity
 from autogen.mcp.mcp_proxy.security import {% for i in security_classes %}{{i}}{% if not loop.last %}, {% endif %}{% endfor %}
-
 
 app = MCPProxy(
     {% if info %}
@@ -60,6 +62,11 @@ if __name__ == "__main__":
     parser.add_argument("transport", choices=["stdio", "sse"], help="Transport mode (stdio or sse)")
     args = parser.parse_args()
 
-    # todo: add security parameters from env variables
+    if "SECURITY" in os.environ:
+        security_params = BaseSecurity.parse_security_parameters(
+            os.environ["SECURITY"],
+        )
+
+    app.set_security_params(security_params)
 
     app._mcp.run(transport=args.transport)

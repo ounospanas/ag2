@@ -2,12 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 import builtins
-import importlib
 import inspect
 import json
 import re
 import shutil
-import sys
 import tempfile
 from collections.abc import Iterable, Iterator, Mapping
 from contextlib import contextmanager
@@ -270,20 +268,20 @@ class MCPProxy:
                 output_model_type=DataModelType.PydanticV2BaseModel,
             )
             # Use unique file name for main.py
-            main_name = f"main_{output_dir.name}"
+            main_name = "main"
             main_path = output_dir / f"{main_name}.py"
             shutil.move(output_dir / "main.py", main_path)
 
             # Change "from models import" to "from models_unique_name import"
             with main_path.open("r") as f:
                 main_py_code = f.read()
-            main_py_code = main_py_code.replace("from .models import", f"from models_{output_dir.name} import")
+            main_py_code = main_py_code.replace("from .models import", "from models import")
 
             with main_path.open("w") as f:
                 f.write(main_py_code)
 
             # Use unique file name for models.py
-            models_name = f"models_{output_dir.name}"
+            models_name = "models"
             models_path = output_dir / f"{models_name}.py"
             shutil.move(output_dir / "models.py", models_path)
 
@@ -318,23 +316,23 @@ class MCPProxy:
             openapi_json = json.dumps(openapi_parsed)
 
         with optional_temp_path(client_source_path) as td:
-            suffix = td.name
+            suffix = td.name  # noqa F841
 
-            main_name = cls.generate_code(
+            main_name = cls.generate_code(  # noqa F841
                 input_text=openapi_json,  # type: ignore [arg-type]
                 output_dir=td,
             )
             # add td to sys.path
-            try:
-                sys.path.append(str(td))
-                main = importlib.import_module(main_name, package=td.name)  # nosemgrep
-            finally:
-                sys.path.remove(str(td))
+            # try:
+            #     sys.path.append(str(td))
+            #     main = importlib.import_module(main_name, package=td.name)  # nosemgrep
+            # finally:
+            #     sys.path.remove(str(td))
 
-            client: MCPProxy = main.app  # type: ignore [attr-defined]
-            client.set_globals(main, suffix=suffix)
+            # client: MCPProxy = main.app  # type: ignore [attr-defined]
+            # client.set_globals(main, suffix=suffix)
 
-            return client
+            # return client
 
     def _get_functions_to_register(
         self,

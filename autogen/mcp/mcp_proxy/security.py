@@ -61,6 +61,13 @@ class BaseSecurity(BaseModel):
     def get_security_parameters(cls, schema_parameters: dict[str, Any]) -> str:
         return f'{cls.__name__}(name="{schema_parameters.get("name")}")'
 
+    @classmethod
+    def parse_security_parameters(cls, unparsed_params: dict[str, Any]) -> "BaseSecurityParameters":
+        type = unparsed_params.pop("type")
+        schema_parameters = unparsed_params.pop("schema_parameters")
+        security_class = cls.get_security_class(type, schema_parameters)
+        return security_class.Parameters.model_validate(unparsed_params)
+
 
 class BaseSecurityParameters(Protocol):
     """Base class for security parameters."""
@@ -132,6 +139,13 @@ class APIKeyHeader(BaseSecurity):
         def get_security_class(self) -> type[BaseSecurity]:
             return APIKeyHeader
 
+        def dump(self) -> dict[str, Any]:
+            return {
+                "type": "apiKey",
+                "schema_parameters": {"in": "header"},
+                **self.model_dump(),
+            }
+
 
 class APIKeyQuery(BaseSecurity):
     """API Key Query security class."""
@@ -161,6 +175,13 @@ class APIKeyQuery(BaseSecurity):
         def get_security_class(self) -> type[BaseSecurity]:
             return APIKeyQuery
 
+        def dump(self) -> dict[str, Any]:
+            return {
+                "type": "apiKey",
+                "schema_parameters": {"in": "query"},
+                **self.model_dump(),
+            }
+
 
 class APIKeyCookie(BaseSecurity):
     """API Key Cookie security class."""
@@ -188,6 +209,13 @@ class APIKeyCookie(BaseSecurity):
 
         def get_security_class(self) -> type[BaseSecurity]:
             return APIKeyCookie
+
+        def dump(self) -> dict[str, Any]:
+            return {
+                "type": "apiKey",
+                "schema_parameters": {"in": "cookie"},
+                **self.model_dump(),
+            }
 
 
 class HTTPBearer(BaseSecurity):
@@ -218,6 +246,13 @@ class HTTPBearer(BaseSecurity):
 
         def get_security_class(self) -> type[BaseSecurity]:
             return HTTPBearer
+
+        def dump(self) -> dict[str, Any]:
+            return {
+                "type": "http",
+                "schema_parameters": {"scheme": "bearer"},
+                **self.model_dump(),
+            }
 
 
 class HTTPBasic(BaseSecurity):
@@ -252,6 +287,13 @@ class HTTPBasic(BaseSecurity):
 
         def get_security_class(self) -> type[BaseSecurity]:
             return HTTPBasic
+
+        def dump(self) -> dict[str, Any]:
+            return {
+                "type": "http",
+                "schema_parameters": {"scheme": "basic"},
+                **self.model_dump(),
+            }
 
 
 class OAuth2PasswordBearer(BaseSecurity):
@@ -322,3 +364,10 @@ class OAuth2PasswordBearer(BaseSecurity):
 
         def get_security_class(self) -> type[BaseSecurity]:
             return OAuth2PasswordBearer
+
+        def dump(self) -> dict[str, Any]:
+            return {
+                "type": "oauth2",
+                "schema_parameters": {"flows": {"password": {"tokenUrl": self.token_url or ""}}},
+                **self.model_dump(),
+            }
