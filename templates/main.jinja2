@@ -1,0 +1,56 @@
+{{imports}}
+
+from typing import *
+
+from autogen.mcp.openapi import OpenAPI
+from autogen.mcp.openapi.security import {% for i in security_classes %}{{i}}{% if not loop.last %}, {% endif %}{% endfor %}
+
+
+app = OpenAPI(
+    {% if info %}
+    {% for key,value in info.items() %}
+    {% set info_value= value.__repr__() %}
+    {% if not key.startswith('x-') %}
+    {{ key }} = {{info_value}},
+    {% endif %}
+    {% endfor %}
+    {% endif %}
+    )
+
+
+{% for operation in operations %}
+@app.{{operation.type}}('{{operation.path}}', response_model={{operation.response}}
+    {% if operation.description %}
+    , description="""{{operation.description}}"""
+    {% endif %}
+    {% if operation.additional_responses %}
+        , responses={
+            {% for status_code, models in operation.additional_responses.items() %}
+                '{{ status_code }}': {
+                {% for key, model in models.items() %}
+                    '{{ key }}': {{ model }}{% if not loop.last %},{% endif %}
+                {% endfor %}
+                }{% if not loop.last %},{% endif %}
+            {% endfor %}
+        }
+    {% endif %}
+    {% if operation.tags %}
+    , tags={{operation.tags}}
+    {% endif %}
+    {% if operation.security %}
+    , security=[{% for security in operation.security %}
+    {% for key, value in security.items() %}
+    {{security_parameters[key]}},
+    {% endfor %}
+    {% endfor %}]
+    {% endif %}
+    )
+def {{operation.function_name}}({{operation.snake_case_arguments}}
+    ) -> {{operation.return_type}}:
+    {%- if operation.summary %}
+    """
+    {{ operation.summary }}
+    """
+    {%- endif %}
+    pass
+{% endfor %}

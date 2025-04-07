@@ -6,7 +6,7 @@ from pathlib import Path
 from fastapi_code_generator.parser import OpenAPIParser
 from fastapi_code_generator.visitor import Visitor
 
-from .security import BaseSecurity
+from autogen.mcp.openapi.security import BaseSecurity
 
 
 def custom_visitor(parser: OpenAPIParser, model_path: Path) -> dict[str, object]:

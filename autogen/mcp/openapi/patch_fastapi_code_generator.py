@@ -11,7 +11,7 @@ import stringcase
 from fastapi_code_generator import __main__ as fastapi_code_generator_main
 from fastapi_code_generator.parser import OpenAPIParser, Operation
 
-logger = logging.get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def patch_parse_schema() -> None:

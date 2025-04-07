@@ -19,7 +19,7 @@ from datamodel_code_generator.reference import Reference
 # from datamodel_code_generator.parser import base
 from fastapi_code_generator.parser import OpenAPIParser
 
-logger = logging.get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 # Save the original method before patching
 original_apply_discriminator_type = OpenAPIParser._Parser__apply_discriminator_type
