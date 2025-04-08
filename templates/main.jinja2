@@ -54,7 +54,7 @@ def {{operation.function_name}}({{operation.snake_case_arguments}}
     {{ operation.summary }}
     """
     {%- endif %}
-    pass
+    raise RuntimeError("Should be patched by MCPProxy and never executed")
 {% endfor %}
 
 if __name__ == "__main__":
