@@ -1,5 +1,6 @@
 # math_server.py
 import argparse
+
 from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("Math")
