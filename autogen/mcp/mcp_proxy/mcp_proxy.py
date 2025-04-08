@@ -2,10 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 import builtins
+import importlib
 import inspect
 import json
 import re
 import shutil
+import sys
 import tempfile
 from collections.abc import Iterable, Iterator, Mapping
 from contextlib import contextmanager
@@ -276,6 +278,8 @@ class MCPProxy:
             with main_path.open("r") as f:
                 main_py_code = f.read()
             main_py_code = main_py_code.replace("from .models import", "from models import")
+            # Removing "from __future__ import annotations" to avoid ForwardRef issues, should be fixed in fastapi_code_generator
+            main_py_code = main_py_code.replace("from __future__ import annotations", "")
 
             with main_path.open("w") as f:
                 f.write(main_py_code)
@@ -323,16 +327,16 @@ class MCPProxy:
                 output_dir=td,
             )
             # add td to sys.path
-            # try:
-            #     sys.path.append(str(td))
-            #     main = importlib.import_module(main_name, package=td.name)  # nosemgrep
-            # finally:
-            #     sys.path.remove(str(td))
+            try:
+                sys.path.append(str(td))
+                main = importlib.import_module(main_name, package=td.name)  # nosemgrep
+            finally:
+                sys.path.remove(str(td))
 
-            # client: MCPProxy = main.app  # type: ignore [attr-defined]
-            # client.set_globals(main, suffix=suffix)
+            client: MCPProxy = main.app  # type: ignore [attr-defined]
+            client.set_globals(main, suffix=suffix)
 
-            # return client
+            return client
 
     def _get_functions_to_register(
         self,
