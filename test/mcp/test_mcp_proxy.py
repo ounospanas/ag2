@@ -4,6 +4,8 @@
 import shutil
 from pathlib import Path
 
+import pytest
+
 from autogen.mcp.mcp_proxy.mcp_proxy import MCPProxy
 
 
