@@ -29,6 +29,7 @@ import requests
 from datamodel_code_generator import DataModelType
 from fastapi_code_generator.__main__ import generate_code
 from mcp.server.fastmcp import FastMCP
+from pydantic import PydanticInvalidForJsonSchema
 from pydantic_core import PydanticUndefined
 
 from .fastapi_code_generator_helpers import patch_get_parameter_type
@@ -195,7 +196,6 @@ class MCPProxy:
             if security is not None:
                 self._security[name] = security
 
-            @self._mcp.tool()
             @wraps(func)
             def wrapper(*args: Any, **kwargs: Any) -> dict[str, Any]:
                 url, params, body_dict = self._process_params(path, func, **kwargs)
@@ -210,6 +210,11 @@ class MCPProxy:
 
                 response = getattr(requests, method)(url, params=params, **body_dict)
                 return response.json()  # type: ignore [no-any-return]
+
+            try:
+                wrapper = self._mcp.tool()(wrapper)  # type: ignore [no-untyped-call]
+            except PydanticInvalidForJsonSchema as e:
+                logger.warning("Could not register function %s: %s", func.__name__, e)
 
             wrapper._description = (  # type: ignore [attr-defined]
                 description or func.__doc__.strip() if func.__doc__ is not None else None
