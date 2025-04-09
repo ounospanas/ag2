@@ -2,8 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 import base64
+import json
 import logging
-from typing import Any, ClassVar, Literal, Optional, Protocol
+from typing import Any, ClassVar, Literal, Optional
 
 import requests
 from pydantic import BaseModel, model_validator
@@ -68,8 +69,17 @@ class BaseSecurity(BaseModel):
         security_class = cls.get_security_class(type, schema_parameters)
         return security_class.Parameters.model_validate(unparsed_params)
 
+    @classmethod
+    def parse_security_parameters_from_env(cls, env: dict[str, str]) -> "BaseSecurityParameters":
+        """Parse security parameters from environment variables."""
+        security_str = env.get("SECURITY")
+        if not security_str:
+            logger.warning("No security parameters found in environment variables.")
 
-class BaseSecurityParameters(Protocol):
+        return cls.parse_security_parameters(json.loads(security_str))
+
+
+class BaseSecurityParameters(BaseModel):
     """Base class for security parameters."""
 
     def apply(
@@ -80,6 +90,15 @@ class BaseSecurityParameters(Protocol):
     ) -> None: ...
 
     def get_security_class(self) -> type[BaseSecurity]: ...
+
+    def dump(self) -> dict[str, Any]:
+        raise NotImplementedError("Subclasses must implement the dump method")
+
+    def to_env(self) -> dict[str, Any]:
+        """Convert the security parameters to a dictionary."""
+        return {
+            "SECURITY": json.dumps(self.dump()),
+        }
 
 
 class UnsuportedSecurityStub(BaseSecurity):
@@ -97,7 +116,7 @@ class UnsuportedSecurityStub(BaseSecurity):
             raise RuntimeError("Trying to set UnsuportedSecurityStub params")
         return False
 
-    class Parameters(BaseModel):  # BaseSecurityParameters
+    class Parameters(BaseSecurityParameters):  # BaseSecurityParameters
         """API Key Header security parameters class."""
 
         def apply(
@@ -118,7 +137,7 @@ class APIKeyHeader(BaseSecurity):
     type: ClassVar[Literal["apiKey"]] = "apiKey"
     in_value: ClassVar[Literal["header"]] = "header"
 
-    class Parameters(BaseModel):  # BaseSecurityParameters
+    class Parameters(BaseSecurityParameters):  # BaseSecurityParameters
         """API Key Header security parameters class."""
 
         value: str
@@ -155,9 +174,9 @@ class APIKeyQuery(BaseSecurity):
 
     @classmethod
     def is_supported(cls, type: str, schema_parameters: dict[str, Any]) -> bool:
-        return super().is_supported(type, schema_parameters) and "name" in schema_parameters
+        return super().is_supported(type, schema_parameters)
 
-    class Parameters(BaseModel):  # BaseSecurityParameters
+    class Parameters(BaseSecurityParameters):  # BaseSecurityParameters
         """API Key Query security parameters class."""
 
         value: str
@@ -189,7 +208,7 @@ class APIKeyCookie(BaseSecurity):
     type: ClassVar[Literal["apiKey"]] = "apiKey"
     in_value: ClassVar[Literal["cookie"]] = "cookie"
 
-    class Parameters(BaseModel):  # BaseSecurityParameters
+    class Parameters(BaseSecurityParameters):  # BaseSecurityParameters
         """API Key Cookie security parameters class."""
 
         value: str
@@ -228,7 +247,7 @@ class HTTPBearer(BaseSecurity):
     def is_supported(cls, type: str, schema_parameters: dict[str, Any]) -> bool:
         return cls.type == type and cls.in_value == schema_parameters.get("scheme")
 
-    class Parameters(BaseModel):  # BaseSecurityParameters
+    class Parameters(BaseSecurityParameters):  # BaseSecurityParameters
         """HTTP Bearer security parameters class."""
 
         value: str
@@ -265,7 +284,7 @@ class HTTPBasic(BaseSecurity):
     def is_supported(cls, type: str, schema_parameters: dict[str, Any]) -> bool:
         return cls.type == type and cls.in_value == schema_parameters.get("scheme")
 
-    class Parameters(BaseModel):  # BaseSecurityParameters
+    class Parameters(BaseSecurityParameters):  # BaseSecurityParameters
         """HTTP Basic security parameters class."""
 
         username: str
@@ -313,7 +332,7 @@ class OAuth2PasswordBearer(BaseSecurity):
         token_url = f"{schema_parameters.get('server_url')}/{schema_parameters['flows']['password']['tokenUrl']}"
         return f'{cls.__name__}(name="{name}", token_url="{token_url}")'
 
-    class Parameters(BaseModel):  # BaseSecurityParameters
+    class Parameters(BaseSecurityParameters):  # BaseSecurityParameters
         """OAuth2 Password Bearer security class."""
 
         username: Optional[str] = None
