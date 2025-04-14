@@ -6,7 +6,6 @@ import importlib
 import inspect
 import json
 import re
-import shutil
 import sys
 import tempfile
 from collections.abc import Iterable, Iterator, Mapping
@@ -26,13 +25,13 @@ from typing import (
 
 import fastapi
 import requests
+import yaml
 from datamodel_code_generator import DataModelType
 from fastapi_code_generator.__main__ import generate_code
 from mcp.server.fastmcp import FastMCP
 from pydantic import PydanticInvalidForJsonSchema
 from pydantic_core import PydanticUndefined
 
-from .fastapi_code_generator_helpers import patch_get_parameter_type
 from .security import BaseSecurity, BaseSecurityParameters
 
 if TYPE_CHECKING:
@@ -263,38 +262,41 @@ class MCPProxy:
             custom_visitors = []
         custom_visitors.append(Path(__file__).parent / "security_schema_visitor.py")
 
-        with patch_get_parameter_type():
-            generate_code(
-                input_name="openapi.json",
-                input_text=input_text,
-                encoding="utf-8",
-                output_dir=output_dir,
-                template_dir=cls._get_template_dir(),
-                disable_timestamp=disable_timestamp,
-                custom_visitors=custom_visitors,
-                output_model_type=DataModelType.PydanticV2BaseModel,
-            )
-            # Use unique file name for main.py
-            main_name = "main"
-            main_path = output_dir / f"{main_name}.py"
-            shutil.move(output_dir / "main.py", main_path)
+        # with patch_get_parameter_type():
+        generate_code(
+            input_name="openapi.yaml",
+            input_text=input_text,
+            encoding="utf-8",
+            output_dir=output_dir,
+            template_dir=cls._get_template_dir(),
+            disable_timestamp=disable_timestamp,
+            custom_visitors=custom_visitors,
+            output_model_type=DataModelType.PydanticV2BaseModel,
+        )
+        # Use unique file name for main.py
+        # main_name = "main"
+        # main_path = output_dir / f"{main_name}.py"
+        # shutil.move(output_dir / "main.py", main_path)
+        main_path = output_dir / "main.py"
 
-            # Change "from models import" to "from models_unique_name import"
-            with main_path.open("r") as f:
-                main_py_code = f.read()
-            main_py_code = main_py_code.replace("from .models import", "from models import")
-            # Removing "from __future__ import annotations" to avoid ForwardRef issues, should be fixed in fastapi_code_generator
-            main_py_code = main_py_code.replace("from __future__ import annotations", "")
+        # Change "from models import" to "from models_unique_name import"
+        with main_path.open("r") as f:
+            main_py_code = f.read()
+        # main_py_code = main_py_code.replace("from .models import", "from models import")
+        main_py_code = main_py_code.replace("from .models", "from models")
+        # Removing "from __future__ import annotations" to avoid ForwardRef issues, should be fixed in fastapi_code_generator
+        main_py_code = main_py_code.replace("from __future__ import annotations", "")
 
-            with main_path.open("w") as f:
-                f.write(main_py_code)
+        with main_path.open("w") as f:
+            f.write(main_py_code)
 
-            # Use unique file name for models.py
-            models_name = "models"
-            models_path = output_dir / f"{models_name}.py"
-            shutil.move(output_dir / "models.py", models_path)
+        # Use unique file name for models.py
+        # models_name = "models"
+        # models_path = output_dir / f"{models_name}.py"
+        # shutil.move(output_dir / "models.py", models_path)
 
-            return main_name
+        # return main_name
+        return main_path.stem
 
     def set_globals(self, main: ModuleType, suffix: str) -> None:
         xs = {k: v for k, v in main.__dict__.items() if not k.startswith("__")}
@@ -319,16 +321,18 @@ class MCPProxy:
                 response.raise_for_status()
                 openapi_json = response.text
 
+        openapi_parsed = json.loads(openapi_json)  # type: ignore [arg-type]
+
         if servers:
-            openapi_parsed = json.loads(openapi_json)  # type: ignore [arg-type]
             openapi_parsed["servers"] = servers
-            openapi_json = json.dumps(openapi_parsed)
+
+        yaml_friendly = yaml.safe_dump(openapi_parsed)
 
         with optional_temp_path(client_source_path) as td:
             suffix = td.name  # noqa F841
 
             main_name = cls.generate_code(  # noqa F841
-                input_text=openapi_json,  # type: ignore [arg-type]
+                input_text=yaml_friendly,  # type: ignore [arg-type]
                 output_dir=td,
             )
             # add td to sys.path

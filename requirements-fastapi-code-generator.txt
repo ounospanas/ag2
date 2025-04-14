@@ -1,0 +1,1 @@
+git+https://github.com/ag2ai/fastapi-code-generator.git@Bugfixing#egg=fastapi-code-generator

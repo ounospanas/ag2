@@ -1,13 +1,13 @@
 # Copyright (c) 2023 - 2025, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
-import json
 import logging
 import re
 from functools import cached_property, wraps
 from typing import Any
 
 import stringcase
+import yaml
 from fastapi_code_generator import __main__ as fastapi_code_generator_main
 from fastapi_code_generator.parser import OpenAPIParser, Operation
 
@@ -31,9 +31,9 @@ def patch_parse_schema() -> None:
 def patch_function_name_parsing() -> None:
     def function_name(self: Operation) -> str:
         if self.operationId:
-            name: str = self.operationId.replace("/", "_")
+            name: str = re.sub(r"[/{=}]", "_", self.operationId)
         else:
-            path = re.sub(r"/{|/", "_", self.snake_case_path).replace("}", "")
+            path = re.sub(r"[/{=]", "_", self.snake_case_path).replace("}", "")
             name = f"{self.type}{path}"
         return stringcase.snakecase(name)  # type: ignore[no-any-return]
 
@@ -52,7 +52,7 @@ def patch_generate_code() -> None:
         try:
             input_text: str = kwargs["input_text"]
 
-            json_spec = json.loads(input_text)
+            json_spec = yaml.safe_load(input_text)
 
             schemas_with_dots = sorted(
                 [name for name in json_spec.get("components", {}).get("schemas", {}) if "." in name],
@@ -67,6 +67,9 @@ def patch_generate_code() -> None:
             kwargs["input_text"] = input_text
 
         except Exception as e:
+            print(
+                f"Patched fastapi_code_generator.__main__.generate_code raised: {e}, passing untouched arguments to original generate_code"
+            )
             logger.info(
                 f"Patched fastapi_code_generator.__main__.generate_code raised: {e}, passing untouched arguments to original generate_code"
             )
