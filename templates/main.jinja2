@@ -21,20 +21,9 @@ app = MCPProxy(
 
 
 {% for operation in operations %}
-@app.{{operation.type}}('{{operation.path}}', response_model={{operation.response}}
+@app.{{operation.type}}('{{operation.path}}'
     {% if operation.description %}
-    , description="""{{operation.description}}"""
-    {% endif %}
-    {% if operation.additional_responses %}
-        , responses={
-            {% for status_code, models in operation.additional_responses.items() %}
-                '{{ status_code }}': {
-                {% for key, model in models.items() %}
-                    '{{ key }}': {{ model }}{% if not loop.last %},{% endif %}
-                {% endfor %}
-                }{% if not loop.last %},{% endif %}
-            {% endfor %}
-        }
+    , description=""" {{operation.description}} """
     {% endif %}
     {% if operation.tags %}
     , tags={{operation.tags}}
@@ -48,7 +37,7 @@ app = MCPProxy(
     {% endif %}
     )
 def {{operation.function_name}}({{operation.snake_case_arguments}}
-    ) -> {{operation.return_type}}:
+    ):
     {%- if operation.summary %}
     """
     {{ operation.summary }}

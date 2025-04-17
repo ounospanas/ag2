@@ -14,7 +14,7 @@ def test_generating_whatsapp():
     tmp_path.mkdir(parents=True, exist_ok=True)
 
     MCPProxy.create(
-        openapi_json=(Path(__file__).parent / "data_trello_copy.json").read_text(),
+        openapi_json=(Path(__file__).parent / "data_github.json").read_text(),
         # openapi_url="https://dac-static.atlassian.com/cloud/trello/swagger.v3.json?_v=1.592.0",
         # openapi_url="https://dev.infobip.com/openapi/products/whatsapp.json",
         client_source_path="here",
