@@ -48,7 +48,7 @@ jobs:
       #     TWINE_USERNAME: ${{ secrets.PYAUTOGEN_PYPI_USERNAME }}
       #     TWINE_PASSWORD: ${{ secrets.PYAUTOGEN_PYPI_PASSWORD }}
       #   shell: pwsh
-      #   run: twine upload dist/*pyautogen*
+      #   run: twine upload dist/*ag2*
       - name: Build autogen
         shell: pwsh
         run: |
