@@ -5,6 +5,7 @@ import shutil
 from pathlib import Path
 
 import pytest
+from mcp.server.fastmcp import FastMCP
 
 from autogen.mcp.mcp_proxy.mcp_proxy import MCPProxy
 
@@ -24,3 +25,16 @@ def test_generating_whatsapp():
     )
 
     assert tmp_path.exists(), "Failed to create tmp directory"
+
+
+def test_mcp_proxy():
+    # This test is a placeholder to ensure MCPProxy can be imported and instantiated
+    # without any issues. It does not perform any actual functionality tests.
+    mcp_proxy = MCPProxy(
+        description="Test MCP Proxy",
+        title="Test MCP",
+        version="1.0",
+        servers=[{"url": "http://localhost:8000"}],
+    )
+    assert mcp_proxy is not None, "MCPProxy instantiation failed"
+    assert isinstance(mcp_proxy.get_mcp(), FastMCP), "get_mcp should return an instance of FastMCP"
