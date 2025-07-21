@@ -26,13 +26,27 @@ Use the web-based editor to visually design flows. It's **design-only**, ideal f
 
 ### 2. Python SDK (via PyPI)
 
+#### CLI
 ```bash
-pip install waldiez[jupyter]
-# or
-pip install waldiez[studio]
+pip install waldiez
+
+# Convert a Waldiez flow to a python script or a jupyter notebook
+waldiez convert --file /path/to/a/flow.waldiez --output /path/to/an/output/flow[.py|.ipynb]
+# Convert and run the script, optionally force generation if the output file already exists
+waldiez run --file /path/to/a/flow.waldiez --output /path/to/an/output/flow[.py|.ipynb] [--force]
 ```
 
-Includes CLI (`waldiez convert`, `waldiez run`), JupyterLab & Studio support.
+#### JupyterLab
+```bash
+pip install waldiez[jupyter] 
+# installs jupyterlab with waldiez extension for designing, converting and running waldiez flows
+```
+
+#### Studio
+```bash
+pip install waldiez[studio] 
+# installs FastAPI-based app for designing, converting and running waldiez flows
+```
 
 ### 3. Docker
 Use prebuilt images:
